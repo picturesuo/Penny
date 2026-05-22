@@ -186,6 +186,8 @@ function assertCreateSurface(check) {
 
 function assertConnectedKeywordResults(check) {
   assert(check.selectorTargetsPresent === true, "Post-OAuth browser evidence must prove stable connected Gmail selector targets are present.");
+  assert(check.oauthCompleted === true, "Post-OAuth browser evidence must prove OAuth completed for the staged Gmail account.");
+  assert(check.nangoAuthWebhookVerified === true, "Post-OAuth browser evidence must prove Nango delivered and Penny accepted the Gmail auth webhook.");
   assert(check.connectedStateVisible === true, "Post-OAuth browser evidence must show Gmail connected state.");
   assert(check.gmailReadonlyVisible === true, "Post-OAuth browser evidence must show gmail.readonly.");
   assert(check.messageCountVisible === true, "Post-OAuth browser evidence must show message count.");
