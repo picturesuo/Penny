@@ -449,22 +449,40 @@ export async function handleBrainImportRequest(
 
 export async function handleBrainDemoFixtureRequest(request: Request): Promise<Response> {
   if (request.method !== "GET") {
-    return methodNotAllowed("GET /api/brain/demo-fixture/penny requires the GET method.", "GET");
+    return methodNotAllowed("GET /api/brain/demo-fixture/:fixture requires the GET method.", "GET");
   }
 
-  const content = await readFile(new URL("../../../test/fixtures/penny-brain-demo-conversations.json", import.meta.url), "utf8");
+  const path = new URL(request.url).pathname;
+  const fixture = brainDemoFixtureForPath(path);
+  const content = await readFile(new URL(fixture.fileUrl, import.meta.url), "utf8");
 
   return jsonResponse({
     data: {
       importInput: {
         kind: "chatgpt_export",
-        label: "Penny demo ChatGPT export",
-        fileName: "conversations.json",
+        label: fixture.label,
+        fileName: fixture.fileName,
         mimeType: "application/json",
         content,
       },
     },
   });
+}
+
+function brainDemoFixtureForPath(path: string): { label: string; fileName: string; fileUrl: string } {
+  if (path === "/api/brain/demo-fixture/yc-founder") {
+    return {
+      label: "Penny YC founder fixture",
+      fileName: "penny-yc-founder-fixture.json",
+      fileUrl: "../../../test/fixtures/penny-yc-founder-fixture.json",
+    };
+  }
+
+  return {
+    label: "Penny demo ChatGPT export",
+    fileName: "conversations.json",
+    fileUrl: "../../../test/fixtures/penny-brain-demo-conversations.json",
+  };
 }
 
 export async function handleBrainImportJobRequest(
