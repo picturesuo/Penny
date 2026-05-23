@@ -15,6 +15,7 @@ interface LandingPageProps {
     sourceMaterial?: LearnSourceMaterialInput,
   ) => Promise<void>;
   onQuickNote: (rawIdea: string) => Promise<void>;
+  onBuildWithPenny?: () => Promise<void>;
 }
 
 type LandingDestination = Extract<PennyMode, "Learn" | "Create"> | "QuickNote";
@@ -100,7 +101,7 @@ export function landingSubmitIntent(destination: LandingDestination | null, rawI
   return { action: "submit-prompt", mode: destination, rawIdea: trimmedIdea };
 }
 
-export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote }: LandingPageProps) {
+export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote, onBuildWithPenny }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
   const [sourceMaterial, setSourceMaterial] = useState<LearnSourceMaterialInput | null>(null);
   const [isCtrlDown, setIsCtrlDown] = useState(false);
@@ -283,6 +284,20 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <div className="landing-rule" aria-hidden="true" />
             <p>FOR YOUR THOUGHTS</p>
           </div>
+
+          {onBuildWithPenny ? (
+            <button
+              type="button"
+              className="landing-brain-start-button"
+              disabled={disabled}
+              data-testid="landing-build-with-penny"
+              onClick={() => {
+                void onBuildWithPenny();
+              }}
+            >
+              Build with Penny
+            </button>
+          ) : null}
 
           <button type="button" className="landing-brain-start-button" disabled={disabled} onClick={() => onModeSelect("Brain")}>
             Start with your Brain
