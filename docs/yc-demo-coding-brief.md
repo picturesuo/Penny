@@ -140,7 +140,7 @@ pnpm build
 Use this existing e2e path:
 
 ```bash
-PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test/e2e/yc-recording.spec.cjs --reporter=line
+PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line
 ```
 
 ## Finish Criteria
