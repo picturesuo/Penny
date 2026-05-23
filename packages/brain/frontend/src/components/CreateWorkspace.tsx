@@ -37,6 +37,7 @@ interface CreateWorkspaceProps {
 
 export const createLensOrder: CreateLens[] = ["Personal", "Practical", "Valuable", "Critical", "Weird"];
 export const createLearnBridgeConcept = "Brain Ranker weights explicit judgment events over implicit behavior.";
+export const CREATE_WORKSPACE_DRAFT_STORAGE_KEY = "penny.createWorkspaceDraft.v1";
 
 const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Prompt artifact", "Verification", "Export"];
 const ycFixtureLabels = ["Email fixture", "Gmail-style context", "Manual messages context", "Founder notes", "trainingUse=false"];
@@ -66,6 +67,29 @@ const createExportFeedbackReasons: Array<{ reason: CreateExportFeedbackReason; l
   { reason: "ready_to_ship", label: "Ready to ship" },
 ];
 
+type PersistedCreateWorkspaceDraft = {
+  version: 1;
+  updatedAt: number;
+  draftText: string;
+  optionSet: OptionSet | null;
+  selectedOptionIds: string[];
+  userComment: string;
+  artifact: CodingPromptArtifact | null;
+  verification: VerificationSummary | null;
+  judgmentEvent: JudgmentEvent | null;
+  observability: CreateObservability | null;
+  promptExport: PromptExport | null;
+  localStatus: string;
+};
+
+export function clearCreateWorkspaceDraftStorage(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(CREATE_WORKSPACE_DRAFT_STORAGE_KEY);
+}
+
 export function CreateWorkspace({
   data,
   status,
@@ -79,25 +103,27 @@ export function CreateWorkspace({
   onLearnThis,
 }: CreateWorkspaceProps) {
   const sourceText = initialSeedText?.trim() || data?.source?.rawText?.trim() || "";
-  const [draftText, setDraftText] = useState(sourceText);
-  const [optionSet, setOptionSet] = useState<OptionSet | null>(null);
-  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
-  const [userComment, setUserComment] = useState("");
-  const [artifact, setArtifact] = useState<CodingPromptArtifact | null>(null);
-  const [verification, setVerification] = useState<VerificationSummary | null>(null);
-  const [judgmentEvent, setJudgmentEvent] = useState<JudgmentEvent | null>(null);
-  const [observability, setObservability] = useState<CreateObservability | null>(null);
+  const [restoredDraft] = useState(() => readCreateWorkspaceDraft());
+  const [draftText, setDraftText] = useState(restoredDraft?.draftText ?? sourceText);
+  const [optionSet, setOptionSet] = useState<OptionSet | null>(restoredDraft?.optionSet ?? null);
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredDraft?.selectedOptionIds ?? []);
+  const [userComment, setUserComment] = useState(restoredDraft?.userComment ?? "");
+  const [artifact, setArtifact] = useState<CodingPromptArtifact | null>(restoredDraft?.artifact ?? null);
+  const [verification, setVerification] = useState<VerificationSummary | null>(restoredDraft?.verification ?? null);
+  const [judgmentEvent, setJudgmentEvent] = useState<JudgmentEvent | null>(restoredDraft?.judgmentEvent ?? null);
+  const [observability, setObservability] = useState<CreateObservability | null>(restoredDraft?.observability ?? null);
   const [providerComparison, setProviderComparison] = useState<CreateProviderComparisonResponse["data"] | null>(null);
-  const [promptExport, setPromptExport] = useState<PromptExport | null>(null);
+  const [promptExport, setPromptExport] = useState<PromptExport | null>(restoredDraft?.promptExport ?? null);
   const [exportFeedbackRating, setExportFeedbackRating] = useState<CreateExportFeedbackRating | null>(null);
   const [exportFeedbackReasons, setExportFeedbackReasons] = useState<CreateExportFeedbackReason[]>([]);
   const [exportFeedbackComment, setExportFeedbackComment] = useState("");
   const [exportFeedbackStatus, setExportFeedbackStatus] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
-  const [localStatus, setLocalStatus] = useState("Create ready");
+  const [localStatus, setLocalStatus] = useState(restoredDraft?.localStatus ?? "Create ready");
   const [failure, setFailure] = useState<string | null>(null);
   const seedRef = useRef<HTMLTextAreaElement | null>(null);
   const bootstrappedTextRef = useRef<string | null>(null);
+  const restoredDraftRef = useRef(Boolean(restoredDraft));
 
   const busy = localBusy || isThinking;
   const displayStatus = busy ? "Thinking" : localStatus || status;
@@ -124,11 +150,46 @@ export function CreateWorkspace({
       return;
     }
 
+    if (restoredDraftRef.current && restoredDraft?.draftText) {
+      bootstrappedTextRef.current = sourceText;
+      restoredDraftRef.current = false;
+      onInitialSeedConsumed?.();
+      return;
+    }
+
     bootstrappedTextRef.current = sourceText;
     setDraftText(sourceText);
     onInitialSeedConsumed?.();
     void handleGenerateDirections(sourceText);
-  }, [sourceText, onInitialSeedConsumed]);
+  }, [restoredDraft?.draftText, sourceText, onInitialSeedConsumed]);
+
+  useEffect(() => {
+    persistCreateWorkspaceDraft({
+      version: 1,
+      updatedAt: Date.now(),
+      draftText,
+      optionSet,
+      selectedOptionIds,
+      userComment,
+      artifact,
+      verification,
+      judgmentEvent,
+      observability,
+      promptExport,
+      localStatus,
+    });
+  }, [
+    artifact,
+    draftText,
+    judgmentEvent,
+    localStatus,
+    observability,
+    optionSet,
+    promptExport,
+    selectedOptionIds,
+    userComment,
+    verification,
+  ]);
 
   function setStatus(nextStatus: string) {
     setLocalStatus(nextStatus);
@@ -682,6 +743,77 @@ function createCanvasNodes(input: {
       detail: input.promptExport?.fileName ?? input.artifact?.title ?? "Artifact not generated yet",
     },
   ];
+}
+
+function readCreateWorkspaceDraft(): PersistedCreateWorkspaceDraft | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(CREATE_WORKSPACE_DRAFT_STORAGE_KEY);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!isCreateWorkspaceDraft(parsed)) {
+      window.localStorage.removeItem(CREATE_WORKSPACE_DRAFT_STORAGE_KEY);
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    window.localStorage.removeItem(CREATE_WORKSPACE_DRAFT_STORAGE_KEY);
+    return null;
+  }
+}
+
+function persistCreateWorkspaceDraft(draft: PersistedCreateWorkspaceDraft): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const hasCreateState =
+    draft.draftText.trim() ||
+    draft.optionSet ||
+    draft.selectedOptionIds.length ||
+    draft.userComment.trim() ||
+    draft.artifact ||
+    draft.promptExport;
+
+  if (!hasCreateState) {
+    window.localStorage.removeItem(CREATE_WORKSPACE_DRAFT_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(CREATE_WORKSPACE_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+}
+
+function isCreateWorkspaceDraft(value: unknown): value is PersistedCreateWorkspaceDraft {
+  if (!isRecord(value) || value.version !== 1 || typeof value.updatedAt !== "number") {
+    return false;
+  }
+
+  return (
+    typeof value.draftText === "string" &&
+    Array.isArray(value.selectedOptionIds) &&
+    value.selectedOptionIds.every((optionId) => typeof optionId === "string") &&
+    typeof value.userComment === "string" &&
+    (value.optionSet === null || isRecord(value.optionSet)) &&
+    (value.artifact === null || isRecord(value.artifact)) &&
+    (value.verification === null || isRecord(value.verification)) &&
+    (value.judgmentEvent === null || isRecord(value.judgmentEvent)) &&
+    (value.observability === null || isRecord(value.observability)) &&
+    (value.promptExport === null || isRecord(value.promptExport)) &&
+    typeof value.localStatus === "string"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryProfileData | null }) {
