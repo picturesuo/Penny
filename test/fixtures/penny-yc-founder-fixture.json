@@ -1,90 +1,52 @@
-[
-  {
-    "title": "Email fixture - Gmail-style context",
-    "create_time": 1779613200,
-    "messages": [
-      {
-        "role": "user",
-        "content": "Email fixture. Gmail-style context. Subject: Lovable hackathon recap. I watched founders use coding agents before they had a clear spec, and the failure was not code quality, it was vague thinking."
-      },
-      {
-        "role": "assistant",
-        "content": "Source fact: The Lovable hackathon showed that people need an ideation instrument before coding agents, because vague ideas need to become buildable specs with assumptions, options, and tradeoffs."
-      },
-      {
-        "role": "user",
-        "content": "Goal: Penny should help a founder turn vague ideas -> buildable specs using emails, messages, and notes as private context."
-      },
-      {
-        "role": "assistant",
-        "content": "Decision: Store derived memory only from this fixture; trainingUse=false; raw Gmail-style snippets are for demo grounding and should not imply live Gmail OAuth."
-      }
-    ]
+{
+  "schemaVersion": "penny-yc-founder-fixture.v2",
+  "demoPrompt": "I want to create a YC startup around ideation and thinking - maybe a thinking instrument. It should use my past emails, messages, and notes to help me turn vague ideas into buildable structure. I want it to feel like a workbench that gives ideas direction without taking judgment away from the human.",
+  "safety": {
+    "fixtureOnly": true,
+    "trainingUse": false,
+    "liveConnectorClaims": false,
+    "copy": "Safe demo fixture only. These are fake email, LinkedIn-style, WhatsApp-style, and founder-note records imported as private Brain memory. They do not claim live Gmail, LinkedIn, WhatsApp, iMessage, SMS, or OAuth access."
   },
-  {
-    "title": "Manual messages context for demo",
-    "create_time": 1779699600,
-    "messages": [
-      {
-        "role": "user",
-        "content": "Manual messages context for demo. I keep saying Penny is a memory-native workbench, not a GPT wrapper, because it remembers decisions, rejected directions, and explicit human judgment."
-      },
-      {
-        "role": "assistant",
-        "content": "Preference: Penny should preserve human judgment as first-class signal. The user wants to select Personal plus Valuable plus Critical instead of being commanded toward one best answer."
-      },
-      {
-        "role": "user",
-        "content": "Frustration: Generic AI apps turn everything into a chatbot or dashboard and hide why a suggestion exists."
-      },
-      {
-        "role": "assistant",
-        "content": "Project: Create should show why each option exists, cite founder memory, and export a coding-agent prompt with product thesis, target user, risks, MVP scope, and demo script."
-      }
-    ]
-  },
-  {
-    "title": "Founder notes",
-    "create_time": 1779786000,
-    "messages": [
-      {
-        "role": "user",
-        "content": "Founder notes. Penny is a controllable thinking instrument for founders and builders who need to turn raw thought into claims, assumptions, challenges, learning, artifacts, and canvas state."
-      },
-      {
-        "role": "assistant",
-        "content": "Idea: The north star is context -> options -> judgment -> artifact -> learn -> canvas/export, with Brain as the product substrate."
-      },
-      {
-        "role": "user",
-        "content": "Build style: Keep it newspaper-like, warm paper, restrained borders, compact hierarchy, no huge redesign, no generic chatbot sidebar."
-      },
-      {
-        "role": "assistant",
-        "content": "Decision: Create and Learn should happen inside Brain context. Create/export synthesize from Brain, and every meaningful action should become append-only Move history."
-      }
-    ]
-  },
-  {
-    "title": "Rejected directions",
-    "create_time": 1779872400,
-    "messages": [
-      {
-        "role": "user",
-        "content": "Rejected directions: notes app, dashboard, chatbot, assistant for everything. Do not pitch Penny as a notes app, dashboard, chatbot, or assistant for everything."
-      },
-      {
-        "role": "assistant",
-        "content": "Rejected direction: Penny should not become a generic notes app because the value is structured thinking, memory, challenge, learn, and artifact generation."
-      },
-      {
-        "role": "user",
-        "content": "Rejected direction: Avoid a generic dashboard because it makes Penny look like analytics instead of a memory-native creativity workbench."
-      },
-      {
-        "role": "assistant",
-        "content": "Rejected direction: Avoid chatbot positioning because Penny is not a chatbot. It is a memory-native creativity workbench."
-      }
-    ]
-  }
-]
+  "sources": [
+    {
+      "id": "yc-email-lovable",
+      "kind": "email_fixture",
+      "label": "Email fixture - Lovable hackathon recap",
+      "fileName": "yc-email-lovable-fixture.txt",
+      "sourceUri": "demo-fixture:email/lovable-hackathon",
+      "content": "Source type: Safe Gmail-style email fixture. Not live Gmail. No OAuth. trainingUse=false.\nSubject: Lovable hackathon recap and the missing thinking layer.\nFrom: founder@example.test\nTo: self@example.test\n\nSource fact: The founder won a Lovable hackathon while watching builders use coding agents before they had a clear spec.\nSource fact: The failure mode was not code quality; it was vague thinking entering the coding agent too early.\nGoal: Penny should help a founder turn vague ideas into buildable specs using private email-style context, manual message transcripts, founder notes, and explicit judgment.\nIdea: The best YC story is that Penny helps a user understand and recreate Penny using Penny itself.\nDecision: This fixture stores safe derived memory only; it must not imply live Gmail OAuth, account scanning, or real inbox access.\nPreference: Show source chips and evidence so a demo viewer can see why a suggestion exists.\n"
+    },
+    {
+      "id": "yc-linkedin-founder-context",
+      "kind": "linkedin_context",
+      "label": "LinkedIn-style founder context fixture",
+      "fileName": "yc-linkedin-founder-context-fixture.txt",
+      "sourceUri": "demo-fixture:linkedin/founder-context",
+      "content": "Source type: Safe LinkedIn-style founder context fixture. Not live LinkedIn. No OAuth. trainingUse=false.\nProfile note: Founder/builder focused on AI builders, coding agents, memory-native creativity, YC, and software that turns raw thought into shippable structure.\nSource fact: AI builders increasingly need sharper upstream thinking because coding agents make implementation faster than deciding what should be built.\nGoal: Penny should feel like an AI workbench for founder creativity, not a generic assistant.\nPreference: The product should preserve human judgment; Penny can suggest options, but the founder chooses the mix.\nDecision: Avoid GPT-wrapper risk by grounding suggestions in private Brain memory, explicit source evidence, rejected directions, and user judgment events.\nIdea: Penny's moat is reusable precedent and memory over time: what the founder chose, rejected, defended, learned, and exported.\n"
+    },
+    {
+      "id": "yc-whatsapp-transcript",
+      "kind": "manual_messages_transcript",
+      "label": "Manual WhatsApp-style transcript fixture",
+      "fileName": "yc-whatsapp-style-transcript-fixture.txt",
+      "sourceUri": "demo-fixture:manual-messages/whatsapp-style",
+      "content": "Source type: Manual pasted WhatsApp-style transcript fixture. Not live WhatsApp, SMS, or iMessage. No OAuth. trainingUse=false.\nBen: I keep circling Penny as a thinking instrument, not a chatbot. It should pull together the mess of emails, messages, and notes so ideas stop floating around.\nFriend: The interesting part is not that AI writes the answer. It is that it gives you five directions and makes your judgment visible.\nBen: Exactly. Personal, Practical, Valuable, Critical, Weird. Equal cards. I do not want Penny to pick for me.\nFriend: The demo should show Penny learning from what you select, not just generating copy.\nBen: If I get confused, I want Learn this to explain the concept and then send me back to Create without losing state.\nSource fact: The user wants a memory-native workbench that gathers scattered context into one creative workspace.\nPreference: Equal-option Create cards should inhibit premature convergence and grow creativity instead of narrowing it too early.\nGoal: Preserve selected options, comments, artifact state, Learn focus, and final export as one continuous flow.\n"
+    },
+    {
+      "id": "yc-founder-notes",
+      "kind": "founder_notes",
+      "label": "Founder notes - memory-native creativity",
+      "fileName": "yc-founder-notes-fixture.md",
+      "sourceUri": "demo-fixture:notes/founder-workbench",
+      "content": "# Founder notes\n\nProject: Penny is a controllable thinking instrument for founders and builders who need to turn raw thought into claims, assumptions, challenges, learning, artifacts, and canvas state.\n\nIdea: The north star is context -> options -> judgment -> artifact -> Learn bridge -> canvas outline -> export build prompt, with Brain as the product substrate.\n\nGoal: The YC demo should start from the landing page, take the founder's rough idea, synthesize safe fixture context, show five grounded options, record user judgment, refine an artifact, teach one confusing concept, show a visual outline, and export a coding-agent prompt.\n\nPreference: Keep the newspaper/editorial style, restrained borders, compact hierarchy, and readable evidence. Do not add broad connectors, OAuth surfaces, or new modes for the demo.\n\nDecision: Create and Learn should happen inside Brain context. Every meaningful user selection or comment should become a durable judgment signal later.\n\nSource fact: The product promise is a private Brain of context, messages, notes, and email-style sources that helps a founder turn vague ideas into direction, structure, and buildable artifacts.\n"
+    },
+    {
+      "id": "yc-rejected-directions",
+      "kind": "founder_notes",
+      "label": "Rejected directions fixture",
+      "fileName": "yc-rejected-directions-fixture.txt",
+      "sourceUri": "demo-fixture:notes/rejected-directions",
+      "content": "Source type: Safe founder-note fixture. trainingUse=false.\nRejected direction: Do not pitch Penny as a generic chatbot, because the value is a controllable thinking workbench with graph memory, challenge, Learn, and artifact output.\nRejected direction: Do not make Penny a generic notes app, because notes alone do not create assumptions, options, judgment events, challenges, or build prompts.\nRejected direction: Do not make Penny a generic productivity dashboard, because the YC story is creative direction and structured thinking, not metrics panels.\nRejected direction: Do not build broad Slack, social, iMessage, SMS, WhatsApp, LinkedIn, or Gmail OAuth surfaces for the 2-day demo.\nDecision: Use only safe fixture/manual/pasted context for the YC demo path and keep trainingUse=false visible.\nRisk: Fake live connector claims would weaken trust; the UI must say fixture, manual transcript, or demo context when those sources are used.\n"
+    }
+  ]
+}
