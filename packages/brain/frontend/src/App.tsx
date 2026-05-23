@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import {
   createChallengeBrief,
   createLearnSession,
+  fetchBrainYcFounderFixtureImport,
   type LearnSourceMaterialInput,
   fetchBrainHybridSearch,
   fetchBrainDocuments,
   fetchBrainRecents,
   fetchSessionCockpit,
+  importBrainSource,
   keepBrainRecentIdea,
   issueChallengeFromCandidate,
   respondToChallenge,
@@ -62,6 +64,8 @@ type QuickNoteAction = "build" | "brain" | "check" | "learn" | "archive" | "rest
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const SESSION_QUERY_PARAM = "sessionId";
+export const pennyYcCreatePrompt =
+  "Use my emails, messages, and founder notes to shape Penny as an ideation workbench that turns vague ideas into buildable specs before coding agents start.";
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
@@ -333,6 +337,43 @@ export function App() {
     setCreateBrainProfile(null);
     setActiveMode("Create");
     setStatus("Preparing Create");
+  }
+
+  async function handleBuildWithPenny() {
+    setIsThinking(true);
+    setStatus("Loading YC founder fixture");
+
+    try {
+      const fixture = await fetchBrainYcFounderFixtureImport();
+      const imported = await importBrainSource(fixture.data.importInput);
+
+      if (imported.data.job.status === "failed") {
+        throw new Error(imported.data.job.errorMessages[0] ?? "YC founder fixture import failed.");
+      }
+
+      setSelectedDocumentId(null);
+      setData(null);
+      setMoves([]);
+      setAutopilot(null);
+      setChallengeResponse(null);
+      setLatestArtifact(null);
+      setFocusedClaimId(null);
+      setFocusedWorkStructureStepId(null);
+      setBrainCanvasOpen(false);
+      setLearnFocusNode(null);
+      setRelatedBrainSearch(null);
+      setCreateInitialSeedText(pennyYcCreatePrompt);
+      setCreateBrainProfile(imported.data.profile);
+      setLandingVisible(false);
+      setActiveMode("Create");
+      forgetActiveSession();
+      setStatus("YC founder fixture loaded for Create");
+    } catch (error) {
+      setLandingVisible(true);
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
+    }
   }
 
   async function handleLandingQuickNote(rawIdea: string) {
@@ -876,6 +917,7 @@ export function App() {
             onModeSelect={handleLandingModeSelect}
             onPromptSubmit={handleLandingPromptSubmit}
             onQuickNote={handleLandingQuickNote}
+            onBuildWithPenny={handleBuildWithPenny}
           />
         ) : (
           <>
