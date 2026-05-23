@@ -306,7 +306,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
           <div className="landing-prompt-box" onClick={handlePromptBoxClick}>
             <form className="landing-composer" onSubmit={handleSubmit}>
               <label className="sr-only" htmlFor="landingIdea">
-                Ask Penny anything
+                Enter a rough thought for Penny
               </label>
               <textarea
                 id="landingIdea"
@@ -314,7 +314,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                 value={rawIdea}
                 onChange={(event) => setRawIdea(event.target.value)}
                 disabled={disabled}
-                placeholder="Ask anything..."
+                placeholder="Drop a rough idea, then choose Create, Learn, or Quick note..."
                 aria-describedby="landingStatus"
                 rows={1}
               />
