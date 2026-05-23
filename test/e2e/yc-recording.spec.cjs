@@ -80,7 +80,12 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
     "Weird",
   ]);
   await expect(page.getByRole("region", { name: "Create graph" })).toBeVisible();
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/Penny.*Brain sources.*Create options.*Learn explanation.*Export prompt/s);
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Brain sources");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Penny YC founder fixture");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Create options");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Generated Personal / Practical / Valuable / Critical / Weird");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Learn explanation");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Artifact/export");
   await captureProof(page, testInfo, "02-fixture-create-canvas");
 
   await page.locator('[data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
