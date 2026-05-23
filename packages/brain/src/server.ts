@@ -454,7 +454,7 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       return;
     }
 
-    if (url.pathname === "/api/brain/demo-fixture/penny") {
+    if (/^\/api\/brain\/demo-fixture\/(?:penny|yc-founder)$/.test(url.pathname)) {
       await writeWebResponse(outgoing, await handleBrainDemoFixtureRequest(request));
       return;
     }
