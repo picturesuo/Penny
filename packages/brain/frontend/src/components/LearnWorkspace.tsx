@@ -26,6 +26,7 @@ interface LearnWorkspaceProps {
   focusNode: CanvasNode | null;
   isThinking: boolean;
   onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
+  onBackToCreate?: () => void;
 }
 
 export function LearnWorkspace({
@@ -36,6 +37,7 @@ export function LearnWorkspace({
   focusNode,
   isThinking,
   onSearchBrainRelated,
+  onBackToCreate,
 }: LearnWorkspaceProps) {
   const output = useMemo(
     () => buildLearnSessionOutput(data, selectedDocument, autopilot) ?? defaultLearnSessionOutput(),
@@ -46,6 +48,11 @@ export function LearnWorkspace({
   return (
     <main className="learn-workspace" aria-label="Learn">
       <section className="learn-main">
+        {onBackToCreate ? (
+          <button type="button" className="learn-back-to-create" data-testid="learn-back-to-create" onClick={onBackToCreate}>
+            Back to Create
+          </button>
+        ) : null}
         <LearnSessionView
           output={output}
           sourceText={sourceText}
@@ -315,6 +322,10 @@ type LearnPageData = {
 type LearnLessonPage = {
   step: LearnPageData["steps"][number];
   substep: LearnPageData["steps"][number]["substeps"][number];
+};
+
+type CreateLearnBridgeNode = CanvasNode & {
+  id: "create-learn:brain-ranker-judgment-events";
 };
 
 function LearningPathSidebar({
@@ -1325,6 +1336,10 @@ function buildLearnPageData(
   focusedClaim: BrainClaim | null,
   focusNode: CanvasNode | null,
 ): LearnPageData {
+  if (isCreateLearnBridgeNode(focusNode)) {
+    return buildCreateLearnBridgePageData(focusNode);
+  }
+
   if (output.sessionV2) {
     return buildLearnPageDataFromSessionV2(output.sessionV2);
   }
@@ -1424,6 +1439,149 @@ function buildLearnPageData(
       ],
       placeholder: "Ask anything...",
     },
+  };
+}
+
+function isCreateLearnBridgeNode(node: CanvasNode | null): node is CreateLearnBridgeNode {
+  return node?.id === "create-learn:brain-ranker-judgment-events";
+}
+
+function buildCreateLearnBridgePageData(focusNode: CreateLearnBridgeNode): LearnPageData {
+  const goal = focusNode.summary ?? "Brain Ranker weights explicit judgment events over implicit behavior.";
+  const lessons: LearnLesson[] = [
+    createCreateBridgeLesson({
+      index: 0,
+      title: "Explain simply",
+      shortExplanation:
+        "Explicit judgment events are the things you deliberately do: selecting cards, writing comments, and rating exports. Penny should trust those more than passive behavior like hovering, scrolling, or merely opening a drawer.",
+      visualTitle: "Signal strength",
+      visualBody: "Explicit judgment -> strong memory signal -> future Create ranking\nImplicit behavior -> weak hint -> never overrides stated judgment",
+      visualDescription: "The ranker treats deliberate judgment as stronger evidence than accidental interaction.",
+      quickCheck: "If a user selects Critical but only views Practical, which signal should carry more weight?",
+      takeaway: "Penny should learn from chosen judgment before inferred behavior.",
+      exampleLines: [
+        "User selects Personal, Valuable, and Critical.",
+        "User only opens Practical details.",
+        "Next Create run should weight the selected lenses higher because those were explicit judgment events.",
+      ],
+      whyThisMatters: "This keeps Penny controllable: the user teaches the instrument by deciding, not by being watched.",
+    }),
+    createCreateBridgeLesson({
+      index: 1,
+      title: "Show worked example",
+      shortExplanation:
+        "A useful ranking update can be written as a simple priority rule: selected option events outrank unselected viewing events, and written comments outrank both.",
+      visualTitle: "Worked ranking rule",
+      visualBody: "1. Comment: strongest\n2. Selected option: strong\n3. Export feedback: strong\n4. Viewed option: weak\n5. Unseen option: no signal",
+      visualDescription: "The example orders judgment evidence by how intentional it is.",
+      quickCheck: "Where should a written founder/builder comment sit in the ranking order?",
+      takeaway: "The more intentional the action, the more Penny should reuse it.",
+      exampleLines: [
+        "Comment: Keep Penny as a memory-native workbench.",
+        "Selected: Personal + Valuable + Critical.",
+        "Ignored: Weird.",
+        "Result: the artifact should preserve memory, target user value, and critique before novelty.",
+      ],
+      whyThisMatters: "The artifact changes for reasons the user can inspect.",
+    }),
+    createCreateBridgeLesson({
+      index: 2,
+      title: "Show how this applies to my artifact",
+      shortExplanation:
+        "For the current Create artifact, Penny should make the selected lenses and comment visible in the prompt, then use them as future Brain Ranker evidence.",
+      visualTitle: "Artifact application",
+      visualBody:
+        "Brain memory -> five cards -> explicit selection/comment -> artifact sections -> export prompt -> future ranking evidence",
+      visualDescription: "The artifact becomes a visible receipt for what Penny learned.",
+      quickCheck: "What should the exported prompt show so the next run can learn from it?",
+      takeaway: "The artifact is not just output; it is a durable judgment receipt.",
+      exampleLines: [
+        "Selected lenses appear in Selected Option History.",
+        "The founder/builder comment appears in User Intent.",
+        "The exported prompt carries those choices forward as source-backed constraints.",
+      ],
+      whyThisMatters: `This applies directly to ${focusNode.refs?.artifactId ? `artifact ${focusNode.refs.artifactId}` : "the current artifact"}.`,
+    }),
+  ];
+  const steps = lessons.map((lesson, index) => ({
+    id: `create-learn-step-${index + 1}`,
+    title: lesson.title,
+    expanded: index === 0,
+    substeps: [
+      {
+        id: `create-learn-step-${index + 1}-substep-1`,
+        title: lesson.title,
+        isActive: index === 0,
+        lesson,
+      },
+    ],
+  }));
+
+  return {
+    goal: "Learn how Brain Ranker uses explicit Create judgment",
+    progressPercent: 0,
+    steps,
+    currentStep: lessons[0]!,
+    askPenny: {
+      suggestedQuestions: [
+        "Explain this more simply.",
+        "Show another worked example.",
+        "How does this change my artifact?",
+        "What should Penny not infer from passive behavior?",
+      ],
+      placeholder: "Ask about explicit judgment signals...",
+    },
+  };
+}
+
+function createCreateBridgeLesson(input: {
+  index: number;
+  title: string;
+  shortExplanation: string;
+  visualTitle: string;
+  visualBody: string;
+  visualDescription: string;
+  quickCheck: string;
+  takeaway: string;
+  exampleLines: string[];
+  whyThisMatters: string;
+}): LearnLesson {
+  return {
+    stepNumber: input.index + 1,
+    totalSteps: 3,
+    substepNumber: 1,
+    totalSubsteps: 1,
+    title: input.title,
+    parentTitle: "Create judgment signals",
+    learningGoal: input.title,
+    shortExplanation: input.shortExplanation,
+    visual: {
+      type: "diagram",
+      title: input.visualTitle,
+      body: input.visualBody,
+      description: input.visualDescription,
+    },
+    quickCheck: input.quickCheck,
+    takeaway: input.takeaway,
+    sourceSpans: [],
+    teachingSections: [
+      { title: "Definition", body: input.shortExplanation },
+      { title: "Application", body: input.whyThisMatters },
+      { title: "Procedure", body: input.exampleLines.join(" ") },
+    ],
+    misconceptions: ["Passive behavior should not silently override an explicit user decision."],
+    coreIdea: {
+      bullets: input.exampleLines,
+      visualPlaceholderLabel: input.visualTitle,
+    },
+    example: {
+      title: input.visualTitle,
+      description: input.visualDescription,
+      lines: input.exampleLines,
+      whyThisMatters: input.whyThisMatters,
+      format: "business",
+    },
+    nextStepTitle: input.index === 2 ? "Back to Create" : "the next Create judgment lesson",
   };
 }
 
