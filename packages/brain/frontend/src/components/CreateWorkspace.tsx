@@ -39,7 +39,7 @@ export const createLensOrder: CreateLens[] = ["Personal", "Practical", "Valuable
 export const createLearnBridgeConcept = "Brain Ranker weights explicit judgment events over implicit behavior.";
 export const CREATE_WORKSPACE_DRAFT_STORAGE_KEY = "penny.createWorkspaceDraft.v1";
 
-const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Prompt artifact", "Verification", "Export"];
+const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Idea Spec", "Verification", "Export"];
 const ycFixtureLabels = [
   "Email fixture",
   "LinkedIn-style context",
@@ -80,6 +80,7 @@ type PersistedCreateWorkspaceDraft = {
   draftText: string;
   optionSet: OptionSet | null;
   selectedOptionIds: string[];
+  rejectedOptionIds?: string[];
   userComment: string;
   artifact: CodingPromptArtifact | null;
   verification: VerificationSummary | null;
@@ -114,6 +115,7 @@ export function CreateWorkspace({
   const [draftText, setDraftText] = useState(restoredDraft?.draftText ?? sourceText);
   const [optionSet, setOptionSet] = useState<OptionSet | null>(restoredDraft?.optionSet ?? null);
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredDraft?.selectedOptionIds ?? []);
+  const [rejectedOptionIds, setRejectedOptionIds] = useState<string[]>(restoredDraft?.rejectedOptionIds ?? []);
   const [userComment, setUserComment] = useState(restoredDraft?.userComment ?? "");
   const [artifact, setArtifact] = useState<CodingPromptArtifact | null>(restoredDraft?.artifact ?? null);
   const [verification, setVerification] = useState<VerificationSummary | null>(restoredDraft?.verification ?? null);
@@ -177,6 +179,7 @@ export function CreateWorkspace({
       draftText,
       optionSet,
       selectedOptionIds,
+      rejectedOptionIds,
       userComment,
       artifact,
       verification,
@@ -193,6 +196,7 @@ export function CreateWorkspace({
     observability,
     optionSet,
     promptExport,
+    rejectedOptionIds,
     selectedOptionIds,
     userComment,
     verification,
@@ -238,6 +242,7 @@ export function CreateWorkspace({
       const payload = await createNext(buildCreateNextInput({ rawIdea, data, brainProfile }));
       applyCreatePayload(payload.data);
       setSelectedOptionIds([]);
+      setRejectedOptionIds([]);
       setUserComment("");
       setJudgmentEvent(null);
       setProviderComparison(null);
@@ -261,12 +266,12 @@ export function CreateWorkspace({
       return;
     }
 
-    if (!selectedOptionIds.length && !userComment.trim()) {
-      setStatus("Select one or more directions or add a comment first");
+    if (!selectedOptionIds.length && !rejectedOptionIds.length && !userComment.trim()) {
+      setStatus("Select, reject, or comment on at least one direction first");
       return;
     }
 
-    await runCreateAction("Updating coding prompt artifact", async () => {
+    await runCreateAction("Updating Idea Spec", async () => {
       const payload = await createNext(
         buildCreateNextInput({
           rawIdea,
@@ -274,14 +279,14 @@ export function CreateWorkspace({
           brainProfile,
           optionSet,
           selectedOptionIds,
-          userComment,
+          userComment: judgmentCommentWithRejected(userComment, rejectedOptionIds, options),
           artifact,
         }),
       );
       applyCreatePayload(payload.data);
       setPromptExport(null);
       resetExportFeedback();
-      setStatus(payload.data.judgmentEvent ? "Judgment recorded; artifact verified" : "Artifact verified");
+      setStatus(payload.data.judgmentEvent ? "Judgment recorded; Idea Spec verified" : "Idea Spec verified");
     });
   }
 
@@ -307,7 +312,7 @@ export function CreateWorkspace({
 
   async function handleExportPrompt() {
     if (!artifact) {
-      setStatus("Generate the artifact before exporting");
+      setStatus("Generate the Idea Spec before exporting");
       return;
     }
 
@@ -371,9 +376,27 @@ export function CreateWorkspace({
   }
 
   function toggleOption(optionId: string) {
-    setSelectedOptionIds((current) =>
-      current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId],
-    );
+    setSelectedOptionIds((current) => {
+      const isSelected = current.includes(optionId);
+
+      if (!isSelected) {
+        setRejectedOptionIds((rejected) => rejected.filter((id) => id !== optionId));
+      }
+
+      return isSelected ? current.filter((id) => id !== optionId) : [...current, optionId];
+    });
+  }
+
+  function toggleRejectedOption(optionId: string) {
+    setRejectedOptionIds((current) => {
+      const isRejected = current.includes(optionId);
+
+      if (!isRejected) {
+        setSelectedOptionIds((selected) => selected.filter((id) => id !== optionId));
+      }
+
+      return isRejected ? current.filter((id) => id !== optionId) : [...current, optionId];
+    });
   }
 
   function toggleExportFeedbackReason(reason: CreateExportFeedbackReason) {
@@ -397,9 +420,9 @@ export function CreateWorkspace({
         <article className="check-main-cycle create-workspace-card">
           <header className="check-cycle-hero">
             <span>CREATE KERNEL</span>
-            <h1>Options -&gt; judgment -&gt; artifact.</h1>
+            <h1>Options -&gt; judgment -&gt; Idea Spec.</h1>
             <p>
-              Turn a rough idea into five directions, select the strongest mix, and export a verified prompt for Codex,
+              Turn a rough idea into five equal directions, judge the strongest mix, and export a verified prompt for Codex,
               Claude Code, or Cursor.
             </p>
           </header>
@@ -429,8 +452,10 @@ export function CreateWorkspace({
             options={options}
             nextBestMove={optionSet?.nextBestMove ?? null}
             selectedOptionIds={selectedOptionIds}
+            rejectedOptionIds={rejectedOptionIds}
             busy={busy}
             onToggleOption={toggleOption}
+            onRejectOption={toggleRejectedOption}
             onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
           />
 
@@ -445,6 +470,13 @@ export function CreateWorkspace({
               <span>Judgment</span>
               <strong>{selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "Select one or more cards"}</strong>
             </header>
+            <CreateJudgmentNextPlace
+              selectedOptions={selectedOptions}
+              rejectedOptions={options.filter((option) => rejectedOptionIds.includes(option.id))}
+              userComment={userComment}
+              nextBestMove={optionSet?.nextBestMove ?? null}
+              artifact={artifact}
+            />
             <label>
               <span>Comment</span>
               <textarea
@@ -456,7 +488,7 @@ export function CreateWorkspace({
             <div className="create-action-row">
               <button type="button" className="check-primary-button" onClick={() => void handleUpdateArtifact()} disabled={busy || !optionSet}>
                 <CheckCircle2 size={15} />
-                Update artifact
+                Update Idea Spec
               </button>
               {judgmentEvent ? <span>JudgmentEvent: {judgmentEvent.inferredSignals.join(", ") || "recorded"}</span> : null}
             </div>
@@ -516,7 +548,7 @@ export function CreateLearnBridgePanel({
         <span>Learn bridge</span>
         <strong>{createLearnBridgeConcept}</strong>
         <p>
-          Explain simply, show a worked example, and show how this applies to my artifact without losing the selected Create cards.
+          Explain simply, show a worked example, and show how this applies to my Idea Spec without losing the selected Create cards.
         </p>
       </div>
       <button
@@ -533,7 +565,7 @@ export function CreateLearnBridgePanel({
 }
 
 export function buildCreateLearnBridgeNode(artifact: CodingPromptArtifact | null): CanvasNode {
-  const artifactTitle = artifact?.title ?? "the current Create artifact";
+  const artifactTitle = artifact?.title ?? "the current Idea Spec";
 
   return {
     id: "create-learn:brain-ranker-judgment-events",
@@ -543,11 +575,57 @@ export function buildCreateLearnBridgeNode(artifact: CodingPromptArtifact | null
       createLearnBridgeConcept,
       "Explain simply: explicit selections, comments, and export feedback are stronger evidence than passive behavior.",
       "Show worked example: selecting Personal + Valuable + Critical should outweigh merely viewing Practical.",
-      `Apply to my artifact: use the recorded judgment to shape ${artifactTitle}.`,
+      `Apply to my Idea Spec: use the recorded judgment to shape ${artifactTitle}.`,
     ].join(" "),
     ...(artifact ? { refs: { artifactId: artifact.id } } : {}),
     actions: ["learn", "check", "related"],
   };
+}
+
+export function CreateJudgmentNextPlace({
+  selectedOptions,
+  rejectedOptions,
+  userComment,
+  nextBestMove,
+  artifact,
+}: {
+  selectedOptions: CandidateOption[];
+  rejectedOptions: CandidateOption[];
+  userComment: string;
+  nextBestMove?: NextBestMove | null;
+  artifact: CodingPromptArtifact | null;
+}) {
+  const hasJudgment = selectedOptions.length || rejectedOptions.length || userComment.trim();
+  const selectedLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "No selected cards yet";
+  const rejectedLabel = rejectedOptions.length ? rejectedOptions.map((option) => option.lens).join(" + ") : "No rejected cards yet";
+  const nextTitle = hasJudgment
+    ? artifact
+      ? "Update the Idea Spec from this judgment"
+      : "Record the first judgment into an Idea Spec"
+    : nextBestMove?.title ?? "Pick the card with the most creative energy";
+  const nextDetail = hasJudgment
+    ? "Penny will preserve selected cards, rejected directions, and your comment before suggesting the next useful place."
+    : nextBestMove?.action ?? "Select, reject, or comment. The next step will stay visible without making one card the boss.";
+
+  return (
+    <section className="create-judgment-next-place" aria-label="Next best place">
+      <div>
+        <span>Next place</span>
+        <strong>{nextTitle}</strong>
+        <p>{nextDetail}</p>
+      </div>
+      <dl>
+        <div>
+          <dt>Selected</dt>
+          <dd>{selectedLabel}</dd>
+        </div>
+        <div>
+          <dt>Rejected</dt>
+          <dd>{rejectedLabel}</dd>
+        </div>
+      </dl>
+    </section>
+  );
 }
 
 export function buildCreateOptionLearnNode(option: CandidateOption, artifact: CodingPromptArtifact | null): CanvasNode {
@@ -563,7 +641,7 @@ export function buildCreateOptionLearnNode(option: CandidateOption, artifact: Co
     summary: [
       `What this option means: ${option.oneLine}`,
       `Why Penny suggested it: ${option.topReason} ${option.rationale}`,
-      `Worked example: apply ${option.lens} by taking the next move "${option.nextMove}" and checking it against the artifact.`,
+      `Worked example: apply ${option.lens} by taking the next move "${option.nextMove}" and checking it against the Idea Spec.`,
       `Next smallest concept: understand how ${option.lens} changes the selected option mix without taking judgment away from the user.`,
       sourceLabels.length ? `Source evidence: ${sourceLabels.join(", ")}.` : "Source evidence: rough idea only.",
     ].join(" "),
@@ -672,7 +750,7 @@ export function CreatePathSidebar({
       <div className="check-path-head">
         <div>
           <span>CREATE PATH</span>
-          <strong>Prompt artifact kernel</strong>
+          <strong>Idea Spec kernel</strong>
         </div>
         {onOpenBrain ? (
           <button type="button" className="check-ask-button" aria-label="Open Brain from Create" onClick={onOpenBrain}>
@@ -787,8 +865,8 @@ function createCanvasNodes(input: {
     {
       id: "artifact-export",
       label: "Export",
-      detail: input.promptExport?.fileName ?? input.artifact?.title ?? "Artifact not generated yet",
-      note: "Coding-agent prompt carries selections, evidence, and non-goals.",
+      detail: input.promptExport?.fileName ?? input.artifact?.title ?? "Idea Spec not generated yet",
+      note: "Export prompt carries selections, evidence, taste, and non-goals.",
       edgeToNext: "ships",
     },
   ];
@@ -850,6 +928,8 @@ function isCreateWorkspaceDraft(value: unknown): value is PersistedCreateWorkspa
     typeof value.draftText === "string" &&
     Array.isArray(value.selectedOptionIds) &&
     value.selectedOptionIds.every((optionId) => typeof optionId === "string") &&
+    (value.rejectedOptionIds === undefined ||
+      (Array.isArray(value.rejectedOptionIds) && value.rejectedOptionIds.every((optionId) => typeof optionId === "string"))) &&
     typeof value.userComment === "string" &&
     (value.optionSet === null || isRecord(value.optionSet)) &&
     (value.artifact === null || isRecord(value.artifact)) &&
@@ -1051,15 +1131,19 @@ export function CreateOptionBoard({
   options,
   nextBestMove,
   selectedOptionIds,
+  rejectedOptionIds = [],
   busy,
   onToggleOption,
+  onRejectOption,
   onLearnThis,
 }: {
   options: CandidateOption[];
   nextBestMove?: NextBestMove | null;
   selectedOptionIds: string[];
+  rejectedOptionIds?: string[];
   busy: boolean;
   onToggleOption: (optionId: string) => void;
+  onRejectOption?: ((optionId: string) => void) | undefined;
   onLearnThis?: ((option: CandidateOption) => void) | undefined;
 }) {
   const [detailOptionId, setDetailOptionId] = useState<string | null>(null);
@@ -1087,7 +1171,7 @@ export function CreateOptionBoard({
     <section className="create-option-board" aria-label="Create directions" data-testid="create-option-board">
       <header>
         <span>Directions</span>
-        <strong>Choose the mix Penny should build from</strong>
+        <strong>Five equal options; choose, combine, reject, or inspect</strong>
       </header>
       {nextBestMove ? (
         <section className={`create-next-best-move${nextBestMove.grounded ? " is-grounded" : " is-context-light"}`}>
@@ -1101,7 +1185,7 @@ export function CreateOptionBoard({
         {options.map((option) => (
           <article
             key={option.id}
-            className={`create-option-card${selectedOptionIds.includes(option.id) ? " is-selected" : ""}`}
+            className={`create-option-card${selectedOptionIds.includes(option.id) ? " is-selected" : ""}${rejectedOptionIds.includes(option.id) ? " is-rejected" : ""}`}
             data-testid="create-option-card"
             data-create-lens={option.lens}
           >
@@ -1116,9 +1200,9 @@ export function CreateOptionBoard({
               <strong>{option.title}</strong>
               <p>{option.oneLine}</p>
             </button>
-            <div className="create-option-memory-meta" aria-label={`${option.lens} memory grounding`}>
-              <span>{option.memoryCount} memories</span>
-              <span>{option.sourceCount} sources</span>
+            <div className="create-option-memory-meta" aria-label={`${option.lens} evidence and taste grounding`}>
+              <span>Evidence {createEvidenceCount(option)}</span>
+              <span>Taste {createTasteCount(option)}</span>
               <span>{option.contextLabel}</span>
             </div>
             <div className="create-option-source-chips" aria-label={`${option.lens} source chips`}>
@@ -1144,6 +1228,19 @@ export function CreateOptionBoard({
                 <Info size={14} />
                 Details
               </button>
+              {onRejectOption ? (
+                <button
+                  type="button"
+                  className="create-option-detail-button"
+                  aria-pressed={rejectedOptionIds.includes(option.id)}
+                  onClick={() => onRejectOption(option.id)}
+                  disabled={busy}
+                  data-testid="create-option-reject-button"
+                >
+                  <X size={14} />
+                  Reject
+                </button>
+              ) : null}
               {onLearnThis ? (
                 <button
                   type="button"
@@ -1181,12 +1278,14 @@ export function CreateOptionDetailsDrawer({
 }) {
   const sourceRefs = uniqueById(option.sourcesUsed);
   const memoryRefs = uniqueById(option.memoryUsed);
+  const tasteRefs = memoryRefs.filter((memory) => memory.kind === "preference");
+  const evidenceRefs = memoryRefs.filter((memory) => memory.kind !== "preference");
   const importedSourceRefs = sourceRefs.filter((source) => source.kind === "source");
   const groundedClaims = [
-    ...memoryRefs.map((memory) => memory.summary),
+    ...evidenceRefs.map((memory) => memory.summary),
     ...importedSourceRefs.map((source) => source.excerpt),
   ].filter(Boolean);
-  const inferredClaims = [option.rationale, ...option.risks].filter(Boolean);
+  const inferredClaims = [...tasteRefs.map((memory) => memory.summary), option.rationale, ...option.risks].filter(Boolean);
 
   return (
     <aside
@@ -1231,10 +1330,33 @@ export function CreateOptionDetailsDrawer({
       </section>
 
       <section>
-        <span>Memories used</span>
-        {memoryRefs.length ? (
+        <span>Evidence used</span>
+        {evidenceRefs.length || sourceRefs.length ? (
           <ul>
-            {memoryRefs.map((memory) => (
+            {evidenceRefs.map((memory) => (
+              <li key={memory.id}>
+                <strong>{memory.label}</strong>
+                <p>{memory.summary}</p>
+              </li>
+            ))}
+            {sourceRefs.map((source) => (
+              <li key={source.id}>
+                <strong>{source.label}</strong>
+                <p>{source.excerpt}</p>
+                {source.sourceRange ? <small>{source.sourceRange}</small> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Context-light: no concrete imported evidence matched this direction.</p>
+        )}
+      </section>
+
+      <section>
+        <span>Taste interpreted</span>
+        {tasteRefs.length ? (
+          <ul>
+            {tasteRefs.map((memory) => (
               <li key={memory.id}>
                 <strong>{memory.label}</strong>
                 <p>{memory.summary}</p>
@@ -1242,21 +1364,8 @@ export function CreateOptionDetailsDrawer({
             ))}
           </ul>
         ) : (
-          <p>Context-light: no strong imported memory matched this direction.</p>
+          <p>No explicit taste memory was used; this direction is inferred from the rough idea and available context.</p>
         )}
-      </section>
-
-      <section>
-        <span>Sources used</span>
-        <ul>
-          {sourceRefs.map((source) => (
-            <li key={source.id}>
-              <strong>{source.label}</strong>
-              <p>{source.excerpt}</p>
-              {source.sourceRange ? <small>{source.sourceRange}</small> : null}
-            </li>
-          ))}
-        </ul>
       </section>
 
       <section className="create-option-claim-grounding">
@@ -1309,12 +1418,12 @@ export function CreateArtifactPanel({
 
   if (!artifact) {
     return (
-      <section className="create-artifact-panel" aria-label="Coding prompt artifact" data-testid="create-artifact-panel">
+      <section className="create-artifact-panel" aria-label="Idea Spec" data-testid="create-artifact-panel">
         <header>
-          <span>Artifact</span>
-          <strong>CodingPromptArtifact</strong>
+          <span>Idea Spec</span>
+          <strong>Waiting for Create directions</strong>
         </header>
-        <p className="create-panel-empty">Generate directions to start the prompt artifact.</p>
+        <p className="create-panel-empty">Generate directions to start the living Idea Spec.</p>
       </section>
     );
   }
@@ -1326,9 +1435,9 @@ export function CreateArtifactPanel({
   }
 
   return (
-    <section className="create-artifact-panel" aria-label="Coding prompt artifact" data-testid="create-artifact-panel">
+    <section className="create-artifact-panel" aria-label="Idea Spec" data-testid="create-artifact-panel">
       <header>
-        <span>Artifact v{artifact.version}</span>
+        <span>Idea Spec v{artifact.version}</span>
         <strong>{artifact.title}</strong>
       </header>
       <div className="yc-artifact-outline" aria-label="YC artifact outline" data-testid="yc-artifact-outline">
@@ -1394,7 +1503,7 @@ export function CreateVerificationPanel({ verification }: { verification: Verifi
       <section className="create-verification-panel" aria-label="Verification summary">
         <header>
           <span>Verification</span>
-          <strong>Waiting on artifact</strong>
+          <strong>Waiting on Idea Spec</strong>
         </header>
         <p className="create-panel-empty">Verification will check intent, buildability, grounding, generic risk, missing info, and risks.</p>
       </section>
@@ -1699,7 +1808,7 @@ function ycArtifactOutline(artifact: CodingPromptArtifact): Array<{
     },
     {
       title: "Learn bridge",
-      body: `${createLearnBridgeConcept} Learn explains simply, shows a worked example, and applies the concept back to this artifact.`,
+      body: `${createLearnBridgeConcept} Learn explains simply, shows a worked example, and applies the concept back to this Idea Spec.`,
       status,
     },
     {
@@ -1724,13 +1833,13 @@ function ycArtifactOutline(artifact: CodingPromptArtifact): Array<{
     },
     {
       title: "Demo script",
-      body: "Landing -> Build with Penny -> fixture-backed Create -> evidence drawer -> Personal + Valuable + Critical judgment -> artifact -> Learn this -> Back to Create -> Canvas -> Export.",
+      body: "Landing -> Create -> fixture-backed Create -> evidence drawer -> Personal + Valuable + Critical judgment -> Idea Spec -> Learn this -> Back to Create -> Canvas -> Export.",
       status,
     },
     {
       title: "Build prompt/export",
       body: clipDisplayText(
-        section("Final coding-agent prompt") || "Export prompt turns this artifact into a copyable coding-agent spec.",
+        section("Final coding-agent prompt") || "Export prompt turns this Idea Spec into a copyable coding-agent spec.",
         520,
       ),
       status,
@@ -1768,6 +1877,25 @@ function namedBlock(text: string, label: string): string {
 
 function sortCreateOptions(options: CandidateOption[]): CandidateOption[] {
   return [...options].sort((left, right) => createLensOrder.indexOf(left.lens) - createLensOrder.indexOf(right.lens));
+}
+
+function createEvidenceCount(option: CandidateOption): number {
+  return uniqueById([...option.memoryUsed.filter((memory) => memory.kind !== "preference"), ...option.sourcesUsed]).length;
+}
+
+function createTasteCount(option: CandidateOption): number {
+  return uniqueById(option.memoryUsed.filter((memory) => memory.kind === "preference")).length;
+}
+
+function judgmentCommentWithRejected(comment: string, rejectedOptionIds: string[], options: CandidateOption[]): string {
+  const rejectedLenses = options.filter((option) => rejectedOptionIds.includes(option.id)).map((option) => option.lens);
+  const cleanComment = comment.trim();
+
+  if (!rejectedLenses.length) {
+    return cleanComment;
+  }
+
+  return [cleanComment, `Rejected directions: ${rejectedLenses.join(", ")}.`].filter(Boolean).join("\n\n");
 }
 
 function uniqueById<T extends { id: string }>(values: T[]): T[] {
