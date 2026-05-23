@@ -23,7 +23,7 @@ import {
 import { buildAutopilotStartIntent, runAutopilotGoThere, type PennyMode } from "./autopilotUx";
 import { BrainWorkspace } from "./components/BrainWorkspace";
 import { CodebaseBrainPanel } from "./components/CodebaseBrainPanel";
-import { CreateWorkspace } from "./components/CreateWorkspace";
+import { clearCreateWorkspaceDraftStorage, CreateWorkspace } from "./components/CreateWorkspace";
 import { Header } from "./components/Header";
 import { LandingPage } from "./components/LandingPage";
 import { LearnWorkspace } from "./components/LearnWorkspace";
@@ -61,8 +61,15 @@ type ChallengeResponseDraft =
 
 type BrainRelatedSearchState = BrainHybridSearchResponse["data"];
 type QuickNoteAction = "build" | "brain" | "check" | "learn" | "archive" | "restore";
+type PersistedCreateWorkspaceBoot = {
+  version: 1;
+  updatedAt: number;
+  seedText: string;
+  brainProfile: BrainMemoryProfileData | null;
+};
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
+const CREATE_WORKSPACE_BOOT_KEY = "penny.createWorkspaceBoot.v1";
 const SESSION_QUERY_PARAM = "sessionId";
 export const pennyYcCreatePrompt =
   "Use my emails, messages, and founder notes to shape Penny as an ideation workbench that turns vague ideas into buildable specs before coding agents start.";
@@ -126,6 +133,18 @@ export function App() {
         await refreshRecents();
 
         if (!sessionId) {
+          const createBoot = restoreCreateWorkspaceBoot();
+
+          if (createBoot) {
+            setCreateInitialSeedText(createBoot.seedText);
+            setCreateBrainProfile(createBoot.brainProfile);
+            setCreateWorkspaceMounted(true);
+            setLandingVisible(false);
+            setActiveMode("Create");
+            setStatus("Create restored");
+            return;
+          }
+
           setLandingVisible(true);
           setStatus("Docs loaded");
           return;
@@ -306,6 +325,7 @@ export function App() {
     setCreateWorkspaceMounted(false);
     setLandingVisible(true);
     forgetActiveSession();
+    forgetCreateWorkspaceBoot();
     setStatus("Ready");
   }
 
@@ -341,7 +361,9 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
-    setCreateInitialSeedText(sourceMaterial?.extractedText || rawIdea);
+    const createSeedText = sourceMaterial?.extractedText || rawIdea;
+    rememberCreateWorkspaceBoot({ seedText: createSeedText, brainProfile: null });
+    setCreateInitialSeedText(createSeedText);
     setCreateBrainProfile(null);
     setActiveMode("Create");
     setStatus("Preparing Create");
@@ -370,6 +392,7 @@ export function App() {
       setBrainCanvasOpen(false);
       setLearnFocusNode(null);
       setRelatedBrainSearch(null);
+      rememberCreateWorkspaceBoot({ seedText: pennyYcCreatePrompt, brainProfile: imported.data.profile });
       setCreateInitialSeedText(pennyYcCreatePrompt);
       setCreateBrainProfile(imported.data.profile);
       setCreateWorkspaceMounted(true);
@@ -863,6 +886,7 @@ export function App() {
           setBrainCanvasOpen(false);
           setLearnFocusNode(null);
           setRelatedBrainSearch(null);
+          rememberCreateWorkspaceBoot({ seedText: recent.rawIdea, brainProfile: null });
           setCreateInitialSeedText(recent.rawIdea);
           setCreateBrainProfile(null);
           setCreateWorkspaceMounted(true);
@@ -903,7 +927,9 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
-    setCreateInitialSeedText(createPromptFromBrainProfile(profile));
+    const createSeedText = createPromptFromBrainProfile(profile);
+    rememberCreateWorkspaceBoot({ seedText: createSeedText, brainProfile: profile });
+    setCreateInitialSeedText(createSeedText);
     setCreateBrainProfile(profile);
     setCreateWorkspaceMounted(true);
     setLandingVisible(false);
@@ -1124,4 +1150,72 @@ function forgetActiveSession(): void {
   const url = new URL(window.location.href);
   url.searchParams.delete(SESSION_QUERY_PARAM);
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function rememberCreateWorkspaceBoot(input: { seedText: string; brainProfile: BrainMemoryProfileData | null }): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  clearCreateWorkspaceDraftStorage();
+  window.localStorage.setItem(
+    CREATE_WORKSPACE_BOOT_KEY,
+    JSON.stringify({
+      version: 1,
+      updatedAt: Date.now(),
+      seedText: input.seedText,
+      brainProfile: input.brainProfile,
+    } satisfies PersistedCreateWorkspaceBoot),
+  );
+}
+
+function restoreCreateWorkspaceBoot(): PersistedCreateWorkspaceBoot | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(CREATE_WORKSPACE_BOOT_KEY);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!isCreateWorkspaceBoot(parsed)) {
+      window.localStorage.removeItem(CREATE_WORKSPACE_BOOT_KEY);
+      clearCreateWorkspaceDraftStorage();
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    window.localStorage.removeItem(CREATE_WORKSPACE_BOOT_KEY);
+    clearCreateWorkspaceDraftStorage();
+    return null;
+  }
+}
+
+function forgetCreateWorkspaceBoot(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(CREATE_WORKSPACE_BOOT_KEY);
+  clearCreateWorkspaceDraftStorage();
+}
+
+function isCreateWorkspaceBoot(value: unknown): value is PersistedCreateWorkspaceBoot {
+  return (
+    isRecord(value) &&
+    value.version === 1 &&
+    typeof value.updatedAt === "number" &&
+    typeof value.seedText === "string" &&
+    (value.brainProfile === null || isRecord(value.brainProfile))
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
