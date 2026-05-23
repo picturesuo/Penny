@@ -261,6 +261,7 @@ export function BrainWorkspace({
   const [memoryError, setMemoryError] = useState<string | null>(null);
   const [memoryNotice, setMemoryNotice] = useState<string | null>(null);
   const [memoryReviewingId, setMemoryReviewingId] = useState<string | null>(null);
+  const [documentSeedFocusRequest, setDocumentSeedFocusRequest] = useState(0);
   const quickNotes = useMemo(() => [...recents, ...archivedRecents], [recents, archivedRecents]);
   const selectedQuickNote = quickNotes.find((recent) => recent.id === selectedQuickNoteId) ?? null;
   const selectedQuickNoteArchived = archivedRecents.some((recent) => recent.id === selectedQuickNoteId);
@@ -350,6 +351,12 @@ export function BrainWorkspace({
   function handleBackToLibrary() {
     setSelectedQuickNoteId(null);
     onBackToLibrary();
+  }
+
+  function handleNewDocument() {
+    setSelectedQuickNoteId(null);
+    onBackToLibrary();
+    setDocumentSeedFocusRequest((request) => request + 1);
   }
 
   async function handleQuickNoteAction(
@@ -483,7 +490,7 @@ export function BrainWorkspace({
         archivedRecents={archivedRecents}
         onSelectDocument={handleSelectDocument}
         onSelectQuickNote={(recent) => setSelectedQuickNoteId(recent.id)}
-        onNewDocument={onNewThought}
+        onNewDocument={handleNewDocument}
         onQuickNoteCreate={onQuickNoteCreate}
         onQuickNoteAction={handleQuickNoteAction}
       />
@@ -503,7 +510,7 @@ export function BrainWorkspace({
           isThinking={isThinking}
           status={status}
           onBack={handleBackToLibrary}
-          onNewDocument={onNewThought}
+          onNewDocument={handleNewDocument}
           onReworkDocument={onReworkDocument}
           onRetry={() => handleSelectDocument(selectedDocument.sessionId)}
           onAsk={onSeed}
@@ -525,6 +532,7 @@ export function BrainWorkspace({
           onGoogleConnectorSourceDelete={handleGoogleConnectorSourceDelete}
           onMemoryReview={handleMemoryReview}
           onStartCreateWithBrain={onStartCreateWithBrain}
+          focusSeedRequest={documentSeedFocusRequest}
         />
       )}
     </main>
@@ -2009,9 +2017,15 @@ function BrainSidebar({
         <div className="brain-sidebar-section-head">
           <Folder size={15} aria-hidden="true" />
           <strong>Folders</strong>
-          <button type="button" className="brain-sidebar-add-doc" onClick={handleAddFolder}>
+          <button
+            type="button"
+            className="brain-sidebar-add-doc"
+            disabled
+            title="Folder persistence is not in this demo yet."
+            aria-label="Add Folder is not in this demo yet"
+          >
             <FolderPlus size={14} aria-hidden="true" />
-            <span>Add Folder</span>
+            <span>Add Folder unavailable</span>
           </button>
         </div>
         {visibleFolders.length > 0 ? (
@@ -2232,6 +2246,7 @@ function BrainDocumentsIndex({
   onGoogleConnectorSourceDelete,
   onMemoryReview,
   onStartCreateWithBrain,
+  focusSeedRequest,
 }: {
   documentsData: BrainDocumentsData | null;
   memoryProfile: BrainMemoryProfileData | null;
@@ -2248,10 +2263,12 @@ function BrainDocumentsIndex({
   onGoogleConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onMemoryReview: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
   onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
+  focusSeedRequest?: number | undefined;
 }) {
   const documents = documentsData?.documents ?? [];
   const [searchQuery, setSearchQuery] = useState("");
   const [seedText, setSeedText] = useState("");
+  const seedInputRef = useRef<HTMLTextAreaElement | null>(null);
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const recentDocuments = useMemo(() => recentDocumentRows(documents), [documents]);
   const searchResults = useMemo(() => {
@@ -2279,6 +2296,12 @@ function BrainDocumentsIndex({
     />
   );
 
+  useEffect(() => {
+    if (focusSeedRequest) {
+      seedInputRef.current?.focus();
+    }
+  }, [focusSeedRequest]);
+
   async function handleCreateDocument(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -2305,6 +2328,7 @@ function BrainDocumentsIndex({
         <div className="brain-document-seed-row">
           <textarea
             id="brainDocumentSeed"
+            ref={seedInputRef}
             value={seedText}
             onChange={(event) => setSeedText(event.target.value)}
             placeholder="Write the thought you want Penny to structure."
