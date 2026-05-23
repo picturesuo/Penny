@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { isYcDemoCreatePrompt, pennyYcCreatePrompt } from "../src/App";
 import { landingShortcutIntent, landingShortcuts, landingSubmitIntent } from "../src/components/LandingPage";
 import { LandingPage } from "../src/components/LandingPage";
 
@@ -65,7 +66,7 @@ test("landing page exposes Start with your Brain first-run CTA", () => {
   assert.match(markup, /Start with your Brain/);
 });
 
-test("landing page exposes Build with Penny CTA when fixture loader is wired", () => {
+test("landing page exposes a small YC fixture fallback when fixture loader is wired", () => {
   const markup = renderToStaticMarkup(
     createElement(LandingPage, {
       disabled: false,
@@ -77,6 +78,12 @@ test("landing page exposes Build with Penny CTA when fixture loader is wired", (
     }),
   );
 
-  assert.match(markup, /Build with Penny/);
-  assert.match(markup, /data-testid="landing-build-with-penny"/);
+  assert.match(markup, /Use YC demo fixture/);
+  assert.match(markup, /data-testid="landing-yc-demo-fixture"/);
+  assert.doesNotMatch(markup, /Build with Penny/);
+});
+
+test("landing Create prompt detector recognizes the narrated YC demo prompt", () => {
+  assert.equal(isYcDemoCreatePrompt(pennyYcCreatePrompt), true);
+  assert.equal(isYcDemoCreatePrompt("Build a quiet weekly planning view."), false);
 });
