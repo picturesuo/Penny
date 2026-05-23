@@ -675,7 +675,7 @@ export function CreatePathSidebar({
           <strong>Prompt artifact kernel</strong>
         </div>
         {onOpenBrain ? (
-          <button type="button" className="check-ask-button" onClick={onOpenBrain}>
+          <button type="button" className="check-ask-button" aria-label="Open Brain from Create" onClick={onOpenBrain}>
             Brain
           </button>
         ) : null}
@@ -1585,13 +1585,13 @@ function memoryKindFromNodeType(type: BrainMemoryProfileData["recentMemoryNodes"
 function sourceImportEvidenceLabel(kind: string): string {
   switch (kind) {
     case "email_fixture":
-      return "Safe email-style fixture evidence; not live Gmail";
+      return "Safe email-style fixture evidence; not live Gmail, no OAuth, trainingUse=false";
     case "linkedin_context":
-      return "Safe LinkedIn-style fixture evidence; not live LinkedIn";
+      return "Safe LinkedIn-style fixture evidence; not live LinkedIn, no OAuth, trainingUse=false";
     case "manual_messages_transcript":
-      return "Manual/pasted message transcript evidence; not live SMS, iMessage, or WhatsApp";
+      return "Manual/pasted message transcript evidence; not live SMS, iMessage, or WhatsApp, trainingUse=false";
     case "founder_notes":
-      return "Founder-note evidence";
+      return "Founder-note evidence; manual/private source, trainingUse=false";
     default:
       return `Private Brain source evidence (${kind})`;
   }
