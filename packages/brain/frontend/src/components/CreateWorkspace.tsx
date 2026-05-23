@@ -40,7 +40,14 @@ export const createLearnBridgeConcept = "Brain Ranker weights explicit judgment 
 export const CREATE_WORKSPACE_DRAFT_STORAGE_KEY = "penny.createWorkspaceDraft.v1";
 
 const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Prompt artifact", "Verification", "Export"];
-const ycFixtureLabels = ["Email fixture", "Gmail-style context", "Manual messages context", "Founder notes", "trainingUse=false"];
+const ycFixtureLabels = [
+  "Email fixture",
+  "LinkedIn-style context",
+  "Manual messages transcript",
+  "WhatsApp-style demo",
+  "Founder notes",
+  "trainingUse=false",
+];
 const ycArtifactOutlineTitles = [
   "Product thesis",
   "Target user",
@@ -424,6 +431,7 @@ export function CreateWorkspace({
             selectedOptionIds={selectedOptionIds}
             busy={busy}
             onToggleOption={toggleOption}
+            onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
           />
 
           <CreateLearnBridgePanel artifact={artifact} onLearnThis={onLearnThis} />
@@ -455,7 +463,7 @@ export function CreateWorkspace({
           </section>
 
           <div className="create-output-grid">
-            <CreateArtifactPanel artifact={artifact} />
+            <CreateArtifactPanel artifact={artifact} selectedOptions={selectedOptions} />
             <CreateVerificationPanel verification={verification} />
           </div>
 
@@ -536,6 +544,28 @@ export function buildCreateLearnBridgeNode(artifact: CodingPromptArtifact | null
       "Explain simply: explicit selections, comments, and export feedback are stronger evidence than passive behavior.",
       "Show worked example: selecting Personal + Valuable + Critical should outweigh merely viewing Practical.",
       `Show how this applies to my artifact: use the recorded judgment to shape ${artifactTitle}.`,
+    ].join(" "),
+    ...(artifact ? { refs: { artifactId: artifact.id } } : {}),
+    actions: ["learn", "check", "related"],
+  };
+}
+
+export function buildCreateOptionLearnNode(option: CandidateOption, artifact: CodingPromptArtifact | null): CanvasNode {
+  const sourceLabels = uniqueById(option.sourcesUsed)
+    .filter((source) => source.kind !== "rough_idea")
+    .slice(0, 3)
+    .map((source) => source.label);
+
+  return {
+    id: `create-option-learn:${option.id}`,
+    kind: "concept",
+    title: `${option.lens}: ${option.title}`,
+    summary: [
+      `What this option means: ${option.oneLine}`,
+      `Why Penny suggested it: ${option.topReason} ${option.rationale}`,
+      `Worked example: apply ${option.lens} by taking the next move "${option.nextMove}" and checking it against the artifact.`,
+      `Next smallest concept: understand how ${option.lens} changes the selected option mix without taking judgment away from the user.`,
+      sourceLabels.length ? `Source evidence: ${sourceLabels.join(", ")}.` : "Source evidence: rough idea only.",
     ].join(" "),
     ...(artifact ? { refs: { artifactId: artifact.id } } : {}),
     actions: ["learn", "check", "related"],
@@ -678,13 +708,15 @@ export function CreatePathSidebar({
       <section className="yc-demo-canvas" aria-label="YC demo Canvas" data-testid="yc-demo-canvas">
         <div className="check-thinking-graph-head">
           <span>Canvas</span>
-          <strong>Penny path</strong>
+          <strong>Visual outline</strong>
         </div>
+        <p className="yc-demo-canvas-flow">Penny -&gt; Brain -&gt; Create -&gt; Learn -&gt; Export</p>
         <ol>
-          {canvasNodes.map((node) => (
-            <li key={node.id}>
+          {canvasNodes.map((node, index) => (
+            <li key={node.id} data-edge-label={index < canvasNodes.length - 1 ? node.edgeToNext : undefined}>
               <strong>{node.label}</strong>
               <span>{node.detail}</span>
+              {node.note ? <small>{node.note}</small> : null}
             </li>
           ))}
         </ol>
@@ -702,6 +734,8 @@ type CreateCanvasNode = {
   id: string;
   label: string;
   detail: string;
+  note?: string;
+  edgeToNext: string;
 };
 
 function createCanvasNodes(input: {
@@ -711,36 +745,51 @@ function createCanvasNodes(input: {
   artifact: CodingPromptArtifact | null;
   promptExport: PromptExport | null;
 }): CreateCanvasNode[] {
-  const sourceLabels = input.brainProfile?.sources.slice(0, 2).map((source) => source.label).filter(Boolean) ?? [];
+  const sourceLabels = input.brainProfile?.sources.slice(0, 4).map((source) => source.label).filter(Boolean) ?? [];
   const selectedLenses = input.selectedOptions.map((option) => option.lens);
   const generatedLenses = input.options.map((option) => option.lens);
 
   return [
     {
+      id: "penny-workbench",
+      label: "Penny",
+      detail: "Memory-native creativity workbench",
+      note: "Human judgment stays in control.",
+      edgeToNext: "grounds",
+    },
+    {
       id: "brain-sources",
-      label: "Brain sources",
+      label: "Brain",
       detail: sourceLabels.length
         ? `${input.brainProfile?.stats.memoryNodeCount ?? 0} memories from ${sourceLabels.join(", ")}`
         : "Context-light until Brain imports are attached",
+      note: "Safe fixture/manual sources only.",
+      edgeToNext: "suggests",
     },
     {
       id: "create-options",
-      label: "Create options",
+      label: "Create",
       detail: selectedLenses.length
         ? `Selected ${selectedLenses.join(" + ")}`
         : generatedLenses.length
           ? `Generated ${generatedLenses.join(" / ")}`
           : "Waiting for five directions",
+      note: "Five equal cards: Personal, Practical, Valuable, Critical, Weird.",
+      edgeToNext: "explains",
     },
     {
       id: "learn-explanation",
-      label: "Learn explanation",
+      label: "Learn",
       detail: createLearnBridgeConcept,
+      note: "Bridge opens without losing Create state.",
+      edgeToNext: "returns",
     },
     {
       id: "artifact-export",
-      label: "Artifact/export",
+      label: "Export",
       detail: input.promptExport?.fileName ?? input.artifact?.title ?? "Artifact not generated yet",
+      note: "Coding-agent prompt carries selections, evidence, and non-goals.",
+      edgeToNext: "ships",
     },
   ];
 }
@@ -1004,12 +1053,14 @@ export function CreateOptionBoard({
   selectedOptionIds,
   busy,
   onToggleOption,
+  onLearnThis,
 }: {
   options: CandidateOption[];
   nextBestMove?: NextBestMove | null;
   selectedOptionIds: string[];
   busy: boolean;
   onToggleOption: (optionId: string) => void;
+  onLearnThis?: ((option: CandidateOption) => void) | undefined;
 }) {
   const [detailOptionId, setDetailOptionId] = useState<string | null>(null);
   const activeDetailOption = detailOptionId ? options.find((option) => option.id === detailOptionId) ?? null : null;
@@ -1040,7 +1091,7 @@ export function CreateOptionBoard({
       </header>
       {nextBestMove ? (
         <section className={`create-next-best-move${nextBestMove.grounded ? " is-grounded" : " is-context-light"}`}>
-          <span>Next-best move</span>
+          <span>Possible move</span>
           <strong>{nextBestMove.title}</strong>
           <p>{nextBestMove.action}</p>
           <small>{nextBestMove.whyItMatters}</small>
@@ -1070,29 +1121,64 @@ export function CreateOptionBoard({
               <span>{option.sourceCount} sources</span>
               <span>{option.contextLabel}</span>
             </div>
+            <div className="create-option-source-chips" aria-label={`${option.lens} source chips`}>
+              {uniqueById(option.sourcesUsed)
+                .filter((source) => source.kind !== "rough_idea")
+                .slice(0, 3)
+                .map((source) => (
+                  <span key={source.id}>{source.label}</span>
+                ))}
+            </div>
             <div>
               <p>{option.topReason}</p>
               <p>{option.rationale}</p>
               <small>{option.nextMove}</small>
             </div>
-            <button
-              type="button"
-              className="create-option-detail-button"
-              onClick={() => setDetailOptionId(option.id)}
-              data-testid="create-option-details-button"
-            >
-              <Info size={14} />
-              Details
-            </button>
+            <div className="create-option-card-actions">
+              <button
+                type="button"
+                className="create-option-detail-button"
+                onClick={() => setDetailOptionId(option.id)}
+                data-testid="create-option-details-button"
+              >
+                <Info size={14} />
+                Details
+              </button>
+              {onLearnThis ? (
+                <button
+                  type="button"
+                  className="create-option-detail-button"
+                  onClick={() => onLearnThis(option)}
+                  data-testid="create-option-learn-this-button"
+                >
+                  <BookOpen size={14} />
+                  Learn this
+                </button>
+              ) : null}
+            </div>
           </article>
         ))}
       </div>
-      {activeDetailOption ? <CreateOptionDetailsDrawer option={activeDetailOption} onClose={() => setDetailOptionId(null)} /> : null}
+      {activeDetailOption ? (
+        <CreateOptionDetailsDrawer
+          option={activeDetailOption}
+          onClose={() => setDetailOptionId(null)}
+          onLearnThis={onLearnThis}
+        />
+      ) : null}
     </section>
   );
 }
 
-export function CreateOptionDetailsDrawer({ option, onClose }: { option: CandidateOption; onClose: () => void }) {
+export function CreateOptionDetailsDrawer({
+  option,
+  onClose,
+  onLearnThis,
+}: {
+  option: CandidateOption;
+  onClose: () => void;
+  onLearnThis?: ((option: CandidateOption) => void) | undefined;
+}) {
   const sourceRefs = uniqueById(option.sourcesUsed);
   const memoryRefs = uniqueById(option.memoryUsed);
   const importedSourceRefs = sourceRefs.filter((source) => source.kind === "source");
@@ -1114,9 +1200,17 @@ export function CreateOptionDetailsDrawer({ option, onClose }: { option: Candida
           <span>{option.lens} details</span>
           <strong>{option.title}</strong>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close option details">
-          <X size={16} />
-        </button>
+        <div className="create-option-detail-actions">
+          {onLearnThis ? (
+            <button type="button" onClick={() => onLearnThis(option)} data-testid="create-detail-learn-this-button">
+              <BookOpen size={15} />
+              Learn this
+            </button>
+          ) : null}
+          <button type="button" onClick={onClose} aria-label="Close option details">
+            <X size={16} />
+          </button>
+        </div>
       </header>
 
       <section>
@@ -1201,7 +1295,18 @@ export function CreateOptionDetailsDrawer({ option, onClose }: { option: Candida
   );
 }
 
-export function CreateArtifactPanel({ artifact }: { artifact: CodingPromptArtifact | null }) {
+export function CreateArtifactPanel({
+  artifact,
+  selectedOptions = [],
+}: {
+  artifact: CodingPromptArtifact | null;
+  selectedOptions?: CandidateOption[];
+}) {
+  const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
+  const [refinedSectionIds, setRefinedSectionIds] = useState<string[]>([]);
+  const [commentSectionIds, setCommentSectionIds] = useState<string[]>([]);
+  const [sectionComments, setSectionComments] = useState<Record<string, string>>({});
+
   if (!artifact) {
     return (
       <section className="create-artifact-panel" aria-label="Coding prompt artifact" data-testid="create-artifact-panel">
@@ -1212,6 +1317,12 @@ export function CreateArtifactPanel({ artifact }: { artifact: CodingPromptArtifa
         <p className="create-panel-empty">Generate directions to start the prompt artifact.</p>
       </section>
     );
+  }
+
+  const selectedLensLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "the current selected option mix";
+
+  function toggleValue(values: string[], value: string): string[] {
+    return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
   }
 
   return (
@@ -1225,6 +1336,43 @@ export function CreateArtifactPanel({ artifact }: { artifact: CodingPromptArtifa
           <article key={section.title} className={section.status === "updated" ? "is-updated" : ""} data-testid="yc-artifact-section">
             <span>{section.title}</span>
             <p>{section.body}</p>
+            <div className="yc-artifact-section-actions" aria-label={`${section.title} section actions`}>
+              <button type="button" onClick={() => setExpandedSectionIds((current) => toggleValue(current, section.title))}>
+                {expandedSectionIds.includes(section.title) ? "Collapse" : "Expand"}
+              </button>
+              <button type="button" onClick={() => setRefinedSectionIds((current) => toggleValue(current, section.title))}>
+                Use selected mix
+              </button>
+              <button type="button" onClick={() => setCommentSectionIds((current) => toggleValue(current, section.title))}>
+                Add comment
+              </button>
+            </div>
+            {expandedSectionIds.includes(section.title) ? (
+              <p className="yc-artifact-section-note">
+                Expanded demo note: keep {section.title.toLowerCase()} tied to {selectedLensLabel}, source evidence, and the current rough idea.
+              </p>
+            ) : null}
+            {refinedSectionIds.includes(section.title) ? (
+              <p className="yc-artifact-section-note">
+                Selected mix applied: {selectedLensLabel} is now the working pressure for this section.
+              </p>
+            ) : null}
+            {commentSectionIds.includes(section.title) ? (
+              <label className="yc-artifact-section-comment">
+                <span>Section comment</span>
+                <textarea
+                  value={sectionComments[section.title] ?? ""}
+                  onChange={(event) =>
+                    setSectionComments((current) => ({
+                      ...current,
+                      [section.title]: event.target.value,
+                    }))
+                  }
+                  placeholder={`Add a note for ${section.title.toLowerCase()}.`}
+                  rows={2}
+                />
+              </label>
+            ) : null}
           </article>
         ))}
       </div>
@@ -1482,7 +1630,7 @@ function isYcFounderFixtureProfile(profile: BrainMemoryProfileData | null): bool
     ...profile.recentMemoryNodes.map((node) => `${node.title} ${node.summary}`),
   ].join(" ");
 
-  return /penny-yc-founder-fixture|Email fixture|Manual messages context|Founder notes/i.test(haystack);
+  return /penny-yc-founder-fixture|Email fixture|LinkedIn-style founder context|Manual WhatsApp-style transcript|Manual messages transcript|Founder notes/i.test(haystack);
 }
 
 function ycArtifactOutline(artifact: CodingPromptArtifact): Array<{
