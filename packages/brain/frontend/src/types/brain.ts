@@ -1055,6 +1055,10 @@ export type SourceImportKind =
   | "text"
   | "markdown"
   | "pdf"
+  | "email_fixture"
+  | "linkedin_context"
+  | "manual_messages_transcript"
+  | "founder_notes"
   | "chatgpt_export"
   | "claude_export"
   | "docs_text"
@@ -1293,6 +1297,9 @@ export interface BrainImportResponse {
 export interface BrainDemoFixtureResponse {
   data: {
     importInput: BrainImportInput;
+    importInputs?: BrainImportInput[];
+    demoPrompt?: string | null;
+    safetyCopy?: string | null;
   };
 }
 
