@@ -113,7 +113,7 @@ test("LearnWorkspace renders a Create option Learn bridge with option-specific c
   assert.match(markup, /Show worked example/);
   assert.match(markup, /Apply to my artifact/);
   assert.match(markup, /What this option means/);
-  assert.match(markup, /option is a possible direction, not Penny&#x27;s command|option is a possible direction, not Penny's command/);
+  assert.match(markup, /Why Penny suggested it/);
 });
 
 test("LearnWorkspace renders backend expert learning plan subgroups", () => {
