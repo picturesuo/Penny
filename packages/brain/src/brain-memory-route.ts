@@ -553,8 +553,8 @@ function ycFounderFixtureImportInputs(content: string): {
   });
 
   return {
-    demoPrompt: stringValue(record.demoPrompt),
-    safetyCopy: stringValue(recordValue(record.safety)?.copy),
+    demoPrompt: stringValue(record.demoPrompt) ?? null,
+    safetyCopy: stringValue(recordValue(record.safety)?.copy) ?? null,
     importInputs,
   };
 }
