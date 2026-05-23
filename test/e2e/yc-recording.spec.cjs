@@ -47,6 +47,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Personal"]')).toBeVisible();
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Valuable"]')).toBeVisible();
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Critical"]')).toBeVisible();
+  await expect(page.getByRole("region", { name: "Create graph" })).toBeVisible();
 
   await page.locator('[data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
   await expect(page.getByTestId("create-evidence-drawer")).toBeVisible({ timeout: 10_000 });
