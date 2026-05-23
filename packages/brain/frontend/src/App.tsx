@@ -903,7 +903,7 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
-    setCreateInitialSeedText(null);
+    setCreateInitialSeedText(createPromptFromBrainProfile(profile));
     setCreateBrainProfile(profile);
     setCreateWorkspaceMounted(true);
     setLandingVisible(false);
@@ -1008,6 +1008,31 @@ export function App() {
       </div>
     </div>
   );
+}
+
+function createPromptFromBrainProfile(profile: BrainMemoryProfileData): string {
+  const sourceLabels = profile.sources
+    .slice(0, 3)
+    .map((source) => source.label.trim())
+    .filter(Boolean);
+  const memoryTitles = profile.recentMemoryNodes
+    .slice(0, 3)
+    .map((node) => node.title.trim())
+    .filter(Boolean);
+  const contextLine =
+    profile.profile.privacySafeSummary.trim() ||
+    [
+      profile.stats.memoryNodeCount ? `${profile.stats.memoryNodeCount} Brain memories` : null,
+      sourceLabels.length ? `sources: ${sourceLabels.join(", ")}` : null,
+      memoryTitles.length ? `signals: ${memoryTitles.join("; ")}` : null,
+    ]
+      .filter(Boolean)
+      .join(". ");
+
+  return [
+    "Use my Brain context to create five concrete directions for Penny's next buildable artifact.",
+    contextLine ? `Ground the directions in this context: ${contextLine}` : "Ground the directions in the imported Brain memories.",
+  ].join(" ");
 }
 
 function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null): BrainData {
