@@ -2723,10 +2723,11 @@ export function BrainMemoryPanel({
             <span>Load YC founder fixture</span>
           </button>
           <ul className="brain-memory-demo-labels" aria-label="YC founder fixture sources">
-            <li>Email fixture</li>
-            <li>Gmail-style context</li>
-            <li>Manual messages context for demo</li>
-            <li>Founder notes</li>
+            <li>Email fixture, not live Gmail</li>
+            <li>LinkedIn-style context, not live LinkedIn</li>
+            <li>Manual messages context for demo, not live WhatsApp, iMessage, or SMS</li>
+            <li>Founder notes, manual/private</li>
+            <li>trainingUse=false</li>
           </ul>
           <button
             type="button"

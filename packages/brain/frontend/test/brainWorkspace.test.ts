@@ -79,10 +79,11 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Start Create with this Brain/);
   assert.match(markup, /Export coding prompt/);
   assert.match(markup, /Load YC founder fixture/);
-  assert.match(markup, /Email fixture/);
-  assert.match(markup, /Gmail-style context/);
-  assert.match(markup, /Manual messages context for demo/);
-  assert.match(markup, /Founder notes/);
+  assert.match(markup, /Email fixture, not live Gmail/);
+  assert.match(markup, /LinkedIn-style context, not live LinkedIn/);
+  assert.match(markup, /Manual messages context for demo, not live WhatsApp, iMessage, or SMS/);
+  assert.match(markup, /Founder notes, manual\/private/);
+  assert.match(markup, /trainingUse=false/);
   assert.match(markup, /Load Penny demo fixture/);
   assert.match(markup, /Uploaded sources/);
   assert.match(markup, /Founder workflow notes/);
