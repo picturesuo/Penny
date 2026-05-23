@@ -72,7 +72,7 @@ const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const CREATE_WORKSPACE_BOOT_KEY = "penny.createWorkspaceBoot.v1";
 const SESSION_QUERY_PARAM = "sessionId";
 export const pennyYcCreatePrompt =
-  "Use my emails, messages, and founder notes to shape Penny as an ideation workbench that turns vague ideas into buildable specs before coding agents start.";
+  "I want to create a YC startup around ideation and thinking - maybe a thinking instrument. It should use my past emails, messages, and notes to help me turn vague ideas into buildable structure. I want it to feel like a workbench that gives ideas direction without taking judgment away from the human.";
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
@@ -92,6 +92,7 @@ export function App() {
   const [createInitialSeedText, setCreateInitialSeedText] = useState<string | null>(null);
   const [createBrainProfile, setCreateBrainProfile] = useState<BrainMemoryProfileData | null>(null);
   const [createWorkspaceMounted, setCreateWorkspaceMounted] = useState(false);
+  const [createWorkspaceRunId, setCreateWorkspaceRunId] = useState(0);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [landingVisible, setLandingVisible] = useState(true);
   const [status, setStatus] = useState("Ready");
@@ -343,14 +344,19 @@ export function App() {
     rawIdea: string,
     sourceMaterial?: LearnSourceMaterialInput,
   ) {
-    setLandingVisible(false);
-
     if (mode === "Learn") {
+      setLandingVisible(false);
       setActiveMode("Learn");
       await handleLearnSeed(rawIdea, sourceMaterial);
       return;
     }
 
+    if (isYcDemoCreatePrompt(rawIdea)) {
+      await startYcFixtureCreate(rawIdea);
+      return;
+    }
+
+    setLandingVisible(false);
     setData(null);
     setMoves([]);
     setAutopilot(null);
@@ -365,21 +371,21 @@ export function App() {
     rememberCreateWorkspaceBoot({ seedText: createSeedText, brainProfile: null });
     setCreateInitialSeedText(createSeedText);
     setCreateBrainProfile(null);
+    setCreateWorkspaceRunId((current) => current + 1);
     setActiveMode("Create");
     setStatus("Preparing Create");
   }
 
   async function handleBuildWithPenny() {
+    await startYcFixtureCreate(pennyYcCreatePrompt);
+  }
+
+  async function startYcFixtureCreate(rawIdea: string) {
     setIsThinking(true);
-    setStatus("Loading YC founder fixture");
+    setStatus("Synthesizing safe demo sources");
 
     try {
-      const fixture = await fetchBrainYcFounderFixtureImport();
-      const imported = await importBrainSource(fixture.data.importInput);
-
-      if (imported.data.job.status === "failed") {
-        throw new Error(imported.data.job.errorMessages[0] ?? "YC founder fixture import failed.");
-      }
+      const { profile, sourceCount } = await importYcFounderFixtureBundle();
 
       setSelectedDocumentId(null);
       setData(null);
@@ -392,20 +398,46 @@ export function App() {
       setBrainCanvasOpen(false);
       setLearnFocusNode(null);
       setRelatedBrainSearch(null);
-      rememberCreateWorkspaceBoot({ seedText: pennyYcCreatePrompt, brainProfile: imported.data.profile });
-      setCreateInitialSeedText(pennyYcCreatePrompt);
-      setCreateBrainProfile(imported.data.profile);
+      clearCreateWorkspaceDraftStorage();
+      const createSeedText = rawIdea.trim() || pennyYcCreatePrompt;
+      rememberCreateWorkspaceBoot({ seedText: createSeedText, brainProfile: profile });
+      setCreateInitialSeedText(createSeedText);
+      setCreateBrainProfile(profile);
       setCreateWorkspaceMounted(true);
+      setCreateWorkspaceRunId((current) => current + 1);
       setLandingVisible(false);
       setActiveMode("Create");
       forgetActiveSession();
-      setStatus("YC founder fixture loaded for Create");
+      setStatus(`YC demo Brain synthesized from ${sourceCount} safe fixture sources`);
     } catch (error) {
       setLandingVisible(true);
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
       setIsThinking(false);
     }
+  }
+
+  async function importYcFounderFixtureBundle(): Promise<{ profile: BrainMemoryProfileData; sourceCount: number }> {
+    const fixture = await fetchBrainYcFounderFixtureImport();
+    const importInputs = fixture.data.importInputs?.length ? fixture.data.importInputs : [fixture.data.importInput];
+    let profile: BrainMemoryProfileData | null = null;
+
+    for (const [index, importInput] of importInputs.entries()) {
+      setStatus(`Synthesizing demo source ${index + 1}/${importInputs.length}: ${importInput.label ?? "Brain context"}`);
+      const imported = await importBrainSource(importInput);
+
+      if (imported.data.job.status === "failed") {
+        throw new Error(imported.data.job.errorMessages[0] ?? "YC founder fixture import failed.");
+      }
+
+      profile = imported.data.profile;
+    }
+
+    if (!profile) {
+      throw new Error("YC founder fixture did not contain importable demo sources.");
+    }
+
+    return { profile, sourceCount: importInputs.length };
   }
 
   async function handleLandingQuickNote(rawIdea: string) {
@@ -1021,6 +1053,7 @@ export function App() {
                   isThinking={isThinking}
                   brainProfile={createBrainProfile}
                   initialSeedText={createInitialSeedText}
+                  key={createWorkspaceRunId}
                   onInitialSeedConsumed={() => setCreateInitialSeedText(null)}
                   onStatusChange={setStatus}
                   onThinkingChange={setIsThinking}
@@ -1059,6 +1092,16 @@ function createPromptFromBrainProfile(profile: BrainMemoryProfileData): string {
     "Use my Brain context to create five concrete directions for Penny's next buildable artifact.",
     contextLine ? `Ground the directions in this context: ${contextLine}` : "Ground the directions in the imported Brain memories.",
   ].join(" ");
+}
+
+export function isYcDemoCreatePrompt(rawIdea: string): boolean {
+  const normalized = rawIdea.toLowerCase().replace(/\s+/g, " ").trim();
+  const hasYcFrame = /\byc\b|y combinator|startup/.test(normalized);
+  const hasThinkingWorkbench = /ideation|thinking instrument|thinking workbench|creativity workbench|workbench/.test(normalized);
+  const hasPrivateContext =
+    /emails?|gmail|messages?|whatsapp|linkedin|notes?|past context|private context/.test(normalized);
+
+  return Boolean(hasYcFrame && hasThinkingWorkbench && hasPrivateContext);
 }
 
 function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null): BrainData {
