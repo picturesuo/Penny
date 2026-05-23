@@ -288,14 +288,14 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
           {onBuildWithPenny ? (
             <button
               type="button"
-              className="landing-brain-start-button"
+              className="landing-brain-start-button landing-demo-fixture-button"
               disabled={disabled}
-              data-testid="landing-build-with-penny"
+              data-testid="landing-yc-demo-fixture"
               onClick={() => {
                 void onBuildWithPenny();
               }}
             >
-              Build with Penny
+              Use YC demo fixture
             </button>
           ) : null}
 
