@@ -22,6 +22,10 @@ export type SourceImportKind =
   | "text"
   | "markdown"
   | "pdf"
+  | "email_fixture"
+  | "linkedin_context"
+  | "manual_messages_transcript"
+  | "founder_notes"
   | "chatgpt_export"
   | "claude_export"
   | "docs_text"
@@ -319,6 +323,10 @@ const sourceImportKinds = [
   "text",
   "markdown",
   "pdf",
+  "email_fixture",
+  "linkedin_context",
+  "manual_messages_transcript",
+  "founder_notes",
   "chatgpt_export",
   "claude_export",
   "docs_text",
@@ -455,6 +463,24 @@ export async function handleBrainDemoFixtureRequest(request: Request): Promise<R
   const path = new URL(request.url).pathname;
   const fixture = brainDemoFixtureForPath(path);
   const content = await readFile(new URL(fixture.fileUrl, import.meta.url), "utf8");
+  const ycFounderFixture = path === "/api/brain/demo-fixture/yc-founder" ? ycFounderFixtureImportInputs(content) : null;
+
+  if (ycFounderFixture) {
+    return jsonResponse({
+      data: {
+        importInput: {
+          kind: "json",
+          label: fixture.label,
+          fileName: fixture.fileName,
+          mimeType: "application/json",
+          content,
+        },
+        importInputs: ycFounderFixture.importInputs,
+        demoPrompt: ycFounderFixture.demoPrompt,
+        safetyCopy: ycFounderFixture.safetyCopy,
+      },
+    });
+  }
 
   return jsonResponse({
     data: {
@@ -482,6 +508,54 @@ function brainDemoFixtureForPath(path: string): { label: string; fileName: strin
     label: "Penny demo ChatGPT export",
     fileName: "conversations.json",
     fileUrl: "../../../test/fixtures/penny-brain-demo-conversations.json",
+  };
+}
+
+function ycFounderFixtureImportInputs(content: string): {
+  demoPrompt: string | null;
+  safetyCopy: string | null;
+  importInputs: Array<z.infer<typeof BrainImportBodySchema>>;
+} | null {
+  const parsed = parseJsonOrNull(content);
+
+  const record = recordValue(parsed);
+
+  if (!record || record.schemaVersion !== "penny-yc-founder-fixture.v2" || !Array.isArray(record.sources)) {
+    return null;
+  }
+
+  const importInputs = record.sources.flatMap((source) => {
+    const sourceRecord = recordValue(source);
+
+    if (!sourceRecord) {
+      return [];
+    }
+
+    const kind = typeof sourceRecord.kind === "string" ? sourceImportKindValue(sourceRecord.kind) : "text";
+    const label = stringValue(sourceRecord.label) ?? stringValue(sourceRecord.id) ?? labelForKind(kind);
+    const sourceContent = stringValue(sourceRecord.content);
+
+    if (!sourceContent?.trim()) {
+      return [];
+    }
+
+    return [
+      compactObject({
+        kind,
+        label,
+        fileName: stringValue(sourceRecord.fileName),
+        mimeType: "text/plain",
+        sourceUri: stringValue(sourceRecord.sourceUri),
+        content: sourceContent,
+        rawRetention: false,
+      }) as z.infer<typeof BrainImportBodySchema>,
+    ];
+  });
+
+  return {
+    demoPrompt: stringValue(record.demoPrompt),
+    safetyCopy: stringValue(recordValue(record.safety)?.copy),
+    importInputs,
   };
 }
 
@@ -1857,9 +1931,14 @@ function normalizeImportedText(kind: SourceImportKind, content: string): string 
       return normalizeWhitespace(extractGenericJsonText(raw));
     case "csv":
       return normalizeWhitespace(extractCsvText(raw));
+    case "email_fixture":
+    case "linkedin_context":
+    case "manual_messages_transcript":
+      return normalizeWhitespace(raw);
     case "markdown":
     case "docs_text":
     case "canvas_text":
+    case "founder_notes":
       return normalizeWhitespace(stripMarkdown(raw));
     case "pdf":
       return normalizeWhitespace(extractPdfText(raw));
@@ -1885,6 +1964,10 @@ function emptyImportMessage(kind: SourceImportKind): string {
 
   if (kind === "claude_export") {
     return "Claude import needs exported JSON/CSV text or copied conversation text.";
+  }
+
+  if (kind === "manual_messages_transcript") {
+    return "Manual messages transcript import needs pasted or demo transcript text. Penny does not read SMS, iMessage, or WhatsApp directly in this flow.";
   }
 
   return "Brain import needs text content. ZIP/PDF binary parsing is not available unless text has already been extracted.";
@@ -2998,6 +3081,14 @@ function sourcePreviewExplanation(kind: SourceImportKind): string {
       return "Imported markdown notes after removing formatting while preserving the note text.";
     case "pdf":
       return "Imported already-extracted PDF text. Penny does not parse raw or scanned PDF binary content in this flow.";
+    case "email_fixture":
+      return "Imported safe email-style fixture text as private Brain context without claiming live Gmail access.";
+    case "linkedin_context":
+      return "Imported safe LinkedIn-style fixture text as private Brain context without claiming live LinkedIn access.";
+    case "manual_messages_transcript":
+      return "Imported a pasted or demo message transcript as private Brain context. Penny does not read SMS, iMessage, or WhatsApp directly here.";
+    case "founder_notes":
+      return "Imported founder notes as private Brain context.";
     case "csv":
       return "Imported text-like CSV columns such as title, prompt, message, response, summary, content, and text.";
     case "json":
@@ -3295,6 +3386,10 @@ function labelForKind(kind: SourceImportKind): string {
     text: "Text import",
     markdown: "Markdown import",
     pdf: "PDF text import",
+    email_fixture: "Email fixture import",
+    linkedin_context: "LinkedIn-style context import",
+    manual_messages_transcript: "Manual messages transcript import",
+    founder_notes: "Founder notes import",
     chatgpt_export: "ChatGPT export",
     claude_export: "Claude export",
     docs_text: "Document text import",
