@@ -4,15 +4,18 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildCreateNextInput,
+  buildCreateLearnBridgeNode,
   CreateArtifactPanel,
   CreateBrainOnboardingPanel,
   CreateWorkspace,
   CreateComparisonPanel,
   CreateExportFeedbackPanel,
+  CreateLearnBridgePanel,
   CreateOptionBoard,
   CreateOptionDetailsDrawer,
   CreateProviderStatusPanel,
   CreateVerificationPanel,
+  createLearnBridgeConcept,
   isCreateComparisonDevMode,
 } from "../src/components/CreateWorkspace";
 import type { BrainMemoryProfileData, CandidateOption, CreateProviderComparisonResponse } from "../src/types/brain";
@@ -170,6 +173,31 @@ test("CreateExportFeedbackPanel renders rating, reason, and save controls", () =
   assert.match(markup, /Missing constraints/);
   assert.match(markup, /Save feedback/);
   assert.match(markup, /Feedback saved/);
+});
+
+test("CreateLearnBridgePanel exposes the Brain Ranker lesson and focus node", () => {
+  const artifact = createComparisonArm("deterministic", createOptionSet("deterministic").options).artifact;
+  const markup = renderToStaticMarkup(
+    createElement(CreateLearnBridgePanel, {
+      artifact,
+      onLearnThis: () => undefined,
+    }),
+  );
+  const node = buildCreateLearnBridgeNode(artifact);
+
+  assert.match(markup, /data-testid="create-learn-bridge"/);
+  assert.match(markup, /data-testid="create-learn-this-button"/);
+  assert.match(markup, /Learn this/);
+  assert.match(markup, /Brain Ranker weights explicit judgment events over implicit behavior/);
+  assert.match(markup, /Explain simply/);
+  assert.match(markup, /worked example/);
+  assert.match(markup, /applies to my artifact/);
+  assert.equal(createLearnBridgeConcept, "Brain Ranker weights explicit judgment events over implicit behavior.");
+  assert.equal(node.id, "create-learn:brain-ranker-judgment-events");
+  assert.equal(node.kind, "concept");
+  assert.equal(node.refs?.artifactId, artifact.id);
+  assert.match(node.summary ?? "", /Personal \+ Valuable \+ Critical/);
+  assert.match(node.summary ?? "", /explicit selections, comments, and export feedback/);
 });
 
 test("Create UI smoke covers Brain state, five options, evidence, verification, and export feedback", () => {
