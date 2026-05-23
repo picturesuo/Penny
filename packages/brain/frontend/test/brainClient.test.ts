@@ -11,6 +11,7 @@ import {
   deleteBrainSource,
   exportCodingPrompt,
   fetchBrainDemoFixtureImport,
+  fetchBrainYcFounderFixtureImport,
   fetchBrainImportJob,
   fetchBrainHybridSearch,
   fetchBrainMemoryProfile,
@@ -1078,6 +1079,32 @@ test("frontend brain client loads the Brain demo fixture import payload", async 
     assert.equal(fixture.data.importInput.kind, "chatgpt_export");
     assert.equal(fixture.data.importInput.fileName, "conversations.json");
     assert.equal(calls[0]?.url, "/api/brain/demo-fixture/penny");
+    assert.equal(calls[0]?.method, "GET");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client loads the YC founder fixture import payload", async () => {
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      importInput: {
+        kind: "chatgpt_export",
+        label: "Penny YC founder fixture",
+        fileName: "penny-yc-founder-fixture.json",
+        content: "[]",
+      },
+    }),
+  ]);
+
+  try {
+    const fixture = await fetchBrainYcFounderFixtureImport();
+
+    assert.equal(fixture.data.importInput.kind, "chatgpt_export");
+    assert.equal(fixture.data.importInput.label, "Penny YC founder fixture");
+    assert.equal(fixture.data.importInput.fileName, "penny-yc-founder-fixture.json");
+    assert.equal(calls[0]?.url, "/api/brain/demo-fixture/yc-founder");
     assert.equal(calls[0]?.method, "GET");
   } finally {
     restoreFetch();
