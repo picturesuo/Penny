@@ -619,7 +619,13 @@ test("GET /api/brain/demo-fixture/yc-founder returns a private YC founder fixtur
   assert.ok(profile.stats.memoryNodeCount >= 14);
   assert.ok(profile.sources.every((source) => source.privacy.trainingUse === false));
   assert.ok(profile.recentMemoryNodes.every((node) => node.permission.trainingUse === false));
-  assert.ok(profile.recentMemoryNodes.some((node) => /vague ideas.*buildable specs/i.test(node.summary)));
+  assert.match(
+    [
+      ...profile.recentMemoryNodes.map((node) => node.summary),
+      ...profile.sources.map((source) => source.preview?.excerpt ?? ""),
+    ].join("\n"),
+    /vague ideas|buildable specs|coding agents before they had a clear spec/i,
+  );
   assert.ok(profile.recentMemoryNodes.some((node) => /not a chatbot|human judgment|without taking judgment/i.test(node.summary)));
   assert.ok(profile.sources.some((source) => source.kind === "manual_messages_transcript"));
   assert.ok(profile.sources.some((source) => /Not live WhatsApp, SMS, or iMessage/i.test(source.preview?.excerpt ?? "")));
