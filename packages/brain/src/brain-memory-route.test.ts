@@ -586,28 +586,43 @@ test("GET /api/brain/demo-fixture/yc-founder returns a private YC founder fixtur
   const payload = await responsePayload(response);
 
   assert.equal(response.status, 200);
-  assert.equal(payload.data.importInput.kind, "chatgpt_export");
+  assert.equal(payload.data.importInput.kind, "json");
   assert.equal(payload.data.importInput.label, "Penny YC founder fixture");
   assert.equal(payload.data.importInput.fileName, "penny-yc-founder-fixture.json");
-  assert.match(payload.data.importInput.content, /Email fixture/);
-  assert.match(payload.data.importInput.content, /Gmail-style context/);
-  assert.match(payload.data.importInput.content, /Manual messages context for demo/);
-  assert.match(payload.data.importInput.content, /Founder notes/);
-  assert.match(payload.data.importInput.content, /trainingUse=false/);
-
-  const importResponse = await handleBrainImportRequest(
-    jsonRequest("http://localhost/api/brain/import", payload.data.importInput),
-    { service },
+  assert.match(payload.data.demoPrompt, /YC startup around ideation and thinking/i);
+  assert.match(payload.data.safetyCopy, /Safe demo fixture only/i);
+  assert.equal(payload.data.importInputs.length, 5);
+  assert.deepEqual(
+    payload.data.importInputs.map((input: { kind: string }) => input.kind),
+    ["email_fixture", "linkedin_context", "manual_messages_transcript", "founder_notes", "founder_notes"],
   );
-  const importPayload = await responsePayload(importResponse);
-  const profile = importPayload.data.profile as BrainMemoryProfile;
+  assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /Email fixture/);
+  assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /LinkedIn-style founder context fixture/);
+  assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /Manual WhatsApp-style transcript fixture/);
+  assert.match(payload.data.importInputs.map((input: { content: string }) => input.content).join("\n"), /trainingUse=false/);
 
-  assert.equal(importResponse.status, 200);
-  assert.ok(profile.stats.memoryNodeCount >= 8);
+  let profile: BrainMemoryProfile | null = null;
+
+  for (const importInput of payload.data.importInputs) {
+    const importResponse = await handleBrainImportRequest(
+      jsonRequest("http://localhost/api/brain/import", importInput),
+      { service },
+    );
+    const importPayload = await responsePayload(importResponse);
+
+    assert.equal(importResponse.status, 200);
+    profile = importPayload.data.profile as BrainMemoryProfile;
+  }
+
+  assert.ok(profile);
+  assert.ok(profile.stats.sourceCount >= 5);
+  assert.ok(profile.stats.memoryNodeCount >= 14);
   assert.ok(profile.sources.every((source) => source.privacy.trainingUse === false));
   assert.ok(profile.recentMemoryNodes.every((node) => node.permission.trainingUse === false));
   assert.ok(profile.recentMemoryNodes.some((node) => /vague ideas.*buildable specs/i.test(node.summary)));
-  assert.ok(profile.recentMemoryNodes.some((node) => /not a GPT wrapper|human judgment/i.test(node.summary)));
+  assert.ok(profile.recentMemoryNodes.some((node) => /not a chatbot|human judgment|without taking judgment/i.test(node.summary)));
+  assert.ok(profile.sources.some((source) => source.kind === "manual_messages_transcript"));
+  assert.ok(profile.sources.some((source) => /Not live WhatsApp, SMS, or iMessage/i.test(source.preview?.excerpt ?? "")));
   assert.ok(profile.profile.repeatedRejectedDirections.some((signal) => /chatbot|dashboard|notes app|assistant/i.test(`${signal.label} ${signal.summary}`)));
 });
 
