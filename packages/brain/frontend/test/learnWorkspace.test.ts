@@ -83,10 +83,37 @@ test("LearnWorkspace renders the Create Learn bridge with a Back to Create contr
   assert.match(markup, /Learn how Brain Ranker uses explicit Create judgment/);
   assert.match(markup, /Explain simply/);
   assert.match(markup, /Show worked example/);
-  assert.match(markup, /Show how this applies to my artifact/);
+  assert.match(markup, /Apply to my artifact/);
   assert.match(markup, /explicit judgment events are the things you deliberately do/i);
   assert.match(markup, /selecting cards, writing comments, and rating exports/i);
   assert.match(markup, /Thinking graph/);
+});
+
+test("LearnWorkspace renders a Create option Learn bridge with option-specific choices", () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      LearnWorkspace,
+      learnWorkspaceProps({
+        focusNode: {
+          id: "create-option-learn:create-option-personal",
+          kind: "concept",
+          title: "Personal: Memory-native workbench",
+          summary:
+            "What this option means: keep Penny grounded in founder context. Why Penny suggested it: the source evidence points to human judgment. Worked example: select the option and update the artifact. Next smallest concept: understand how Personal changes the selected mix.",
+          refs: { artifactId: "artifact-create-option-test" },
+        },
+        onBackToCreate: () => undefined,
+      }),
+    ),
+  );
+
+  assert.match(markup, /data-testid="learn-back-to-create"/);
+  assert.match(markup, /Learn Personal: Memory-native workbench without leaving Create judgment behind/);
+  assert.match(markup, /Explain simply/);
+  assert.match(markup, /Show worked example/);
+  assert.match(markup, /Apply to my artifact/);
+  assert.match(markup, /What this option means/);
+  assert.match(markup, /option is a possible direction, not Penny&#x27;s command|option is a possible direction, not Penny's command/);
 });
 
 test("LearnWorkspace renders backend expert learning plan subgroups", () => {
