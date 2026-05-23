@@ -376,6 +376,19 @@ test("CreateWorkspace exposes stable browser smoke selectors", () => {
   assert.match(markup, /data-testid="create-export-panel"/);
 });
 
+test("CreateWorkspace gives the Brain return control a Create-specific accessible name", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CreateWorkspace, {
+      data: null,
+      status: "ready",
+      isThinking: false,
+      onOpenBrain: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /aria-label="Open Brain from Create"/);
+});
+
 test("isCreateComparisonDevMode only exposes comparison in dev, test, or explicit flag", () => {
   assert.equal(isCreateComparisonDevMode({ DEV: true }), true);
   assert.equal(isCreateComparisonDevMode({ MODE: "test" }), true);
