@@ -56,7 +56,6 @@ const ycArtifactOutlineTitles = [
   "Demo script",
   "Build prompt/export",
 ] as const;
-const ycDemoCanvasNodes = ["Penny", "Brain sources", "Create options", "Learn explanation", "Export prompt"];
 const createExportFeedbackReasons: Array<{ reason: CreateExportFeedbackReason; label: string }> = [
   { reason: "strong_output", label: "Strong output" },
   { reason: "too_generic", label: "Too generic" },
@@ -106,6 +105,17 @@ export function CreateWorkspace({
   const selectedOptions = useMemo(
     () => options.filter((option) => selectedOptionIds.includes(option.id)),
     [options, selectedOptionIds],
+  );
+  const canvasNodes = useMemo(
+    () =>
+      createCanvasNodes({
+        brainProfile: brainProfile ?? null,
+        options,
+        selectedOptions,
+        artifact,
+        promptExport,
+      }),
+    [artifact, brainProfile, options, promptExport, selectedOptions],
   );
   const activeStepIndex = createActiveStepIndex({ optionSet, judgmentEvent, artifact, verification, promptExport });
 
@@ -313,7 +323,7 @@ export function CreateWorkspace({
 
   return (
     <main className="check-workspace-shell" aria-label="Create workspace" data-testid="create-workspace">
-      <CreatePathSidebar activeIndex={activeStepIndex} status={displayStatus} onOpenBrain={onOpenBrain} />
+      <CreatePathSidebar activeIndex={activeStepIndex} status={displayStatus} canvasNodes={canvasNodes} onOpenBrain={onOpenBrain} />
 
       <section className="check-center-stage" aria-label="Penny Create flow">
         <article className="check-main-cycle create-workspace-card">
@@ -558,10 +568,12 @@ export function CreateExportFeedbackPanel({
 export function CreatePathSidebar({
   activeIndex,
   status,
+  canvasNodes,
   onOpenBrain,
 }: {
   activeIndex: number;
   status: string;
+  canvasNodes: CreateCanvasNode[];
   onOpenBrain?: (() => void) | undefined;
 }) {
   return (
@@ -608,8 +620,11 @@ export function CreatePathSidebar({
           <strong>Penny path</strong>
         </div>
         <ol>
-          {ycDemoCanvasNodes.map((node) => (
-            <li key={node}>{node}</li>
+          {canvasNodes.map((node) => (
+            <li key={node.id}>
+              <strong>{node.label}</strong>
+              <span>{node.detail}</span>
+            </li>
           ))}
         </ol>
       </section>
@@ -620,6 +635,53 @@ export function CreatePathSidebar({
       </div>
     </aside>
   );
+}
+
+type CreateCanvasNode = {
+  id: string;
+  label: string;
+  detail: string;
+};
+
+function createCanvasNodes(input: {
+  brainProfile: BrainMemoryProfileData | null;
+  options: CandidateOption[];
+  selectedOptions: CandidateOption[];
+  artifact: CodingPromptArtifact | null;
+  promptExport: PromptExport | null;
+}): CreateCanvasNode[] {
+  const sourceLabels = input.brainProfile?.sources.slice(0, 2).map((source) => source.label).filter(Boolean) ?? [];
+  const selectedLenses = input.selectedOptions.map((option) => option.lens);
+  const generatedLenses = input.options.map((option) => option.lens);
+
+  return [
+    {
+      id: "brain-sources",
+      label: "Brain sources",
+      detail: sourceLabels.length
+        ? `${input.brainProfile?.stats.memoryNodeCount ?? 0} memories from ${sourceLabels.join(", ")}`
+        : "Context-light until Brain imports are attached",
+    },
+    {
+      id: "create-options",
+      label: "Create options",
+      detail: selectedLenses.length
+        ? `Selected ${selectedLenses.join(" + ")}`
+        : generatedLenses.length
+          ? `Generated ${generatedLenses.join(" / ")}`
+          : "Waiting for five directions",
+    },
+    {
+      id: "learn-explanation",
+      label: "Learn explanation",
+      detail: createLearnBridgeConcept,
+    },
+    {
+      id: "artifact-export",
+      label: "Artifact/export",
+      detail: input.promptExport?.fileName ?? input.artifact?.title ?? "Artifact not generated yet",
+    },
+  ];
 }
 
 export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryProfileData | null }) {
