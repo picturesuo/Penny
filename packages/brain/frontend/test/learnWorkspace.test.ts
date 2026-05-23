@@ -61,6 +61,34 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.doesNotMatch(markup, /NOTE/);
 });
 
+test("LearnWorkspace renders the Create Learn bridge with a Back to Create control", () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      LearnWorkspace,
+      learnWorkspaceProps({
+        focusNode: {
+          id: "create-learn:brain-ranker-judgment-events",
+          kind: "concept",
+          title: "Brain Ranker judgment weighting",
+          summary: "Brain Ranker weights explicit judgment events over implicit behavior.",
+          refs: { artifactId: "artifact-create-test" },
+        },
+        onBackToCreate: () => undefined,
+      }),
+    ),
+  );
+
+  assert.match(markup, /data-testid="learn-back-to-create"/);
+  assert.match(markup, /Back to Create/);
+  assert.match(markup, /Learn how Brain Ranker uses explicit Create judgment/);
+  assert.match(markup, /Explain simply/);
+  assert.match(markup, /Show worked example/);
+  assert.match(markup, /Show how this applies to my artifact/);
+  assert.match(markup, /explicit judgment events are the things you deliberately do/i);
+  assert.match(markup, /selecting cards, writing comments, and rating exports/i);
+  assert.match(markup, /Thinking graph/);
+});
+
 test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   const markup = renderToStaticMarkup(
     createElement(LearnWorkspace, learnWorkspaceProps({
