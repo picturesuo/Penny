@@ -39,6 +39,24 @@ export const createLensOrder: CreateLens[] = ["Personal", "Practical", "Valuable
 export const createLearnBridgeConcept = "Brain Ranker weights explicit judgment events over implicit behavior.";
 
 const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Prompt artifact", "Verification", "Export"];
+const ycFixtureLabels = ["Email fixture", "Gmail-style context", "Manual messages context", "Founder notes", "trainingUse=false"];
+const ycArtifactOutlineTitles = [
+  "Product thesis",
+  "Target user",
+  "Problem",
+  "Why now",
+  "Core loop",
+  "Memory layer",
+  "Create mode",
+  "Learn bridge",
+  "Data sources",
+  "Moat",
+  "Risks",
+  "MVP scope",
+  "Demo script",
+  "Build prompt/export",
+] as const;
+const ycDemoCanvasNodes = ["Penny", "Brain sources", "Create options", "Learn explanation", "Export prompt"];
 const createExportFeedbackReasons: Array<{ reason: CreateExportFeedbackReason; label: string }> = [
   { reason: "strong_output", label: "Strong output" },
   { reason: "too_generic", label: "Too generic" },
@@ -584,6 +602,18 @@ export function CreatePathSidebar({
         </div>
       </section>
 
+      <section className="yc-demo-canvas" aria-label="YC demo Canvas" data-testid="yc-demo-canvas">
+        <div className="check-thinking-graph-head">
+          <span>Canvas</span>
+          <strong>Penny path</strong>
+        </div>
+        <ol>
+          {ycDemoCanvasNodes.map((node) => (
+            <li key={node}>{node}</li>
+          ))}
+        </ol>
+      </section>
+
       <div className="check-path-status">
         <span>Status</span>
         <strong>{status}</strong>
@@ -596,6 +626,8 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
   const memoryCount = profile?.stats.memoryNodeCount ?? 0;
   const sourceCount = profile?.stats.sourceCount ?? 0;
   const topSignals = profile ? topBrainProfileSignals(profile).slice(0, 3) : [];
+  const sourceLabels = profile?.sources.slice(0, 3).map((source) => `${source.label} · trainingUse=${String(source.privacy.trainingUse)}`) ?? [];
+  const fixtureLabels = isYcFounderFixtureProfile(profile) ? ycFixtureLabels : [];
 
   if (!memoryCount) {
     return (
@@ -622,6 +654,20 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
           <li key={signal}>{signal}</li>
         ))}
       </ul>
+      {fixtureLabels.length ? (
+        <div className="create-demo-fixture-labels" aria-label="YC fixture labels" data-testid="yc-fixture-labels">
+          {fixtureLabels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+      ) : null}
+      {sourceLabels.length ? (
+        <div className="create-demo-fixture-labels" aria-label="Brain source privacy">
+          {sourceLabels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -980,6 +1026,14 @@ export function CreateArtifactPanel({ artifact }: { artifact: CodingPromptArtifa
         <span>Artifact v{artifact.version}</span>
         <strong>{artifact.title}</strong>
       </header>
+      <div className="yc-artifact-outline" aria-label="YC artifact outline" data-testid="yc-artifact-outline">
+        {ycArtifactOutline(artifact).map((section) => (
+          <article key={section.title} className={section.status === "updated" ? "is-updated" : ""} data-testid="yc-artifact-section">
+            <span>{section.title}</span>
+            <p>{section.body}</p>
+          </article>
+        ))}
+      </div>
       <div className="create-artifact-sections">
         {artifact.sections.map((section) => (
           <article key={section.id} className={section.status === "updated" ? "is-updated" : ""}>
@@ -1222,6 +1276,137 @@ function uniqueStrings(values: string[]): string[] {
   }
 
   return result;
+}
+
+function isYcFounderFixtureProfile(profile: BrainMemoryProfileData | null): boolean {
+  if (!profile) {
+    return false;
+  }
+
+  const haystack = [
+    ...profile.sources.map((source) => `${source.label} ${source.fileName ?? ""}`),
+    ...profile.recentMemoryNodes.map((node) => `${node.title} ${node.summary}`),
+  ].join(" ");
+
+  return /penny-yc-founder-fixture|Email fixture|Manual messages context|Founder notes/i.test(haystack);
+}
+
+function ycArtifactOutline(artifact: CodingPromptArtifact): Array<{
+  title: (typeof ycArtifactOutlineTitles)[number];
+  body: string;
+  status: "ready" | "updated" | "needs_input";
+}> {
+  const section = (title: string): string => artifact.sections.find((item) => item.title === title)?.body ?? "";
+  const userIntent = section("User intent");
+  const memoryOrchestration = section("AI/memory orchestration");
+  const selectedText = selectedArtifactText(userIntent);
+  const dataSources = namedBlock(userIntent, "Personal context used") || namedBlock(memoryOrchestration, "Personal context used in this artifact") || memoryOrchestration;
+  const updated = artifact.sections.some((item) => item.status === "updated");
+  const status = updated ? "updated" : "ready";
+
+  return [
+    {
+      title: "Product thesis",
+      body: clipDisplayText(`${section("Product goal")} ${selectedText}`, 560),
+      status,
+    },
+    {
+      title: "Target user",
+      body: section("Target user"),
+      status,
+    },
+    {
+      title: "Problem",
+      body: "Founders and builders reach coding agents with vague ideas before the thinking has become explicit enough to implement.",
+      status,
+    },
+    {
+      title: "Why now",
+      body: "Coding agents make building faster, so the bottleneck moves upstream to context, assumptions, judgment, and spec quality.",
+      status,
+    },
+    {
+      title: "Core loop",
+      body: section("Core loop"),
+      status,
+    },
+    {
+      title: "Memory layer",
+      body: clipDisplayText(memoryOrchestration, 560),
+      status,
+    },
+    {
+      title: "Create mode",
+      body: clipDisplayText(section("UX requirements"), 420),
+      status,
+    },
+    {
+      title: "Learn bridge",
+      body: `${createLearnBridgeConcept} Learn explains simply, shows a worked example, and applies the concept back to this artifact.`,
+      status,
+    },
+    {
+      title: "Data sources",
+      body: clipDisplayText(dataSources, 560),
+      status,
+    },
+    {
+      title: "Moat",
+      body: "Reusable memory, explicit human judgment, and rejected-direction history make Penny more than a generic prompt or chatbot wrapper.",
+      status,
+    },
+    {
+      title: "Risks",
+      body: clipDisplayText(section("Verification constraints"), 420),
+      status,
+    },
+    {
+      title: "MVP scope",
+      body: clipDisplayText(`${section("Implementation plan")}\n\n${section("Do-not-break list")}`, 560),
+      status,
+    },
+    {
+      title: "Demo script",
+      body: "Landing -> Build with Penny -> fixture-backed Create -> evidence drawer -> Personal + Valuable + Critical judgment -> artifact -> Learn this -> Back to Create -> Canvas -> Export.",
+      status,
+    },
+    {
+      title: "Build prompt/export",
+      body: clipDisplayText(
+        section("Final coding-agent prompt") || "Export prompt turns this artifact into a copyable coding-agent spec.",
+        520,
+      ),
+      status,
+    },
+  ];
+}
+
+function selectedArtifactText(userIntent: string): string {
+  return namedBlock(userIntent, "Selected option history") || "No selected Create directions yet.";
+}
+
+function clipDisplayText(text: string, maxLength: number): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+
+  if (clean.length <= maxLength) {
+    return clean;
+  }
+
+  return `${clean.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function namedBlock(text: string, label: string): string {
+  const start = text.toLowerCase().indexOf(`${label.toLowerCase()}:`);
+
+  if (start < 0) {
+    return "";
+  }
+
+  const bodyStart = start + label.length + 1;
+  const rest = text.slice(bodyStart).trim();
+  const nextHeading = rest.search(/\n\n[A-Z][A-Za-z /-]+:\n/u);
+
+  return (nextHeading >= 0 ? rest.slice(0, nextHeading) : rest).trim();
 }
 
 function sortCreateOptions(options: CandidateOption[]): CandidateOption[] {

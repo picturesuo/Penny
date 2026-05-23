@@ -1,6 +1,27 @@
 const { test, expect } = require("@playwright/test");
+const fs = require("node:fs/promises");
+const path = require("node:path");
 
-test.use({ channel: process.env.PENNY_PLAYWRIGHT_CHANNEL || "chrome" });
+const slowMo = Number.parseInt(process.env.PENNY_PLAYWRIGHT_SLOWMO_MS || "0", 10);
+const browserOptions = { channel: process.env.PENNY_PLAYWRIGHT_CHANNEL || "chrome" };
+
+if (Number.isFinite(slowMo) && slowMo > 0) {
+  browserOptions.launchOptions = { slowMo };
+}
+
+if (process.env.PENNY_PLAYWRIGHT_VIDEO === "on") {
+  browserOptions.video = "on";
+}
+
+if (process.env.PENNY_PLAYWRIGHT_TRACE === "on") {
+  browserOptions.trace = "on";
+}
+
+if (process.env.PENNY_PLAYWRIGHT_SCREENSHOT === "on") {
+  browserOptions.screenshot = "on";
+}
+
+test.use(browserOptions);
 test.setTimeout(60_000);
 
 test("YC recording path: landing fixture to Create, Learn, and export", async ({ page }, testInfo) => {
@@ -37,21 +58,36 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("landing-build-with-penny")).toBeVisible({ timeout: 15_000 });
+  await captureProof(page, testInfo, "01-landing");
   await page.getByTestId("landing-build-with-penny").click();
 
   await expect(page.getByTestId("create-workspace")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("create-brain-context")).toHaveAttribute("data-create-context", "using-brain", {
     timeout: 15_000,
   });
+  await expect(page.getByRole("textbox", { name: "Rough idea" })).toHaveValue(/emails, messages, and founder notes/i);
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Email fixture");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Gmail-style context");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Manual messages context");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Founder notes");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("trainingUse=false");
   await expect(page.getByTestId("create-option-card")).toHaveCount(5, { timeout: 30_000 });
-  await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Personal"]')).toBeVisible();
-  await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Valuable"]')).toBeVisible();
-  await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Critical"]')).toBeVisible();
+  await expect(page.getByTestId("create-option-card")).toContainText([
+    "Personal",
+    "Practical",
+    "Valuable",
+    "Critical",
+    "Weird",
+  ]);
   await expect(page.getByRole("region", { name: "Create graph" })).toBeVisible();
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/Penny.*Brain sources.*Create options.*Learn explanation.*Export prompt/s);
+  await captureProof(page, testInfo, "02-fixture-create-canvas");
 
   await page.locator('[data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
   await expect(page.getByTestId("create-evidence-drawer")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used/);
+  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Email fixture|Founder notes|Manual messages context/i);
+  await captureProof(page, testInfo, "03-evidence");
 
   for (const lens of ["Personal", "Valuable", "Critical"]) {
     await page.locator(`[data-testid="create-option-card"][data-create-lens="${lens}"] .create-option-select-button`).click();
@@ -60,15 +96,32 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await page
     .locator(".create-judgment-panel textarea")
     .fill("Keep this founder/builder path: memory-native workbench, human judgment, and buildable specs before coding agents.");
+  await captureProof(page, testInfo, "04-selections-comment");
   await page.getByRole("button", { name: "Update artifact" }).click();
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/Personal|Valuable|Critical/, { timeout: 30_000 });
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/founder\/builder path|memory-native workbench/i);
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Product thesis");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Target user");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Problem");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Why now");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Core loop");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Memory layer");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Create mode");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Learn bridge");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Data sources");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Moat");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Risks");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("MVP scope");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Demo script");
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText("Build prompt/export");
+  await captureProof(page, testInfo, "05-artifact");
 
   await page.getByTestId("create-learn-this-button").click();
   await expect(page.getByTestId("learn-back-to-create")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("heading", { name: "Explain simply" })).toBeVisible();
   await expect(page.getByRole("button", { name: "2 Show worked example" })).toBeVisible();
   await expect(page.getByRole("button", { name: "3 Show how this applies to my artifact" })).toBeVisible();
+  await captureProof(page, testInfo, "06-learn");
 
   await page.getByTestId("learn-back-to-create").click();
   await expect(page.getByTestId("create-workspace")).toBeVisible({ timeout: 10_000 });
@@ -76,10 +129,32 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Valuable"]')).toHaveClass(/is-selected/);
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Critical"]')).toHaveClass(/is-selected/);
   await expect(page.locator(".create-judgment-panel textarea")).toHaveValue(/memory-native workbench/);
+  await expect(page.getByTestId("create-evidence-drawer")).toBeVisible();
+  await expect(page.getByTestId("yc-artifact-outline")).toContainText(/Product thesis|founder\/builder path/i);
+  await captureProof(page, testInfo, "07-return-state");
 
   await page.getByTestId("create-export-panel").scrollIntoViewIfNeeded();
   await expect(page.getByRole("button", { name: "Export prompt" })).toBeEnabled({ timeout: 15_000 });
   await page.getByRole("button", { name: "Export prompt" }).click();
   await expect(page.getByTestId("create-export-prompt")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used/);
+  await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## YC Demo Spec/);
+  await expect(page.getByTestId("create-export-prompt")).toHaveValue(/### Product thesis/);
+  await expect(page.getByTestId("create-export-prompt")).toHaveValue(/### Data sources/);
+  await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Source \/ Memory Evidence/);
+  await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Selected Option History/);
+  await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Repeated Rejected Directions/);
+  await captureProof(page, testInfo, "08-export");
 });
+
+async function captureProof(page, testInfo, name) {
+  const proofDir = process.env.PENNY_PROOF_DIR;
+
+  if (!proofDir) {
+    return;
+  }
+
+  const safeName = `${String(testInfo.repeatEachIndex).padStart(3, "0")}-${name}.png`;
+  await fs.mkdir(proofDir, { recursive: true });
+  await page.screenshot({ path: path.join(proofDir, safeName), fullPage: true });
+}

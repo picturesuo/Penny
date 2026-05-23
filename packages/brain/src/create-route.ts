@@ -734,7 +734,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
           section.title === "Final coding-agent prompt"
             ? {
                 ...section,
-                body: buildPromptText(artifact),
+                body: clipText(buildPromptText(artifact), 12_000),
                 status: artifact.version > 1 ? "updated" : section.status,
               }
             : section,
@@ -1808,7 +1808,10 @@ function bodyForUpdatedSection(input: {
     case "Do-not-break list":
       return "Do not break Brain, Create, Learn, session recovery, current auth/session/tenant headers, canvas node actions, or the editorial/newsprint visual language.";
     case "Final coding-agent prompt":
-      return buildPromptText({ ...input.artifact, sections: input.artifact.sections.filter((item) => item.title !== "Final coding-agent prompt") });
+      return clipText(
+        buildPromptText({ ...input.artifact, sections: input.artifact.sections.filter((item) => item.title !== "Final coding-agent prompt") }),
+        12_000,
+      );
   }
 }
 
@@ -1952,6 +1955,9 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
     "## User Intent",
     mainUserIntent(userIntent),
     "",
+    "## YC Demo Spec",
+    buildYcDemoSpecText(artifact, personalContext, selectedHistory, rejectedDirectionText),
+    "",
     "## Personal Context Used",
     personalContext,
     "",
@@ -2002,6 +2008,59 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
     "",
     "## Definition of Done",
     "Create is accessible; rough idea -> five directions -> multi-select judgment/comment -> JudgmentEvent -> updated CodingPromptArtifact -> VerificationSummary -> exported prompt works end to end; Brain and Learn remain intact; build, typecheck, and tests pass.",
+  ].join("\n");
+}
+
+function buildYcDemoSpecText(
+  artifact: CodingPromptArtifact,
+  personalContext: string,
+  selectedHistory: string,
+  rejectedDirectionText: string,
+): string {
+  const section = (title: ArtifactSectionTitle): string => sectionByTitle(artifact, title).body;
+
+  return [
+    "### Product thesis",
+    clipText(`${section("Product goal")} ${selectedHistory}`, 1_400),
+    "",
+    "### Target user",
+    section("Target user"),
+    "",
+    "### Problem",
+    "Founders and builders reach coding agents with vague ideas before the thinking has become explicit enough to implement.",
+    "",
+    "### Why now",
+    "Coding agents make building faster, so the bottleneck moves upstream to context, assumptions, judgment, and spec quality.",
+    "",
+    "### Core loop",
+    clipText(section("Core loop"), 1_200),
+    "",
+    "### Memory layer",
+    clipText(section("AI/memory orchestration"), 1_400),
+    "",
+    "### Create mode",
+    clipText(section("UX requirements"), 1_200),
+    "",
+    "### Learn bridge",
+    "Brain Ranker weights explicit judgment events over implicit behavior. Learn should explain simply, show a worked example, and apply the concept back to this artifact.",
+    "",
+    "### Data sources",
+    clipText(personalContext, 1_400),
+    "",
+    "### Moat",
+    "Reusable memory, explicit human judgment, and rejected-direction history make Penny more than a generic prompt or chatbot wrapper.",
+    "",
+    "### Risks",
+    clipText(`${section("Verification constraints")}\n\n${rejectedDirectionText}`, 1_400),
+    "",
+    "### MVP scope",
+    clipText(`${section("Implementation plan")}\n\n${section("Do-not-break list")}`, 1_400),
+    "",
+    "### Demo script",
+    "Landing -> Build with Penny -> fixture-backed Create -> evidence drawer -> Personal + Valuable + Critical judgment -> artifact -> Learn this -> Back to Create -> Canvas -> Export.",
+    "",
+    "### Build prompt/export",
+    "Export this artifact as the copyable coding-agent prompt/spec that follows in the remaining sections.",
   ].join("\n");
 }
 
