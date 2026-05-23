@@ -1452,7 +1452,7 @@ export function buildCreateOptionSystemPrompt(): string {
     "Return only the structured output schema.",
     "Write exactly five concise, differentiated options for Personal, Practical, Valuable, Critical, and Weird.",
     "Use only the supplied rough idea, memory refs, source refs, and baseline options.",
-    "Do not invent Gmail, Slack, messages, OAuth, connector, global-training, hidden-memory, or external-source claims.",
+    "Do not invent Gmail, LinkedIn, WhatsApp, Slack, messages, OAuth, connector, global-training, hidden-memory, or external-source claims.",
     "Do not add broad new product modes. Keep Create focused on rough idea -> directions -> judgment -> artifact -> verification -> export.",
     "Preserve source grounding by naming grounded context separately from inferred moves.",
   ].join("\n");
@@ -1510,12 +1510,12 @@ function ensureGroundingLanguage(rationale: string, fallback: string): string {
 }
 
 function hasUnsupportedConnectorClaim(text: string): boolean {
-  return /\b(gmail|slack|messages?|oauth|global training|shared training|trained on your data|hidden memory|background import)\b/i.test(text);
+  return /\b(gmail|linkedin|whatsapp|slack|messages?|oauth|global training|shared training|trained on your data|hidden memory|background import)\b/i.test(text);
 }
 
 function hasFakeProvenanceClaim(text: string): boolean {
   return (
-    /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|slack|messages?|oauth)\b/i.test(text)
+    /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|linkedin|whatsapp|slack|messages?|oauth)\b/i.test(text)
     || /\b(global training|shared training|trained on your data|hidden memory|background import|secret memory|private inbox)\b/i.test(text)
   );
 }
@@ -2057,7 +2057,7 @@ function buildYcDemoSpecText(
     clipText(`${section("Implementation plan")}\n\n${section("Do-not-break list")}`, 1_400),
     "",
     "### Demo script",
-    "Landing -> Build with Penny -> fixture-backed Create -> evidence drawer -> Personal + Valuable + Critical judgment -> artifact -> Learn this -> Back to Create -> Canvas -> Export.",
+    "Landing composer -> choose Create -> safe fixture synthesis -> evidence drawer -> Personal + Valuable + Critical judgment -> artifact -> Learn this -> Back to Create -> Canvas -> Export.",
     "",
     "### Build prompt/export",
     "Export this artifact as the copyable coding-agent prompt/spec that follows in the remaining sections.",
@@ -2128,7 +2128,7 @@ function promptSectionText(text: string, title: string): string {
 
 function buildNonGoalsText(_artifact: CodingPromptArtifact): string {
   return [
-    "- Do not build broad OAuth connectors, Gmail/Slack/messages ingestion, or background global memory import for this Create slice.",
+    "- Do not build broad OAuth connectors, Gmail/LinkedIn/WhatsApp/SMS/iMessage/Slack ingestion, or background global memory import for this Create slice.",
     "- Do not turn Create into a generic chatbot sidebar; every AI output must feed the typed option, judgment, artifact, verification, and export loop.",
     "- Do not invent source, memory, connector, or global-training claims. Use only rough idea, session context, and provided Brain refs.",
     "- Do not redesign Brain, Learn, navigation, or unrelated data models while implementing the requested Create flow.",
