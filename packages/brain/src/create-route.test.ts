@@ -497,6 +497,97 @@ test("alpha Brain to Create to export golden path uses reviewed personal context
   assertNoFakePositiveClaims(exported.text);
 });
 
+test("YC founder fixture feeds Create options, judgment, artifact, and export without fake live connector claims", async () => {
+  const headers = requestHeaders({
+    "x-user-id": "yc-founder-create-user",
+    "x-workspace-id": "yc-founder-create-workspace",
+    "x-project-id": "yc-founder-create-project",
+    "x-sphere-id": "yc-founder-create-sphere",
+  });
+  const fixtureResponse = await handleBrainDemoFixtureRequest(getRequest("http://localhost/api/brain/demo-fixture/yc-founder", headers));
+  const fixturePayload = await responsePayload(fixtureResponse);
+  let profile: BrainMemoryProfile | null = null;
+
+  for (const importInput of fixturePayload.data.importInputs) {
+    const importResponse = await handleBrainImportRequest(
+      jsonRequest("http://localhost/api/brain/import", importInput, headers),
+    );
+    const importPayload = await responsePayload(importResponse);
+
+    assert.equal(importResponse.status, 200);
+    profile = importPayload.data.profile as BrainMemoryProfile;
+  }
+
+  assert.ok(profile);
+
+  const service = createInMemoryCreateRouteService();
+  const rawIdea = fixturePayload.data.demoPrompt as string;
+  const first = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: "yc-founder-create-project",
+      sessionId: "yc-founder-create-session",
+      memory: memoryRefsFromProfile(profile),
+      sources: sourceRefsFromProfile(profile),
+    },
+    headers,
+  );
+  const selected = optionsByLens(first.optionSet.options, ["Personal", "Valuable", "Critical"]);
+  const refined = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: first.optionSet.projectId,
+      sessionId: first.optionSet.sessionId,
+      optionSetId: first.optionSet.id,
+      selectedOptionIds: selected.map((option) => option.id),
+      userComment: "Keep the founder/builder path: memory-native workbench, human judgment, and buildable specs before coding agents.",
+      artifact: first.artifact,
+    },
+    headers,
+  );
+  const exportResponse = await handleExportCodingPromptRequest(
+    jsonRequest(
+      "http://localhost/api/create/export-coding-prompt",
+      {
+        artifact: refined.artifact,
+        verification: refined.verification,
+        judgmentEvent: refined.judgmentEvent,
+      },
+      headers,
+    ),
+    { service },
+  );
+  const exportPayload = await responsePayload(exportResponse);
+  const exported = exportPayload.data.export as PromptExport;
+
+  assert.equal(fixtureResponse.status, 200);
+  assert.equal(fixturePayload.data.importInputs.length, 5);
+  assert.deepEqual(first.optionSet.options.map((option) => option.lens), ["Personal", "Practical", "Valuable", "Critical", "Weird"]);
+  assert.ok(first.optionSet.options.every((option) => option.memoryCount >= 1 && option.sourceCount >= 1));
+  assert.ok(first.optionSet.sourcesUsed.some((source) => /Email fixture - Lovable hackathon recap/i.test(source.label)));
+  assert.ok(first.optionSet.sourcesUsed.some((source) => /LinkedIn-style founder context fixture/i.test(source.label)));
+  assert.ok(first.optionSet.sourcesUsed.some((source) => /Manual WhatsApp-style transcript fixture/i.test(source.label)));
+  assert.match(optionText(first, "Personal"), /thinking instrument|human judgment|workbench/i);
+  assert.match(optionText(first, "Critical"), /generic chatbot|GPT-wrapper|fake|rejected/i);
+  assert.ok(refined.judgmentEvent);
+  assert.match(sectionBody(refined.artifact, "User intent"), /founder\/builder path|memory-native workbench/i);
+  assert.equal(exportResponse.status, 200);
+  assert.match(exported.text, /## YC Demo Spec/);
+  assert.match(exported.text, /## Selected Option History/);
+  assert.match(exported.text, /Personal:/);
+  assert.match(exported.text, /Valuable:/);
+  assert.match(exported.text, /Critical:/);
+  assert.match(exported.text, /## Source \/ Memory Evidence/);
+  assert.match(exported.text, /Lovable hackathon|LinkedIn-style founder context|Manual WhatsApp-style transcript/i);
+  assert.match(exported.text, /generic chatbot|notes app|productivity dashboard/i);
+  assert.match(exported.text, /trainingUse=false|not live Gmail|not live SMS, iMessage, or WhatsApp/i);
+  assert.equal(exported.qualitySignals.hasRelevantPersonalContext, true);
+  assert.equal(exported.qualitySignals.hasRepeatedRejectedDirections, true);
+  assertNoFakePositiveClaims(exported.text);
+});
+
 test("Google sync feeds private Brain memory into Create ranking, export, and deletion", async () => {
   const headers = requestHeaders({
     "x-user-id": "google-create-user",
@@ -1377,8 +1468,33 @@ function optionText(result: CreateNextResult, lens: CandidateOption["lens"]): st
   return [option?.title, option?.oneLine, option?.rationale, option?.nextMove, option?.risks.join(" ")].filter(Boolean).join("\n");
 }
 
+function memoryRefsFromProfile(profile: BrainMemoryProfile): MemoryRef[] {
+  return profile.recentMemoryNodes.slice(0, 12).map((node) => ({
+    id: node.id,
+    label: node.title,
+    kind: node.type === "preference" ? "preference" : node.type === "source_fact" ? "context" : "brain",
+    summary: node.summary,
+  }));
+}
+
+function sourceRefsFromProfile(profile: BrainMemoryProfile): SourceRef[] {
+  return profile.sources.slice(0, 8).map((source) => ({
+    id: source.id,
+    label: source.label,
+    kind: "source",
+    excerpt: [
+      source.preview?.excerpt ?? `${source.kind} source evidence`,
+      source.kind === "email_fixture" ? "Not live Gmail." : null,
+      source.kind === "linkedin_context" ? "Not live LinkedIn." : null,
+      source.kind === "manual_messages_transcript" ? "Not live SMS, iMessage, or WhatsApp." : null,
+      "trainingUse=false.",
+    ].filter(Boolean).join(" "),
+    sourceRange: source.fileName ?? `source ${source.id.slice(0, 8)}`,
+  }));
+}
+
 function assertNoFakePositiveClaims(text: string): void {
-  assert.doesNotMatch(text, /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|slack|messages?|oauth)\b/i);
+  assert.doesNotMatch(text, /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|linkedin|whatsapp|slack|messages?|oauth)\b/i);
   assert.doesNotMatch(text, /\b(global training|shared training|trained on your data|hidden memory|background import|secret memory|private inbox)\b/i);
 }
 
