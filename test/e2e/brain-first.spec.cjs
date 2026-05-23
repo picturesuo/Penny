@@ -69,11 +69,13 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
 
   await expect(page.getByTestId("create-workspace")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("create-brain-context")).toHaveAttribute("data-create-context", "using-brain");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Brain-first imported context");
   await page.getByRole("textbox", { name: "Rough idea" }).fill("Use my Brain context to design Penny's real Create loop.");
   await page.getByRole("button", { name: "Show 5 directions" }).click();
   await expect(page.getByTestId("create-option-card")).toHaveCount(5, { timeout: 20_000 });
   await page.locator('[data-testid="create-option-card"][data-create-lens="Personal"] .create-option-select-button').click();
   await page.locator('[data-testid="create-option-card"][data-create-lens="Critical"] .create-option-select-button').click();
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Selected Personal + Critical");
   await page.locator('[data-testid="create-option-card"][data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
   await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used/);
   await page.locator(".create-judgment-panel textarea").fill("Keep the artifact source-grounded and practical.");
@@ -95,4 +97,5 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used|## Product Goal/i, {
     timeout: 15_000,
   });
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/Artifact\/export.*\.md/s);
 });
