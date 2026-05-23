@@ -2666,6 +2666,33 @@
     margin-top: -2px;
   }
 
+  .brain-memory-demo-fixtures {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brain-memory-demo-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .brain-memory-demo-labels li {
+    border: 1px solid rgb(17 17 17 / 0.2);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.72);
+    padding: 7px 9px;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
   .secondary-command {
     display: inline-flex;
     align-items: center;
