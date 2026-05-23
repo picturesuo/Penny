@@ -43,8 +43,18 @@ export class BrainSeedProviderError extends Error {
 }
 
 export function createDefaultBrainSeedProvider(env: Record<string, string | undefined> = process.env): BrainSeedProvider {
-  if (env.XAI_API_KEY?.trim()) {
+  const configuredProvider = env.PENNY_BRAIN_SEED_PROVIDER?.trim().toLowerCase();
+
+  if (configuredProvider === "heuristic") {
+    return createHeuristicBrainSeedProvider();
+  }
+
+  if (configuredProvider === "xai") {
     return createXaiBrainSeedProvider(env);
+  }
+
+  if (env.XAI_API_KEY?.trim()) {
+    return createXaiBrainSeedProviderWithHeuristicFallback(env);
   }
 
   return createHeuristicBrainSeedProvider();
@@ -64,6 +74,29 @@ export function createXaiBrainSeedProvider(
   options: XaiBrainSeedProviderOptions = {},
 ): BrainSeedProvider {
   return createAiSdkXaiBrainSeedProvider(env, options);
+}
+
+export function createXaiBrainSeedProviderWithHeuristicFallback(
+  env: Record<string, string | undefined> = process.env,
+  options: XaiBrainSeedProviderOptions = {},
+): BrainSeedProvider {
+  const primary = createXaiBrainSeedProvider(env, options);
+  const fallback = createHeuristicBrainSeedProvider();
+
+  return {
+    name: primary.name,
+    async generate(input) {
+      try {
+        return await primary.generate(input);
+      } catch (error) {
+        if (error instanceof BrainSeedProviderError && heuristicFallbackEnabled(env)) {
+          return fallback.generate(input);
+        }
+
+        throw error;
+      }
+    },
+  };
 }
 
 export function createAiSdkXaiBrainSeedProvider(
@@ -121,6 +154,12 @@ export function createAiSdkXaiBrainSeedProvider(
 
 export function resolveXaiBrainSeedModel(env: Record<string, string | undefined> = process.env): string {
   return env.XAI_BRAIN_SEED_MODEL?.trim() || env.XAI_MODEL?.trim() || defaultXaiBrainSeedModel;
+}
+
+function heuristicFallbackEnabled(env: Record<string, string | undefined>): boolean {
+  const configured = env.PENNY_BRAIN_SEED_HEURISTIC_FALLBACK?.trim().toLowerCase();
+
+  return configured !== "false" && configured !== "0" && configured !== "off";
 }
 
 export function buildBrainSeedSystemPrompt(): string {
