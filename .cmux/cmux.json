@@ -16,6 +16,7 @@
   },
   "ui": {
     "newWorkspace": {
+      "action": "penny-create-cockpit",
       "contextMenu": [
         {
           "action": "penny-create-cockpit",
