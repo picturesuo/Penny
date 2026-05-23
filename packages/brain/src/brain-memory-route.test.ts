@@ -580,6 +580,37 @@ test("GET /api/brain/demo-fixture/penny returns the existing demo fixture as an 
   assert.match(payload.data.importInput.content, /memory-native Create direction/);
 });
 
+test("GET /api/brain/demo-fixture/yc-founder returns a private YC founder fixture", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const response = await handleBrainDemoFixtureRequest(getRequest("http://localhost/api/brain/demo-fixture/yc-founder"));
+  const payload = await responsePayload(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.importInput.kind, "chatgpt_export");
+  assert.equal(payload.data.importInput.label, "Penny YC founder fixture");
+  assert.equal(payload.data.importInput.fileName, "penny-yc-founder-fixture.json");
+  assert.match(payload.data.importInput.content, /Email fixture/);
+  assert.match(payload.data.importInput.content, /Gmail-style context/);
+  assert.match(payload.data.importInput.content, /Manual messages context for demo/);
+  assert.match(payload.data.importInput.content, /Founder notes/);
+  assert.match(payload.data.importInput.content, /trainingUse=false/);
+
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", payload.data.importInput),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const profile = importPayload.data.profile as BrainMemoryProfile;
+
+  assert.equal(importResponse.status, 200);
+  assert.ok(profile.stats.memoryNodeCount >= 8);
+  assert.ok(profile.sources.every((source) => source.privacy.trainingUse === false));
+  assert.ok(profile.recentMemoryNodes.every((node) => node.permission.trainingUse === false));
+  assert.ok(profile.recentMemoryNodes.some((node) => /vague ideas.*buildable specs/i.test(node.summary)));
+  assert.ok(profile.recentMemoryNodes.some((node) => /not a GPT wrapper|human judgment/i.test(node.summary)));
+  assert.ok(profile.profile.repeatedRejectedDirections.some((signal) => /chatbot|dashboard|notes app|assistant/i.test(`${signal.label} ${signal.summary}`)));
+});
+
 test("Brain memory review can confirm, boost, weaken, and forget a memory", async () => {
   const service = createInMemoryBrainMemoryService();
   const importResponse = await handleBrainImportRequest(
