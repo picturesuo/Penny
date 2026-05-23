@@ -2,7 +2,26 @@ const { test, expect } = require("@playwright/test");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
-test.use({ channel: process.env.PENNY_PLAYWRIGHT_CHANNEL || "chrome" });
+const slowMo = Number.parseInt(process.env.PENNY_PLAYWRIGHT_SLOWMO_MS || "0", 10);
+const browserOptions = { channel: process.env.PENNY_PLAYWRIGHT_CHANNEL || "chrome" };
+
+if (Number.isFinite(slowMo) && slowMo > 0) {
+  browserOptions.launchOptions = { slowMo };
+}
+
+if (process.env.PENNY_PLAYWRIGHT_VIDEO === "on") {
+  browserOptions.video = "on";
+}
+
+if (process.env.PENNY_PLAYWRIGHT_TRACE === "on") {
+  browserOptions.trace = "on";
+}
+
+if (process.env.PENNY_PLAYWRIGHT_SCREENSHOT === "on") {
+  browserOptions.screenshot = "on";
+}
+
+test.use(browserOptions);
 test.setTimeout(90_000);
 
 test("Brain-first loop reaches Create, Learn, and export", async ({ page }, testInfo) => {
