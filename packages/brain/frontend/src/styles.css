@@ -1595,6 +1595,7 @@
   .create-option-card {
     display: grid;
     grid-template-rows: auto auto auto 1fr auto;
+    min-height: 100%;
     border: 1px solid rgb(17 17 17 / 0.12);
     border-radius: 7px;
     background: #fffdf7;
@@ -1604,6 +1605,16 @@
   .create-option-card.is-selected {
     border-color: #2f5c52;
     box-shadow: inset 0 0 0 1px rgb(47 92 82 / 0.3);
+  }
+
+  .create-option-card.is-rejected {
+    border-color: rgb(17 17 17 / 0.2);
+    background: rgb(17 17 17 / 0.035);
+  }
+
+  .create-option-card.is-rejected .create-option-select-button,
+  .create-option-card.is-rejected > div:not(.create-option-card-actions) {
+    opacity: 0.78;
   }
 
   .create-option-select-button {
@@ -1715,7 +1726,7 @@
 
   .create-option-card-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
     border-top: 1px solid rgb(17 17 17 / 0.1);
   }
 
@@ -1842,6 +1853,50 @@
     font-size: 12px;
     font-weight: 700;
     line-height: 1.2;
+  }
+
+  .create-judgment-next-place {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.45fr);
+    gap: 12px;
+    border: 1px solid rgb(47 92 82 / 0.2);
+    border-radius: 7px;
+    padding: 12px;
+    background: rgb(47 92 82 / 0.06);
+  }
+
+  .create-judgment-next-place span,
+  .create-judgment-next-place dt {
+    color: rgb(17 17 17 / 0.56);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .create-judgment-next-place strong,
+  .create-judgment-next-place p,
+  .create-judgment-next-place dl,
+  .create-judgment-next-place dd {
+    margin: 0;
+  }
+
+  .create-judgment-next-place strong {
+    color: #153f38;
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .create-judgment-next-place p,
+  .create-judgment-next-place dd {
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .create-judgment-next-place dl {
+    display: grid;
+    gap: 8px;
   }
 
   .create-output-grid {
