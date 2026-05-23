@@ -1,0 +1,105 @@
+{
+  "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json",
+  "schemaVersion": 1,
+  "actions": {
+    "penny-create-cockpit": {
+      "type": "workspaceCommand",
+      "title": "Penny Create Cockpit",
+      "subtitle": "Open the Create plan, Codex workstreams, and preview",
+      "commandName": "Penny Create Cockpit",
+      "palette": true,
+      "icon": {
+        "type": "symbol",
+        "name": "square.stack.3d.up"
+      }
+    }
+  },
+  "ui": {
+    "newWorkspace": {
+      "contextMenu": [
+        {
+          "action": "penny-create-cockpit",
+          "title": "Penny Create Cockpit"
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "action": "cmux.newTerminal",
+          "title": "New Terminal"
+        },
+        {
+          "action": "cmux.newBrowser",
+          "title": "New Browser"
+        }
+      ]
+    }
+  },
+  "commands": [
+    {
+      "name": "Penny Create Cockpit",
+      "description": "Plan-first CLI coding workspace for Penny Create, with scoped Codex workstreams and local preview.",
+      "workspace": {
+        "name": "Penny Create",
+        "cwd": ".",
+        "layout": {
+          "direction": "horizontal",
+          "children": [
+            {
+              "pane": {
+                "surfaces": [
+                  {
+                    "type": "terminal",
+                    "name": "plan",
+                    "command": "cmux markdown open /Users/bensuo/Desktop/penny/docs/penny-create-operating-outline.md --focus false; printf '\\nOpened docs/penny-create-operating-outline.md in a live markdown panel. Use this terminal for notes or git checks.\\n'; exec \"$SHELL\" -l"
+                  },
+                  {
+                    "type": "terminal",
+                    "name": "lead",
+                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You are the lead coordinator for Penny Create. Keep scope tight, ask when ambiguous, prevent connector/product-mode drift, verify git status, and commit/push each finished repo-visible file on main. Do not rebuild completed work before identifying the smallest current gap.'"
+                  },
+                  {
+                    "type": "terminal",
+                    "name": "create-ui",
+                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You own only Landing -> Create, five equal option cards, selection/comment flow, IdeaSpec UX, and evidence visibility. Preserve Create, Brain, and Learn. Do not add a chatbot surface, broad connectors, or new product modes.'"
+                  },
+                  {
+                    "type": "terminal",
+                    "name": "brain-evidence",
+                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -s danger-full-access -a never 'Read AGENTS.md, docs/penny-create-operating-outline.md, and test/fixtures/penny-yc-founder-fixture.json first. You own only safe Brain fixture/manual source evidence, source chips, privacy copy, and trainingUse=false clarity. Do not add live Gmail, LinkedIn, WhatsApp, iMessage, SMS, Slack, or social connectors.'"
+                  },
+                  {
+                    "type": "terminal",
+                    "name": "learn-canvas",
+                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You own only Learn bridge, return-to-Create state, Canvas as visual outline, and the IdeaSpec ending. Keep Canvas subordinate to Create. Do not build a new canvas system.'"
+                  },
+                  {
+                    "type": "terminal",
+                    "name": "export-verify",
+                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You own only export prompt quality and verification. Run pnpm typecheck, pnpm test, pnpm build, and the YC e2e when relevant. Make product changes only for narrow defects proven by failure.'"
+                  },
+                  {
+                    "type": "terminal",
+                    "name": "dev-server",
+                    "command": "DATABASE_URL= PENNY_SKIP_DATABASE_PREP=true PENNY_AUTH_MODE=dev PORT=3007 pnpm dev"
+                  }
+                ]
+              }
+            },
+            {
+              "pane": {
+                "surfaces": [
+                  {
+                    "type": "browser",
+                    "name": "preview",
+                    "url": "http://localhost:3007"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
