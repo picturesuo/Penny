@@ -328,6 +328,10 @@ type CreateLearnBridgeNode = CanvasNode & {
   id: "create-learn:brain-ranker-judgment-events";
 };
 
+type CreateOptionLearnNode = CanvasNode & {
+  id: `create-option-learn:${string}`;
+};
+
 function LearningPathSidebar({
   steps,
   goal,
@@ -1340,6 +1344,10 @@ function buildLearnPageData(
     return buildCreateLearnBridgePageData(focusNode);
   }
 
+  if (isCreateOptionLearnNode(focusNode)) {
+    return buildCreateOptionLearnPageData(focusNode);
+  }
+
   if (output.sessionV2) {
     return buildLearnPageDataFromSessionV2(output.sessionV2);
   }
@@ -1446,6 +1454,10 @@ function isCreateLearnBridgeNode(node: CanvasNode | null): node is CreateLearnBr
   return node?.id === "create-learn:brain-ranker-judgment-events";
 }
 
+function isCreateOptionLearnNode(node: CanvasNode | null): node is CreateOptionLearnNode {
+  return Boolean(node?.id.startsWith("create-option-learn:"));
+}
+
 function buildCreateLearnBridgePageData(focusNode: CreateLearnBridgeNode): LearnPageData {
   const goal = focusNode.summary ?? "Brain Ranker weights explicit judgment events over implicit behavior.";
   const lessons: LearnLesson[] = [
@@ -1486,7 +1498,7 @@ function buildCreateLearnBridgePageData(focusNode: CreateLearnBridgeNode): Learn
     }),
     createCreateBridgeLesson({
       index: 2,
-      title: "Show how this applies to my artifact",
+      title: "Apply to my artifact",
       shortExplanation:
         "For the current Create artifact, Penny should make the selected lenses and comment visible in the prompt, then use them as future Brain Ranker evidence.",
       visualTitle: "Artifact application",
@@ -1530,6 +1542,92 @@ function buildCreateLearnBridgePageData(focusNode: CreateLearnBridgeNode): Learn
         "What should Penny not infer from passive behavior?",
       ],
       placeholder: "Ask about explicit judgment signals...",
+    },
+  };
+}
+
+function buildCreateOptionLearnPageData(focusNode: CreateOptionLearnNode): LearnPageData {
+  const optionTitle = focusNode.title || "Create option";
+  const optionSummary = focusNode.summary ?? "This Create option needs a simple explanation, worked example, and artifact application.";
+  const lessons: LearnLesson[] = [
+    createCreateBridgeLesson({
+      index: 0,
+      title: "Explain simply",
+      shortExplanation: `What this option means: ${optionSummary}`,
+      visualTitle: "Option meaning",
+      visualBody: `${optionTitle}\n-> direction for the artifact\n-> user decides whether to use it`,
+      visualDescription: "The option is a possible direction, not Penny's command.",
+      quickCheck: "What part of this option should the human judge before Penny updates the artifact?",
+      takeaway: "A Create option is useful when it gives direction without taking judgment away.",
+      exampleLines: [
+        `Option: ${optionTitle}.`,
+        "User reads the evidence and decides whether it belongs in the selected mix.",
+        "Penny waits for the selection/comment before updating the artifact.",
+      ],
+      whyThisMatters: "The demo shows Penny growing creativity by opening directions before narrowing them.",
+    }),
+    createCreateBridgeLesson({
+      index: 1,
+      title: "Show worked example",
+      shortExplanation:
+        "A full worked example means translating the option into one visible artifact change, one evidence check, and one next move.",
+      visualTitle: "Worked option path",
+      visualBody: "Option -> evidence drawer -> selected mix -> artifact section -> export requirement",
+      visualDescription: "The example follows the option through the same Create loop the user can inspect.",
+      quickCheck: "Which artifact section should change first when this option is selected?",
+      takeaway: "The option earns its place by changing the artifact in a traceable way.",
+      exampleLines: [
+        `Read ${optionTitle}.`,
+        "Open details and inspect source/memory evidence.",
+        "Select the card, write a comment, update the artifact, and verify the changed section.",
+      ],
+      whyThisMatters: "This keeps the demo grounded in visible evidence instead of generic generation.",
+    }),
+    createCreateBridgeLesson({
+      index: 2,
+      title: "Apply to my artifact",
+      shortExplanation:
+        "Apply the option by turning its lens into a concrete requirement, risk, or non-goal in the current artifact.",
+      visualTitle: "Artifact application",
+      visualBody: `${optionTitle}\n-> selected option history\n-> matching artifact section\n-> coding-agent prompt`,
+      visualDescription: "The option becomes a visible instruction in the exported build prompt.",
+      quickCheck: "What should the export include so a coding agent can act on this option?",
+      takeaway: "The selected option should survive as a clear artifact requirement, not just a card click.",
+      exampleLines: [
+        "Selected option history names the lens.",
+        "The artifact section says what changed.",
+        "The export carries the evidence, non-goal, and implementation step forward.",
+      ],
+      whyThisMatters: `This applies directly to ${focusNode.refs?.artifactId ? `artifact ${focusNode.refs.artifactId}` : "the current artifact"}.`,
+    }),
+  ];
+  const steps = lessons.map((lesson, index) => ({
+    id: `create-option-learn-step-${index + 1}`,
+    title: lesson.title,
+    expanded: index === 0,
+    substeps: [
+      {
+        id: `create-option-learn-step-${index + 1}-substep-1`,
+        title: lesson.title,
+        isActive: index === 0,
+        lesson,
+      },
+    ],
+  }));
+
+  return {
+    goal: `Learn ${optionTitle} without leaving Create judgment behind.`,
+    progressPercent: 34,
+    steps,
+    currentStep: steps[0]!.substeps[0]!.lesson,
+    askPenny: {
+      suggestedQuestions: [
+        "Explain this option in simpler terms.",
+        "Show another worked example.",
+        "Apply this option to the artifact.",
+        "What evidence supports this option?",
+      ],
+      placeholder: "Ask about this Create option...",
     },
   };
 }
