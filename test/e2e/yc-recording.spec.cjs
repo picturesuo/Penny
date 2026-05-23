@@ -57,9 +57,10 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   });
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("textbox", { name: "Ask Penny anything" })).toBeVisible({ timeout: 15_000 });
+  const landingComposer = page.getByRole("textbox", { name: /Ask Penny anything|Enter a rough thought for Penny/ });
+  await expect(landingComposer).toBeVisible({ timeout: 15_000 });
   await captureProof(page, testInfo, "01-landing");
-  await page.getByRole("textbox", { name: "Ask Penny anything" }).fill(
+  await landingComposer.fill(
     "I want to create a YC startup around ideation and thinking - maybe a thinking instrument. It should use my past emails, messages, and notes to help me turn vague ideas into buildable structure. I want it to feel like a workbench that gives ideas direction without taking judgment away from the human.",
   );
   await page.keyboard.press("Control+C");
@@ -95,7 +96,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
 
   await page.locator('[data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
   await expect(page.getByTestId("create-evidence-drawer")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used/);
+  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used|Evidence used/);
   await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Email fixture|Founder notes|Manual WhatsApp-style transcript|LinkedIn-style/i);
   await captureProof(page, testInfo, "03-evidence");
 

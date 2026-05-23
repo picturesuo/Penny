@@ -11,6 +11,7 @@ import {
   CreateWorkspace,
   CreateComparisonPanel,
   CreateExportFeedbackPanel,
+  CreateJudgmentNextPlace,
   CreateLearnBridgePanel,
   CreateOptionBoard,
   CreateOptionDetailsDrawer,
@@ -40,10 +41,10 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   assert.match(markup, /data-create-lens="Practical"/);
   assert.match(markup, /data-testid="create-option-details-button"/);
   assert.match(markup, /Advance through Personal/);
-  assert.match(markup, /2 memories/);
-  assert.match(markup, /2 sources/);
-  assert.match(markup, /0 memories/);
-  assert.match(markup, /1 sources/);
+  assert.match(markup, /Evidence 3/);
+  assert.match(markup, /Taste 1/);
+  assert.match(markup, /Evidence 1/);
+  assert.match(markup, /Taste 0/);
   assert.match(markup, /Context-light/);
   assert.match(markup, /Details/);
   assert.match(markup, /Learn this/);
@@ -63,13 +64,32 @@ test("CreateOptionDetailsDrawer renders rationale, memories, sources, and ground
   assert.match(markup, /data-testid="create-evidence-drawer"/);
   assert.match(markup, /data-create-lens="Personal"/);
   assert.match(markup, /Rank reasons/);
-  assert.match(markup, /Memories used/);
-  assert.match(markup, /Sources used/);
+  assert.match(markup, /Evidence used/);
+  assert.match(markup, /Taste interpreted/);
   assert.match(markup, /Grounded/);
   assert.match(markup, /Inferred/);
   assert.match(markup, /Uncertainty/);
   assert.match(markup, /Founder workflow notes/);
   assert.match(markup, /Prefers source-backed cards/);
+});
+
+test("CreateJudgmentNextPlace keeps selection, rejection, and comment flow visible", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CreateJudgmentNextPlace, {
+      selectedOptions: [optionForLens("Personal")],
+      rejectedOptions: [optionForLens("Critical")],
+      userComment: "Combine the personal evidence with the practical scope.",
+      nextBestMove: nextBestMove(),
+      artifact: createComparisonArm("deterministic", [memoryGroundedOption()]).artifact,
+    }),
+  );
+
+  assert.match(markup, /Next place/);
+  assert.match(markup, /Update the Idea Spec from this judgment/);
+  assert.match(markup, /Selected/);
+  assert.match(markup, /Personal/);
+  assert.match(markup, /Rejected/);
+  assert.match(markup, /Critical/);
 });
 
 test("Create option Learn node carries option meaning, rationale, worked example, and artifact ref", () => {
@@ -209,7 +229,7 @@ test("CreateLearnBridgePanel exposes the Brain Ranker lesson and focus node", ()
   assert.match(markup, /Brain Ranker weights explicit judgment events over implicit behavior/);
   assert.match(markup, /Explain simply/);
   assert.match(markup, /worked example/);
-  assert.match(markup, /applies to my artifact|Apply to my artifact/);
+  assert.match(markup, /applies to my Idea Spec|Apply to my Idea Spec/);
   assert.equal(createLearnBridgeConcept, "Brain Ranker weights explicit judgment events over implicit behavior.");
   assert.equal(node.id, "create-learn:brain-ranker-judgment-events");
   assert.equal(node.kind, "concept");
@@ -309,8 +329,8 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Valuable/);
   assert.match(markup, /Critical/);
   assert.match(markup, /Weird/);
-  assert.match(markup, /Memories used/);
-  assert.match(markup, /Sources used/);
+  assert.match(markup, /Evidence used/);
+  assert.match(markup, /Taste interpreted/);
   assert.match(markup, /Grounded/);
   assert.match(markup, /Inferred/);
   assert.match(markup, /Final coding-agent prompt/);
@@ -356,8 +376,8 @@ test("Create UI smoke renders real Gmail evidence in details and prompt artifact
   assert.match(markup, /data-testid="create-evidence-drawer"/);
   assert.match(markup, /data-create-lens="Personal"/);
   assert.match(markup, /data-testid="create-artifact-panel"/);
-  assert.match(markup, /Memories used/);
-  assert.match(markup, /Sources used/);
+  assert.match(markup, /Evidence used/);
+  assert.match(markup, /Taste interpreted/);
   assert.match(markup, /Launch partner Gmail memory/);
   assert.match(markup, /Launch partner evidence/);
   assert.match(markup, /gmail:message:gmail-create-msg-1/);
