@@ -57,18 +57,23 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   });
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("landing-build-with-penny")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("textbox", { name: "Ask Penny anything" })).toBeVisible({ timeout: 15_000 });
   await captureProof(page, testInfo, "01-landing");
-  await page.getByTestId("landing-build-with-penny").click();
+  await page.getByRole("textbox", { name: "Ask Penny anything" }).fill(
+    "I want to create a YC startup around ideation and thinking - maybe a thinking instrument. It should use my past emails, messages, and notes to help me turn vague ideas into buildable structure. I want it to feel like a workbench that gives ideas direction without taking judgment away from the human.",
+  );
+  await page.keyboard.press("Control+C");
+  await page.getByRole("button", { name: "Send thought" }).click();
 
   await expect(page.getByTestId("create-workspace")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("create-brain-context")).toHaveAttribute("data-create-context", "using-brain", {
     timeout: 15_000,
   });
-  await expect(page.getByRole("textbox", { name: "Rough idea" })).toHaveValue(/emails, messages, and founder notes/i);
+  await expect(page.getByRole("textbox", { name: "Rough idea" })).toHaveValue(/emails, messages, and notes/i);
   await expect(page.getByTestId("yc-fixture-labels")).toContainText("Email fixture");
-  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Gmail-style context");
-  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Manual messages context");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("LinkedIn-style context");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Manual messages transcript");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("WhatsApp-style demo");
   await expect(page.getByTestId("yc-fixture-labels")).toContainText("Founder notes");
   await expect(page.getByTestId("yc-fixture-labels")).toContainText("trainingUse=false");
   await expect(page.getByTestId("create-option-card")).toHaveCount(5, { timeout: 30_000 });
@@ -80,18 +85,18 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
     "Weird",
   ]);
   await expect(page.getByRole("region", { name: "Create graph" })).toBeVisible();
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Brain sources");
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Penny YC founder fixture");
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Create options");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Penny -> Brain -> Create -> Learn -> Export");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Brain");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Create");
   await expect(page.getByTestId("yc-demo-canvas")).toContainText("Generated Personal / Practical / Valuable / Critical / Weird");
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Learn explanation");
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Artifact/export");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Learn");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Export");
   await captureProof(page, testInfo, "02-fixture-create-canvas");
 
   await page.locator('[data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
   await expect(page.getByTestId("create-evidence-drawer")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used/);
-  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Email fixture|Founder notes|Manual messages context/i);
+  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Email fixture|Founder notes|Manual WhatsApp-style transcript|LinkedIn-style/i);
   await captureProof(page, testInfo, "03-evidence");
 
   for (const lens of ["Personal", "Valuable", "Critical"]) {
@@ -125,7 +130,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await expect(page.getByTestId("learn-back-to-create")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("heading", { name: "Explain simply" })).toBeVisible();
   await expect(page.getByRole("button", { name: "2 Show worked example" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "3 Show how this applies to my artifact" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "3 Apply to my artifact" })).toBeVisible();
   await captureProof(page, testInfo, "06-learn");
 
   await page.getByTestId("learn-back-to-create").click();
