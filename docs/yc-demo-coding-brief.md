@@ -22,6 +22,7 @@ Use CMUX as the coding cockpit and Codex app as the reading/thinking surface.
 - CMUX sidebar: persistent repo/workspace sessions.
 - CMUX surface tabs: persistent workstreams inside the Penny workspace.
 - Active coding: one large visible Codex CLI surface at a time.
+- Codex CLI model setting: `gpt-5.5 medium` for all workstream tabs.
 - Parallelism: multiple Codex CLI sessions can live as tabs, each with a narrow workstream.
 - Codex app: use for reading, summaries, strategy, and long context. Do not use it as the main code-editing surface.
 
