@@ -2776,7 +2776,7 @@ export function BrainMemoryPanel({
               setDraft(event.target.value);
             }
           }}
-          placeholder="Paste notes, markdown, ChatGPT conversations.json, Claude JSON/CSV/text, docs text, or canvas notes."
+          placeholder="Paste notes, manual messages transcript, markdown, ChatGPT conversations.json, Claude JSON/CSV/text, docs text, or canvas notes."
           readOnly={kind === "zip" && Boolean(fileName && draft)}
           rows={4}
         />
@@ -3819,6 +3819,18 @@ function importHintForKind(kind: SourceImportKind): string | null {
     return "For Claude exports, JSON, CSV, copied text, and markdown notes are supported when the message text is present.";
   }
 
+  if (kind === "manual_messages_transcript") {
+    return "Manual/pasted/demo transcript only. Penny does not read SMS, iMessage, WhatsApp, or other message accounts directly in this flow.";
+  }
+
+  if (kind === "email_fixture") {
+    return "Demo email-style text only. This does not claim live Gmail access or OAuth.";
+  }
+
+  if (kind === "linkedin_context") {
+    return "Demo LinkedIn-style context only. This does not claim live LinkedIn access or OAuth.";
+  }
+
   return null;
 }
 
@@ -3826,6 +3838,10 @@ const sourceImportKindOptions: Array<{ kind: SourceImportKind; label: string }> 
   { kind: "text", label: "Plain text" },
   { kind: "markdown", label: "Markdown" },
   { kind: "pdf", label: "PDF text" },
+  { kind: "manual_messages_transcript", label: "Messages transcript / notes" },
+  { kind: "email_fixture", label: "Demo email fixture" },
+  { kind: "linkedin_context", label: "Demo LinkedIn context" },
+  { kind: "founder_notes", label: "Founder notes" },
   { kind: "chatgpt_export", label: "ChatGPT JSON" },
   { kind: "claude_export", label: "Claude export" },
   { kind: "docs_text", label: "Docs text" },
