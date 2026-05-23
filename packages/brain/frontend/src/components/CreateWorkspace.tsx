@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
+import { BookOpen, CheckCircle2, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
 import { compareCreateProviders, createNext, exportCodingPrompt, submitCreateExportFeedback } from "../api/brainClient";
 import type {
   BrainData,
   BrainMemoryProfileData,
   CandidateOption,
+  CanvasNode,
   CodingPromptArtifact,
   CreateExportFeedbackRating,
   CreateExportFeedbackReason,
@@ -31,9 +32,11 @@ interface CreateWorkspaceProps {
   onStatusChange?: (status: string) => void;
   onThinkingChange?: (isThinking: boolean) => void;
   onOpenBrain?: () => void;
+  onLearnThis?: (node: CanvasNode) => void;
 }
 
 export const createLensOrder: CreateLens[] = ["Personal", "Practical", "Valuable", "Critical", "Weird"];
+export const createLearnBridgeConcept = "Brain Ranker weights explicit judgment events over implicit behavior.";
 
 const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Prompt artifact", "Verification", "Export"];
 const createExportFeedbackReasons: Array<{ reason: CreateExportFeedbackReason; label: string }> = [
@@ -56,6 +59,7 @@ export function CreateWorkspace({
   onStatusChange,
   onThinkingChange,
   onOpenBrain,
+  onLearnThis,
 }: CreateWorkspaceProps) {
   const sourceText = initialSeedText?.trim() || data?.source?.rawText?.trim() || "";
   const [draftText, setDraftText] = useState(sourceText);
@@ -333,6 +337,8 @@ export function CreateWorkspace({
             onToggleOption={toggleOption}
           />
 
+          <CreateLearnBridgePanel artifact={artifact} onLearnThis={onLearnThis} />
+
           {isCreateComparisonDevMode() ? (
             <CreateComparisonPanel comparison={providerComparison} busy={busy} onCompare={() => void handleCompareProviders()} />
           ) : null}
@@ -394,6 +400,57 @@ export function CreateWorkspace({
       </section>
     </main>
   );
+}
+
+export function CreateLearnBridgePanel({
+  artifact,
+  onLearnThis,
+}: {
+  artifact: CodingPromptArtifact | null;
+  onLearnThis?: ((node: CanvasNode) => void) | undefined;
+}) {
+  if (!onLearnThis) {
+    return null;
+  }
+
+  return (
+    <section className="create-learn-bridge-panel" aria-label="Create Learn bridge" data-testid="create-learn-bridge">
+      <div>
+        <span>Learn bridge</span>
+        <strong>{createLearnBridgeConcept}</strong>
+        <p>
+          Explain simply, show a worked example, and show how this applies to my artifact without losing the selected Create cards.
+        </p>
+      </div>
+      <button
+        type="button"
+        className="check-secondary-button"
+        data-testid="create-learn-this-button"
+        onClick={() => onLearnThis(buildCreateLearnBridgeNode(artifact))}
+      >
+        <BookOpen size={15} />
+        Learn this
+      </button>
+    </section>
+  );
+}
+
+export function buildCreateLearnBridgeNode(artifact: CodingPromptArtifact | null): CanvasNode {
+  const artifactTitle = artifact?.title ?? "the current Create artifact";
+
+  return {
+    id: "create-learn:brain-ranker-judgment-events",
+    kind: "concept",
+    title: "Brain Ranker judgment weighting",
+    summary: [
+      createLearnBridgeConcept,
+      "Explain simply: explicit selections, comments, and export feedback are stronger evidence than passive behavior.",
+      "Show worked example: selecting Personal + Valuable + Critical should outweigh merely viewing Practical.",
+      `Show how this applies to my artifact: use the recorded judgment to shape ${artifactTitle}.`,
+    ].join(" "),
+    ...(artifact ? { refs: { artifactId: artifact.id } } : {}),
+    actions: ["learn", "check", "related"],
+  };
 }
 
 export function CreateExportFeedbackPanel({
