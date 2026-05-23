@@ -64,3 +64,19 @@ test("landing page exposes Start with your Brain first-run CTA", () => {
 
   assert.match(markup, /Start with your Brain/);
 });
+
+test("landing page exposes Build with Penny CTA when fixture loader is wired", () => {
+  const markup = renderToStaticMarkup(
+    createElement(LandingPage, {
+      disabled: false,
+      status: "Ready",
+      onModeSelect: () => undefined,
+      onPromptSubmit: async () => undefined,
+      onQuickNote: async () => undefined,
+      onBuildWithPenny: async () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Build with Penny/);
+  assert.match(markup, /data-testid="landing-build-with-penny"/);
+});
