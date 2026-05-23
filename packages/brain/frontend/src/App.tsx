@@ -84,6 +84,7 @@ export function App() {
   const [relatedBrainSearch, setRelatedBrainSearch] = useState<BrainRelatedSearchState | null>(null);
   const [createInitialSeedText, setCreateInitialSeedText] = useState<string | null>(null);
   const [createBrainProfile, setCreateBrainProfile] = useState<BrainMemoryProfileData | null>(null);
+  const [createWorkspaceMounted, setCreateWorkspaceMounted] = useState(false);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [landingVisible, setLandingVisible] = useState(true);
   const [status, setStatus] = useState("Ready");
@@ -95,6 +96,12 @@ export function App() {
   const sessionLabel = selectedDocument
     ? `Doc ${shortId(selectedDocument.sessionId)} ${formatLabel(selectedDocument.status)}`
     : `${documentsData?.meta.documentCount ?? 0} docs`;
+
+  useEffect(() => {
+    if (activeMode === "Create") {
+      setCreateWorkspaceMounted(true);
+    }
+  }, [activeMode]);
 
   useEffect(() => {
     if (codebaseBrainPanelVisible) {
@@ -296,6 +303,7 @@ export function App() {
     setRelatedBrainSearch(null);
     setCreateInitialSeedText(null);
     setCreateBrainProfile(null);
+    setCreateWorkspaceMounted(false);
     setLandingVisible(true);
     forgetActiveSession();
     setStatus("Ready");
@@ -364,6 +372,7 @@ export function App() {
       setRelatedBrainSearch(null);
       setCreateInitialSeedText(pennyYcCreatePrompt);
       setCreateBrainProfile(imported.data.profile);
+      setCreateWorkspaceMounted(true);
       setLandingVisible(false);
       setActiveMode("Create");
       forgetActiveSession();
@@ -401,6 +410,7 @@ export function App() {
       await refreshDocuments(data.session.id);
       setActiveMode("Create");
       setCreateBrainProfile(null);
+      setCreateWorkspaceMounted(true);
       setStatus("Create ready");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -429,6 +439,7 @@ export function App() {
       setActiveMode(result.nextMode);
       if (result.nextMode === "Create") {
         setCreateBrainProfile(null);
+        setCreateWorkspaceMounted(true);
       }
       setStatus("Autopilot focus started");
     } catch (error) {
@@ -854,6 +865,7 @@ export function App() {
           setRelatedBrainSearch(null);
           setCreateInitialSeedText(recent.rawIdea);
           setCreateBrainProfile(null);
+          setCreateWorkspaceMounted(true);
           setActiveMode("Create");
           setStatus("Quick note sent to Create");
         } else {
@@ -893,15 +905,24 @@ export function App() {
     setRelatedBrainSearch(null);
     setCreateInitialSeedText(null);
     setCreateBrainProfile(profile);
+    setCreateWorkspaceMounted(true);
     setLandingVisible(false);
     setActiveMode("Create");
     forgetActiveSession();
     setStatus(profile.stats.memoryNodeCount ? "Using your Brain in Create" : "Create opened context-light");
   }
 
+  function handleLearnFromCreate(node: CanvasNode) {
+    setLearnFocusNode(node);
+    setActiveMode("Learn");
+    setStatus("Learn opened from Create");
+  }
+
   if (codebaseBrainPanelVisible) {
     return <CodebaseBrainPanel />;
   }
+
+  const shouldRenderCreateWorkspace = createWorkspaceMounted || activeMode === "Create";
 
   return (
     <div className="min-h-screen bg-white text-[#111]">
@@ -937,6 +958,7 @@ export function App() {
             focusNode={learnFocusNode}
             isThinking={isThinking}
             onSearchBrainRelated={handleBrainRelatedSearch}
+            {...(shouldRenderCreateWorkspace ? { onBackToCreate: () => setActiveMode("Create") } : {})}
           />
         ) : activeMode === "Brain" ? (
           <BrainWorkspace
@@ -964,18 +986,22 @@ export function App() {
             onCanvasNodeAction={handleCanvasNodeAction}
             onStartCreateWithBrain={handleStartCreateWithBrain}
           />
-        ) : activeMode === "Create" ? (
-          <CreateWorkspace
-            data={data}
-            status={status}
-            isThinking={isThinking}
-            brainProfile={createBrainProfile}
-            initialSeedText={createInitialSeedText}
-            onInitialSeedConsumed={() => setCreateInitialSeedText(null)}
-            onStatusChange={setStatus}
-            onThinkingChange={setIsThinking}
-            onOpenBrain={() => setActiveMode("Brain")}
-          />
+            ) : null}
+            {shouldRenderCreateWorkspace ? (
+              <div hidden={activeMode !== "Create"}>
+                <CreateWorkspace
+                  data={data}
+                  status={status}
+                  isThinking={isThinking}
+                  brainProfile={createBrainProfile}
+                  initialSeedText={createInitialSeedText}
+                  onInitialSeedConsumed={() => setCreateInitialSeedText(null)}
+                  onStatusChange={setStatus}
+                  onThinkingChange={setIsThinking}
+                  onOpenBrain={() => setActiveMode("Brain")}
+                  onLearnThis={handleLearnFromCreate}
+                />
+              </div>
             ) : null}
           </>
         )}
