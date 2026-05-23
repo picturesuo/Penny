@@ -237,6 +237,21 @@ export async function fetchBrainDemoFixtureImport(): Promise<BrainDemoFixtureRes
   return payload as BrainDemoFixtureResponse;
 }
 
+export async function fetchBrainYcFounderFixtureImport(): Promise<BrainDemoFixtureResponse> {
+  const response = await fetch("/api/brain/demo-fixture/yc-founder", {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/brain/demo-fixture/yc-founder failed with ${response.status}.`));
+  }
+
+  return payload as BrainDemoFixtureResponse;
+}
+
 export async function fetchBrainImportJob(jobId: string): Promise<BrainImportJobResponse> {
   const response = await fetch(`/api/brain/import/${encodeURIComponent(jobId)}`, {
     method: "GET",
