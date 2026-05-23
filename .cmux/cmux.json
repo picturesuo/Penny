@@ -82,7 +82,7 @@
                   {
                     "type": "terminal",
                     "name": "dev-server",
-                    "command": "DATABASE_URL= PENNY_SKIP_DATABASE_PREP=true PENNY_AUTH_MODE=dev PORT=3007 pnpm dev"
+                    "command": "set -a; [ -f .env.local ] && source .env.local; set +a; PENNY_SKIP_DATABASE_PREP=true PENNY_AUTH_MODE=dev PORT=3007 pnpm dev"
                   }
                 ]
               }
