@@ -543,7 +543,7 @@ export function buildCreateLearnBridgeNode(artifact: CodingPromptArtifact | null
       createLearnBridgeConcept,
       "Explain simply: explicit selections, comments, and export feedback are stronger evidence than passive behavior.",
       "Show worked example: selecting Personal + Valuable + Critical should outweigh merely viewing Practical.",
-      `Show how this applies to my artifact: use the recorded judgment to shape ${artifactTitle}.`,
+      `Apply to my artifact: use the recorded judgment to shape ${artifactTitle}.`,
     ].join(" "),
     ...(artifact ? { refs: { artifactId: artifact.id } } : {}),
     actions: ["learn", "check", "related"],
