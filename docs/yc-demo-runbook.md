@@ -5,8 +5,10 @@
   `DATABASE_URL= PENNY_SKIP_DATABASE_PREP=true PENNY_AUTH_MODE=dev PORT=3007 pnpm dev`
 - Open `http://localhost:3007`.
 - Use the fixture path only. Do not demo live Gmail OAuth, Slack, Drive, Calendar, or broad import setup.
-- Optional browser smoke:
+- Optional one-path browser smoke:
   `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line`
+- Optional 50-repeat stability smoke:
+  `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --repeat-each=50 --reporter=line --output=.tmp-playwright-results`
 
 ## Exact Click Path
 1. On the landing page, click `Build with Penny`.
