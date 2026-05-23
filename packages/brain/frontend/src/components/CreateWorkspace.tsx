@@ -1549,7 +1549,7 @@ function createBrainProfileCreateContext(profile: BrainMemoryProfileData | null)
     id: source.id,
     label: source.label,
     kind: "source",
-    excerpt: `Imported ${source.kind} with ${source.memoryNodeCount} memories and ${source.chunkCount} chunks.`,
+    excerpt: `${sourceImportEvidenceLabel(source.kind)} with ${source.memoryNodeCount} memories and ${source.chunkCount} chunks.`,
     sourceRange: source.fileName ?? `source ${source.id.slice(0, 8)}`,
   }));
 
@@ -1580,6 +1580,21 @@ function memoryKindFromNodeType(type: BrainMemoryProfileData["recentMemoryNodes"
   }
 
   return "brain";
+}
+
+function sourceImportEvidenceLabel(kind: string): string {
+  switch (kind) {
+    case "email_fixture":
+      return "Safe email-style fixture evidence; not live Gmail";
+    case "linkedin_context":
+      return "Safe LinkedIn-style fixture evidence; not live LinkedIn";
+    case "manual_messages_transcript":
+      return "Manual/pasted message transcript evidence; not live SMS, iMessage, or WhatsApp";
+    case "founder_notes":
+      return "Founder-note evidence";
+    default:
+      return `Private Brain source evidence (${kind})`;
+  }
 }
 
 export function isCreateComparisonDevMode(env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env): boolean {
