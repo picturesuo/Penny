@@ -1,0 +1,90 @@
+[
+  {
+    "title": "Email fixture - Gmail-style context",
+    "create_time": 1779613200,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Email fixture. Gmail-style context. Subject: Lovable hackathon recap. I watched founders use coding agents before they had a clear spec, and the failure was not code quality, it was vague thinking."
+      },
+      {
+        "role": "assistant",
+        "content": "Source fact: The Lovable hackathon showed that people need an ideation instrument before coding agents, because vague ideas need to become buildable specs with assumptions, options, and tradeoffs."
+      },
+      {
+        "role": "user",
+        "content": "Goal: Penny should help a founder turn vague ideas -> buildable specs using emails, messages, and notes as private context."
+      },
+      {
+        "role": "assistant",
+        "content": "Decision: Store derived memory only from this fixture; trainingUse=false; raw Gmail-style snippets are for demo grounding and should not imply live Gmail OAuth."
+      }
+    ]
+  },
+  {
+    "title": "Manual messages context for demo",
+    "create_time": 1779699600,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Manual messages context for demo. I keep saying Penny is a memory-native workbench, not a GPT wrapper, because it remembers decisions, rejected directions, and explicit human judgment."
+      },
+      {
+        "role": "assistant",
+        "content": "Preference: Penny should preserve human judgment as first-class signal. The user wants to select Personal plus Valuable plus Critical instead of being commanded toward one best answer."
+      },
+      {
+        "role": "user",
+        "content": "Frustration: Generic AI apps turn everything into a chatbot or dashboard and hide why a suggestion exists."
+      },
+      {
+        "role": "assistant",
+        "content": "Project: Create should show why each option exists, cite founder memory, and export a coding-agent prompt with product thesis, target user, risks, MVP scope, and demo script."
+      }
+    ]
+  },
+  {
+    "title": "Founder notes",
+    "create_time": 1779786000,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Founder notes. Penny is a controllable thinking instrument for founders and builders who need to turn raw thought into claims, assumptions, challenges, learning, artifacts, and canvas state."
+      },
+      {
+        "role": "assistant",
+        "content": "Idea: The north star is context -> options -> judgment -> artifact -> learn -> canvas/export, with Brain as the product substrate."
+      },
+      {
+        "role": "user",
+        "content": "Build style: Keep it newspaper-like, warm paper, restrained borders, compact hierarchy, no huge redesign, no generic chatbot sidebar."
+      },
+      {
+        "role": "assistant",
+        "content": "Decision: Create and Learn should happen inside Brain context. Create/export synthesize from Brain, and every meaningful action should become append-only Move history."
+      }
+    ]
+  },
+  {
+    "title": "Rejected directions",
+    "create_time": 1779872400,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Rejected directions: notes app, dashboard, chatbot, assistant for everything. Do not pitch Penny as a notes app, dashboard, chatbot, or assistant for everything."
+      },
+      {
+        "role": "assistant",
+        "content": "Rejected direction: Penny should not become a generic notes app because the value is structured thinking, memory, challenge, learn, and artifact generation."
+      },
+      {
+        "role": "user",
+        "content": "Rejected direction: Avoid a generic dashboard because it makes Penny look like analytics instead of a memory-native creativity workbench."
+      },
+      {
+        "role": "assistant",
+        "content": "Rejected direction: Avoid chatbot positioning because Penny is not a chatbot. It is a memory-native creativity workbench."
+      }
+    ]
+  }
+]
