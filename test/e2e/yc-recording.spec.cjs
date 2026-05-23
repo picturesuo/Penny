@@ -108,7 +108,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
     .locator(".create-judgment-panel textarea")
     .fill("Keep this founder/builder path: memory-native workbench, human judgment, and buildable specs before coding agents.");
   await captureProof(page, testInfo, "04-selections-comment");
-  await page.getByRole("button", { name: "Update artifact" }).click();
+  await page.getByRole("button", { name: /Update artifact|Update Idea Spec/ }).click();
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/Personal|Valuable|Critical/, { timeout: 30_000 });
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/founder\/builder path|memory-native workbench/i);
   await expect(page.getByTestId("yc-artifact-outline")).toContainText("Product thesis");
