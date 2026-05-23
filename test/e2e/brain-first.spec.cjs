@@ -8,7 +8,10 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   const scopeId = `brain-first-${testInfo.workerIndex}-${Date.now()}`;
 
   await page.addInitScript((scope) => {
-    window.localStorage.clear();
+    if (!window.sessionStorage.getItem(scope.storageResetKey)) {
+      window.localStorage.clear();
+      window.sessionStorage.setItem(scope.storageResetKey, "true");
+    }
 
     const originalFetch = window.fetch.bind(window);
     window.fetch = (input, init = {}) => {
@@ -32,6 +35,7 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
     workspaceId: `${scopeId}-workspace`,
     projectId: `${scopeId}-project`,
     sphereId: `${scopeId}-sphere`,
+    storageResetKey: `${scopeId}-storage-reset`,
   });
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
@@ -97,5 +101,20 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used|## Product Goal/i, {
     timeout: 15_000,
   });
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/Artifact\/export.*\.md/s);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("create-workspace")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("create-brain-context")).toHaveAttribute("data-create-context", "using-brain");
+  await expect(page.getByRole("textbox", { name: "Rough idea" })).toHaveValue(
+    "Use my Brain context to design Penny's real Create loop.",
+  );
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Brain-first imported context");
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText("Selected Personal + Critical");
+  await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Personal"]')).toHaveClass(/is-selected/);
+  await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Critical"]')).toHaveClass(/is-selected/);
+  await expect(page.locator(".create-judgment-panel textarea")).toHaveValue(/source-grounded/);
+  await expect(page.getByTestId("create-artifact-panel")).toContainText(/source-grounded|Personal|Critical/i);
+  await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used|## Product Goal/i);
   await expect(page.getByTestId("yc-demo-canvas")).toContainText(/Artifact\/export.*\.md/s);
 });
