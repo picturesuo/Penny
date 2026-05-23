@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildCreateNextInput,
   buildCreateLearnBridgeNode,
+  buildCreateOptionLearnNode,
   CreateArtifactPanel,
   CreateBrainOnboardingPanel,
   CreateWorkspace,
@@ -28,10 +29,11 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
       selectedOptionIds: [],
       busy: false,
       onToggleOption: () => undefined,
+      onLearnThis: () => undefined,
     }),
   );
 
-  assert.match(markup, /Next-best move/);
+  assert.match(markup, /Possible move/);
   assert.match(markup, /data-testid="create-option-board"/);
   assert.match(markup, /data-testid="create-option-card"/);
   assert.match(markup, /data-create-lens="Personal"/);
@@ -44,6 +46,8 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   assert.match(markup, /1 sources/);
   assert.match(markup, /Context-light/);
   assert.match(markup, /Details/);
+  assert.match(markup, /Learn this/);
+  assert.match(markup, /data-testid="create-option-learn-this-button"/);
   assert.doesNotMatch(markup, /intentMatch|buildability|novelty|rawScores/i);
 });
 
@@ -66,6 +70,20 @@ test("CreateOptionDetailsDrawer renders rationale, memories, sources, and ground
   assert.match(markup, /Uncertainty/);
   assert.match(markup, /Founder workflow notes/);
   assert.match(markup, /Prefers source-backed cards/);
+});
+
+test("Create option Learn node carries option meaning, rationale, worked example, and artifact ref", () => {
+  const artifact = createComparisonArm("deterministic", [memoryGroundedOption()]).artifact;
+  const node = buildCreateOptionLearnNode(memoryGroundedOption(), artifact);
+
+  assert.match(node.id, /^create-option-learn:/);
+  assert.equal(node.kind, "concept");
+  assert.equal(node.refs?.artifactId, artifact.id);
+  assert.match(node.title, /Personal:/);
+  assert.match(node.summary ?? "", /What this option means/);
+  assert.match(node.summary ?? "", /Why Penny suggested it/);
+  assert.match(node.summary ?? "", /Worked example/);
+  assert.match(node.summary ?? "", /Next smallest concept/);
 });
 
 test("CreateBrainOnboardingPanel shows context-light and imported Brain states", () => {
@@ -191,7 +209,7 @@ test("CreateLearnBridgePanel exposes the Brain Ranker lesson and focus node", ()
   assert.match(markup, /Brain Ranker weights explicit judgment events over implicit behavior/);
   assert.match(markup, /Explain simply/);
   assert.match(markup, /worked example/);
-  assert.match(markup, /applies to my artifact/);
+  assert.match(markup, /applies to my artifact|Apply to my artifact/);
   assert.equal(createLearnBridgeConcept, "Brain Ranker weights explicit judgment events over implicit behavior.");
   assert.equal(node.id, "create-learn:brain-ranker-judgment-events");
   assert.equal(node.kind, "concept");
@@ -282,7 +300,7 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
 
   assert.match(markup, /Using your Brain/);
   assert.match(markup, /data-testid="create-brain-context"/);
-  assert.match(markup, /Next-best move/);
+  assert.match(markup, /Possible move/);
   assert.match(markup, /data-testid="create-option-board"/);
   assert.match(markup, /data-testid="create-evidence-drawer"/);
   assert.match(markup, /data-testid="create-artifact-panel"/);
@@ -297,6 +315,9 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Inferred/);
   assert.match(markup, /Final coding-agent prompt/);
   assert.match(markup, /Source \/ Memory Evidence/);
+  assert.match(markup, /Expand/);
+  assert.match(markup, /Use selected mix/);
+  assert.match(markup, /Add comment/);
   assert.match(markup, /Verification/);
   assert.match(markup, /Personal memory grounding/);
   assert.match(markup, /Export feedback/);
