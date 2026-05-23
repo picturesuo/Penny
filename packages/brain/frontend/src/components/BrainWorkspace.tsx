@@ -61,6 +61,7 @@ import {
   createGoogleGmailConnectSession,
   deleteBrainSource,
   fetchBrainDemoFixtureImport,
+  fetchBrainYcFounderFixtureImport,
   fetchBrainMemoryProfile,
   fetchGoogleGmailStatus,
   fetchGoogleConnectorProvider,
@@ -87,6 +88,7 @@ import { CanvasWorkspace } from "./CanvasWorkspace";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
 type BrainMemoryStatus = "idle" | "loading" | "ready" | "importing" | "deleting" | "error";
+type BrainDemoFixtureKind = "penny" | "yc-founder";
 type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "syncing" | "revoking" | "deleting" | "error";
 
 type GoogleConnectorConnectionView = {
@@ -384,24 +386,29 @@ export function BrainWorkspace({
     }
   }
 
-  async function handleMemoryDemoFixtureImport() {
+  async function handleMemoryDemoFixtureImport(fixtureKind: BrainDemoFixtureKind = "penny") {
     setMemoryStatus("importing");
     setMemoryError(null);
     setMemoryNotice(null);
 
     try {
-      const fixture = await fetchBrainDemoFixtureImport();
+      const fixture =
+        fixtureKind === "yc-founder" ? await fetchBrainYcFounderFixtureImport() : await fetchBrainDemoFixtureImport();
       const response = await importBrainSource(fixture.data.importInput);
       setMemoryProfile(response.data.profile);
 
       if (response.data.job.status === "failed") {
         setMemoryStatus("error");
-        setMemoryError(response.data.job.errorMessages.join(" ") || "Brain demo import failed.");
+        setMemoryError(response.data.job.errorMessages.join(" ") || "Brain fixture import failed.");
         return;
       }
 
       setMemoryStatus("ready");
-      setMemoryNotice("Demo fixture imported. Review the source-backed memories below before starting Create.");
+      setMemoryNotice(
+        fixtureKind === "yc-founder"
+          ? "YC founder fixture imported. Review the derived source-backed memories below before starting Create."
+          : "Demo fixture imported. Review the source-backed memories below before starting Create.",
+      );
     } catch (error) {
       setMemoryStatus("error");
       setMemoryError(error instanceof Error ? error.message : String(error));
@@ -2389,7 +2396,7 @@ export function BrainMemoryPanel({
   reviewingId?: string | null;
   disabled: boolean;
   onImport: (input: BrainImportInput) => Promise<void>;
-  onDemoFixtureImport?: (() => Promise<void>) | undefined;
+  onDemoFixtureImport?: ((fixtureKind?: BrainDemoFixtureKind) => Promise<void>) | undefined;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onReviewMemory?: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
@@ -2679,17 +2686,36 @@ export function BrainMemoryPanel({
       />
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {demoFixtureVisible && onDemoFixtureImport ? (
-        <button
-          type="button"
-          className="secondary-command brain-memory-demo-button"
-          disabled={disabled || importing}
-          onClick={() => {
-            void onDemoFixtureImport();
-          }}
-        >
-          <Sparkles size={15} aria-hidden="true" />
-          <span>Load Penny demo fixture</span>
-        </button>
+        <div className="brain-memory-demo-fixtures" aria-label="Demo fixture loaders">
+          <button
+            type="button"
+            className="secondary-command brain-memory-demo-button"
+            disabled={disabled || importing}
+            onClick={() => {
+              void onDemoFixtureImport("yc-founder");
+            }}
+          >
+            <Sparkles size={15} aria-hidden="true" />
+            <span>Load YC founder fixture</span>
+          </button>
+          <ul className="brain-memory-demo-labels" aria-label="YC founder fixture sources">
+            <li>Email fixture</li>
+            <li>Gmail-style context</li>
+            <li>Manual messages context for demo</li>
+            <li>Founder notes</li>
+          </ul>
+          <button
+            type="button"
+            className="secondary-command brain-memory-demo-button"
+            disabled={disabled || importing}
+            onClick={() => {
+              void onDemoFixtureImport();
+            }}
+          >
+            <Sparkles size={15} aria-hidden="true" />
+            <span>Load Penny demo fixture</span>
+          </button>
+        </div>
       ) : null}
       <form className="brain-memory-import" onSubmit={handleSubmit}>
         <div className="brain-memory-import-row">
