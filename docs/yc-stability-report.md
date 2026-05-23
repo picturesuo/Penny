@@ -20,7 +20,7 @@ Visual evidence is captured in [yc-demo-recording-path.png](assets/yc-demo-recor
 - `pnpm test`: passed, 641 tests.
 - `pnpm build`: passed.
 - `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-playwright-results`: passed, 1 test.
-- `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --repeat-each=50 --reporter=line --output=.tmp-playwright-results`: passed, 50 tests in 33.7s.
+- `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --repeat-each=50 --reporter=line --output=.tmp-playwright-results`: passed, 50 tests in 35.2s.
 
 ## Stability Fix
 The first parallel repeat run exposed a real test-shape problem: every repeat shared the same dev-auth identity, so the shared in-memory dev server eventually returned `Too many Penny API requests. Try again shortly.` The e2e spec now clears browser-local app state and injects unique dev scope headers for each repeat before the app boots.
