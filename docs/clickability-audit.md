@@ -15,10 +15,10 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
 - Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
 - Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
-- `pnpm test`: passed, 658 tests.
+- `pnpm test`: passed, 659 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.5s.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 23.1s.
 
 ## Control Findings
 
