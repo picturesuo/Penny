@@ -103,11 +103,13 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
 
   await page
     .locator(".create-judgment-panel textarea")
-    .fill("Keep this founder/builder path: memory-native workbench, human judgment, and buildable specs before coding agents.");
+    .fill(
+      "Make this founder/builder focused. Keep the memory-native creativity angle, but make the output concrete enough that I could build it with Codex.",
+    );
   await captureProof(page, testInfo, "04-selections-comment");
   await page.getByRole("button", { name: /Update artifact|Update Idea Spec/ }).click();
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/Personal|Valuable|Critical/, { timeout: 30_000 });
-  await expect(page.getByTestId("create-artifact-panel")).toContainText(/founder\/builder path|memory-native workbench/i);
+  await expect(page.getByTestId("create-artifact-panel")).toContainText(/founder\/builder focused|memory-native creativity/i);
   await expect(page.getByTestId("yc-artifact-outline")).toContainText("Product thesis");
   await expect(page.getByTestId("yc-artifact-outline")).toContainText("Target user");
   await expect(page.getByTestId("yc-artifact-outline")).toContainText("Problem");
@@ -136,7 +138,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Personal"]')).toHaveClass(/is-selected/);
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Valuable"]')).toHaveClass(/is-selected/);
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Critical"]')).toHaveClass(/is-selected/);
-  await expect(page.locator(".create-judgment-panel textarea")).toHaveValue(/memory-native workbench/);
+  await expect(page.locator(".create-judgment-panel textarea")).toHaveValue(/build it with Codex/);
   await expect(page.getByTestId("create-evidence-drawer")).toBeVisible();
   await expect(page.getByTestId("yc-artifact-outline")).toContainText(/Product thesis|founder\/builder path/i);
   await captureProof(page, testInfo, "07-return-state");
