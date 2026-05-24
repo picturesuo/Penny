@@ -88,6 +88,15 @@ test("POST /api/create/next generates the five required Create directions", asyn
   assert.equal(data.observability.exportQualitySignals.hasRoughIdea, true);
   assert.equal(data.observability.exportQualitySignals.hasImplementationSequence, true);
   assert.equal(typeof data.verification.scores.promptCompleteness, "number");
+  assert.equal(data.canvas.sourceOfTruth, "create_option_set_artifact_judgment_canvas");
+  assert.deepEqual(
+    data.canvas.nodes.map((node) => node.label),
+    ["Penny", "Brain", "Create", "Learn", "Export"],
+  );
+  assert.equal(data.canvas.generatedFrom.optionSetId, data.optionSet.id);
+  assert.equal(data.canvas.generatedFrom.artifactId, data.artifact.id);
+  assert.equal(data.canvas.generatedFrom.judgmentEventId, null);
+  assert.match(data.canvas.nodes.find((node) => node.label === "Create")?.detail ?? "", /Generated Personal \/ Practical \/ Valuable \/ Critical \/ Weird/);
 
   for (const option of data.optionSet.options) {
     assert.ok(option.title);
@@ -1229,6 +1238,10 @@ test("POST /api/create/next records multi-select judgment and updates the artifa
   assert.ok(data.judgmentEvent?.artifactDelta.updatedSectionIds.length);
   assert.equal(data.artifact.version, first.artifact.version + 1);
   assert.ok(data.artifact.judgmentEventIds.includes(data.judgmentEvent?.id ?? "missing"));
+  assert.equal(data.canvas.generatedFrom.judgmentEventId, data.judgmentEvent?.id);
+  assert.deepEqual(data.canvas.generatedFrom.selectedOptionIds, selected.map((option) => option.id));
+  assert.match(data.canvas.nodes.find((node) => node.label === "Create")?.detail ?? "", /Selected Personal \+ Critical \+ Weird/);
+  assert.match(data.canvas.nodes.find((node) => node.label === "Export")?.detail ?? "", / v2$/);
   assert.match(sectionBody(data.artifact, "User intent"), /visibly mutate the artifact/i);
   assert.match(sectionBody(data.artifact, "Verification constraints"), /not-GPT-wrapper/i);
 });

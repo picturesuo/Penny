@@ -198,6 +198,37 @@ export type PromptExport = {
   createdAt: string;
 };
 
+export type CreateCanvasNode = {
+  id: string;
+  label: "Penny" | "Brain" | "Create" | "Learn" | "Export";
+  detail: string;
+  note?: string;
+  edgeToNext: "grounds" | "suggests" | "explains" | "returns" | "ships";
+  refs: {
+    projectId: string;
+    sessionId: string;
+    optionSetId?: string | null;
+    artifactId?: string | null;
+    judgmentEventId?: string | null;
+    memoryIds: string[];
+    sourceIds: string[];
+  };
+};
+
+export type CreateCanvasSnapshot = {
+  sourceOfTruth: "create_option_set_artifact_judgment_canvas";
+  generatedFrom: {
+    projectId: string;
+    sessionId: string;
+    optionSetId: string;
+    artifactId: string;
+    judgmentEventId: string | null;
+    selectedOptionIds: string[];
+    sourceOptionSetIds: string[];
+  };
+  nodes: CreateCanvasNode[];
+};
+
 export type CreateExportFeedback = {
   sourceOfTruth: "create_export_feedback";
   id: string;
@@ -222,6 +253,7 @@ export type CreateNextResult = {
   artifact: CodingPromptArtifact;
   verification: VerificationSummary;
   judgmentEvent: JudgmentEvent | null;
+  canvas: CreateCanvasSnapshot;
   observability: CreateObservability;
   exportReady: boolean;
 };
@@ -746,6 +778,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         artifacts.set(scopedSessionKey, artifact);
       }
       const verification = verifyArtifact(artifact, optionSet, judgmentEvent);
+      const canvas = buildCreateCanvasSnapshot({ optionSet, artifact, judgmentEvent });
       const observability = createObservability({
         trace: generated.trace,
         optionSet,
@@ -759,6 +792,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         artifact,
         verification,
         judgmentEvent,
+        canvas,
         observability,
         exportReady: verification.verdict === "ready",
       };
@@ -1686,6 +1720,89 @@ function buildInitialArtifact(input: {
     sourceOptionSetIds: [input.optionSet.id],
     judgmentEventIds: [],
     updatedAt: input.now,
+  };
+}
+
+export function buildCreateCanvasSnapshot(input: {
+  optionSet: OptionSet;
+  artifact: CodingPromptArtifact;
+  judgmentEvent: JudgmentEvent | null;
+}): CreateCanvasSnapshot {
+  const selectedOptionIds = input.judgmentEvent?.selectedOptionIds ?? [];
+  const selectedLenses = selectedOptionIds
+    .map((optionId) => input.optionSet.options.find((option) => option.id === optionId)?.lens)
+    .filter((lens): lens is CreateLens => Boolean(lens));
+  const generatedLenses = input.optionSet.options.map((option) => option.lens);
+  const memoryIds = unique(input.optionSet.memoryUsed.map((memory) => memory.id));
+  const sourceIds = unique(input.optionSet.sourcesUsed.map((source) => source.id));
+  const nonRoughSources = input.optionSet.sourcesUsed.filter((source) => source.kind !== "rough_idea");
+  const sourceLabels = nonRoughSources.slice(0, 3).map((source) => source.label).filter(Boolean);
+  const baseRefs = {
+    projectId: input.optionSet.projectId,
+    sessionId: input.optionSet.sessionId,
+    optionSetId: input.optionSet.id,
+    artifactId: input.artifact.id,
+    judgmentEventId: input.judgmentEvent?.id ?? null,
+    memoryIds,
+    sourceIds,
+  };
+  const nodes: CreateCanvasNode[] = [
+    {
+      id: stableId("create-canvas-node", input.optionSet.id, "penny"),
+      label: "Penny",
+      detail: "Memory-native creativity workbench",
+      note: "Judgment stays human.",
+      edgeToNext: "grounds",
+      refs: baseRefs,
+    },
+    {
+      id: stableId("create-canvas-node", input.optionSet.id, "brain"),
+      label: "Brain",
+      detail: memoryIds.length
+        ? `${memoryIds.length} memories / ${sourceLabels.length || sourceIds.length} sources${sourceLabels.length ? `: ${sourceLabels.join(", ")}` : ""}`
+        : "Context-light: rough idea only",
+      note: input.optionSet.sourceOfTruth.includes("model_backed") ? "Model copy, source refs preserved." : "Backend retrieved context.",
+      edgeToNext: "suggests",
+      refs: baseRefs,
+    },
+    {
+      id: stableId("create-canvas-node", input.optionSet.id, "create"),
+      label: "Create",
+      detail: selectedLenses.length ? `Selected ${selectedLenses.join(" + ")}` : `Generated ${generatedLenses.join(" / ")}`,
+      note: input.judgmentEvent ? "Explicit judgment recorded." : "Five equal cards.",
+      edgeToNext: "explains",
+      refs: baseRefs,
+    },
+    {
+      id: stableId("create-canvas-node", input.optionSet.id, "learn"),
+      label: "Learn",
+      detail: "Brain Ranker judgment weighting",
+      note: "Explain simply, show example, apply back.",
+      edgeToNext: "returns",
+      refs: baseRefs,
+    },
+    {
+      id: stableId("create-canvas-node", input.optionSet.id, "export"),
+      label: "Export",
+      detail: `${input.artifact.title} v${input.artifact.version}`,
+      note: input.artifact.judgmentEventIds.length ? "Spec reflects selected judgment." : "Spec draft from generated options.",
+      edgeToNext: "ships",
+      refs: baseRefs,
+    },
+  ];
+
+  return {
+    sourceOfTruth: "create_option_set_artifact_judgment_canvas",
+    generatedFrom: {
+      projectId: input.optionSet.projectId,
+      sessionId: input.optionSet.sessionId,
+      optionSetId: input.optionSet.id,
+      artifactId: input.artifact.id,
+      judgmentEventId: input.judgmentEvent?.id ?? null,
+      selectedOptionIds,
+      sourceOptionSetIds: input.artifact.sourceOptionSetIds,
+    },
+    nodes,
   };
 }
 
