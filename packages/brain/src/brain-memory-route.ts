@@ -1505,13 +1505,15 @@ function memoryReviewEventFor(action: MemoryReviewAction): Pick<RecordBrainDevel
 
 function resolveDefaultBrainMemoryService(): BrainMemoryRouteService {
   const databaseUrl = process.env.DATABASE_URL?.trim();
-  const cacheKey = databaseUrl ? `db:${databaseUrl}` : `memory:${brainMemoryRuntimeKind()}`;
+  const useLocalInMemoryFallback = shouldUseLocalInMemoryBrainMemory(databaseUrl);
+  const cacheKey =
+    databaseUrl && !useLocalInMemoryFallback ? `db:${databaseUrl}` : `memory:${brainMemoryRuntimeKind()}:local-fallback`;
 
   if (defaultBrainMemoryServiceCache && defaultBrainMemoryServiceCacheKey === cacheKey) {
     return defaultBrainMemoryServiceCache;
   }
 
-  if (databaseUrl) {
+  if (databaseUrl && !useLocalInMemoryFallback) {
     const db = createPennyDb(databaseUrl);
 
     defaultBrainMemoryServiceCache = createDbBrainMemoryService(db, createDbBrainRankerRecorder(db));
@@ -1533,6 +1535,34 @@ function resolveDefaultBrainMemoryService(): BrainMemoryRouteService {
 
 function brainMemoryRuntimeKind(): "dev-test" | "production" {
   return process.env.NODE_ENV === "production" ? "production" : "dev-test";
+}
+
+function shouldUseLocalInMemoryBrainMemory(databaseUrl: string | undefined): boolean {
+  if (!databaseUrl || brainMemoryRuntimeKind() !== "dev-test") {
+    return false;
+  }
+
+  const authMode = process.env.PENNY_AUTH_MODE?.trim().toLowerCase();
+
+  return readEnvFlag("PENNY_SKIP_DATABASE_PREP", false) && (!authMode || authMode === "dev");
+}
+
+function readEnvFlag(name: string, fallback: boolean): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+
+  if (!value) {
+    return fallback;
+  }
+
+  if (["1", "true", "yes", "on"].includes(value)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(value)) {
+    return false;
+  }
+
+  return fallback;
 }
 
 async function loadDbMemoryStore(db: BrainMemoryDb, scope: BrainScope): Promise<ScopeMemoryStore> {

@@ -249,6 +249,45 @@ test("default Brain memory service refuses production in-memory fallback", async
   });
 });
 
+test("default Brain memory service uses local in-memory fallback when database prep is skipped", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      DATABASE_URL: "postgresql://stale-user:stale-pass@invalid.invalid:5432/penny",
+      PENNY_AUTH_MODE: "dev",
+      PENNY_SKIP_DATABASE_PREP: "true",
+    },
+    async () => {
+      const headers = requestHeaders({
+        "x-user-id": "local-fallback-user",
+        "x-workspace-id": "local-fallback-workspace",
+        "x-project-id": "local-fallback-project",
+        "x-sphere-id": "local-fallback-sphere",
+      });
+      const response = await handleBrainImportRequest(
+        jsonRequest(
+          "http://localhost/api/brain/import",
+          {
+            kind: "text",
+            label: "Local fallback notes",
+            content:
+              "Project: Penny should use a safe local demo Brain when database prep is skipped. Preference: keep YC Create fixture imports working without stale remote database access.",
+          },
+          headers,
+        ),
+      );
+      const payload = await responsePayload(response);
+      const job = payload.data.job as IngestionJob;
+      const profile = payload.data.profile as BrainMemoryProfile;
+
+      assert.equal(response.status, 200);
+      assert.equal(job.status, "completed");
+      assert.equal(profile.stats.sourceCount, 1);
+      assert.ok(profile.recentMemoryNodes.some((node) => /local demo Brain|YC Create fixture/i.test(node.summary)));
+    },
+  );
+});
+
 test("Brain memory jobs, reviews, retrieval, and source deletion are scoped by user", async () => {
   const service = createInMemoryBrainMemoryService();
   const userAHeaders = requestHeaders({
