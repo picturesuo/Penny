@@ -39,6 +39,7 @@ import type {
   BrainGraphPath,
   BrainGraphPathNode,
   BrainHierarchyFolder,
+  BrainCodingPromptExport,
   BrainRecentIdea,
   BrainSidebarData,
   IngestionJob,
@@ -60,6 +61,7 @@ import type {
 import {
   createGoogleGmailConnectSession,
   deleteBrainSource,
+  exportBrainCodingPrompt,
   fetchBrainDemoFixtureImport,
   fetchBrainYcFounderFixtureImport,
   fetchBrainMemoryProfile,
@@ -88,6 +90,7 @@ import { CanvasWorkspace } from "./CanvasWorkspace";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
 type BrainMemoryStatus = "idle" | "loading" | "ready" | "importing" | "deleting" | "error";
+type BrainExportStatus = "idle" | "exporting" | "ready" | "error";
 type BrainDemoFixtureKind = "penny" | "yc-founder";
 type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "syncing" | "revoking" | "deleting" | "error";
 
@@ -2459,6 +2462,9 @@ export function BrainMemoryPanel({
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleWarning, setGoogleWarning] = useState<string | null>(null);
   const [googleConnectLink, setGoogleConnectLink] = useState<string | null>(null);
+  const [brainExport, setBrainExport] = useState<BrainCodingPromptExport | null>(null);
+  const [brainExportStatus, setBrainExportStatus] = useState<BrainExportStatus>("idle");
+  const [brainExportError, setBrainExportError] = useState<string | null>(null);
   const importing = status === "importing";
   const sources = profile?.sources ?? [];
   const recentNodes = profile?.recentMemoryNodes ?? [];
@@ -2467,7 +2473,8 @@ export function BrainMemoryPanel({
   const profileReviewKey = profileReviewFingerprint(profile);
   const [reviewedProfileKey, setReviewedProfileKey] = useState<string | null>(null);
   const profileReviewed = Boolean(profileReviewKey && reviewedProfileKey === profileReviewKey);
-  const firstRunSteps = brainFirstRunSteps({ profile, recentNodes, sections: profileSections, profileReviewed });
+  const brainPromptExported = Boolean(brainExport);
+  const firstRunSteps = brainFirstRunSteps({ profile, recentNodes, sections: profileSections, profileReviewed, brainPromptExported });
   const hasImportedMemories = (profile?.stats.memoryNodeCount ?? 0) > 0;
   const demoFixtureVisible = showDemoFixture ?? isBrainDemoFixtureMode();
   const canImport = draft.trim().length > 0 && !disabled && !importing;
@@ -2691,6 +2698,25 @@ export function BrainMemoryPanel({
     return (await semanticSearchGoogleGmail(input)).data;
   }
 
+  async function handleBrainExport() {
+    if (!profile || !hasImportedMemories || disabled || importing || brainExportStatus === "exporting") {
+      return;
+    }
+
+    setBrainExportStatus("exporting");
+    setBrainExportError(null);
+
+    try {
+      const response = await exportBrainCodingPrompt({ goal: createBrainExportGoal(profile) });
+
+      setBrainExport(response.data);
+      setBrainExportStatus("ready");
+    } catch (error) {
+      setBrainExportStatus("error");
+      setBrainExportError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <section className="brain-memory-panel" aria-label="Second Brain memory">
       <div className="brain-memory-panel-head">
@@ -2854,6 +2880,34 @@ export function BrainMemoryPanel({
             <span>Use this Brain to create something</span>
           </button>
         </div>
+      ) : null}
+      {profile && hasImportedMemories ? (
+        <section className="brain-memory-export-panel" aria-label="Brain coding prompt export">
+          <div>
+            <strong>Coding-agent prompt</strong>
+            <span>Private Brain context, formatted for Codex and Claude Code.</span>
+          </div>
+          <button
+            type="button"
+            className="secondary-command"
+            disabled={disabled || importing || brainExportStatus === "exporting"}
+            onClick={() => void handleBrainExport()}
+          >
+            <FileText size={15} aria-hidden="true" />
+            <span>{brainExportStatus === "exporting" ? "Exporting..." : "Export coding prompt"}</span>
+          </button>
+          {brainExportStatus === "error" && brainExportError ? <p className="brain-memory-error">{brainExportError}</p> : null}
+          {brainExport ? (
+            <div className="brain-memory-export-result">
+              <div className="brain-memory-export-meta" aria-label="Brain prompt export quality">
+                <span>{brainExport.export.fileName}</span>
+                <span>{brainExport.export.targets.join(" / ")}</span>
+                <span>{brainExport.export.qualitySignals.promptCompletenessScore}% complete</span>
+              </div>
+              <textarea readOnly aria-label="Brain coding prompt export text" rows={8} value={brainExport.export.text} />
+            </div>
+          ) : null}
+        </section>
       ) : null}
     </section>
   );
@@ -3829,11 +3883,13 @@ export function brainFirstRunSteps({
   recentNodes,
   sections,
   profileReviewed,
+  brainPromptExported,
 }: {
   profile: BrainMemoryProfileData | null;
   recentNodes: MemoryNode[];
   sections: Array<{ title: string; items: BrainProfileSectionItem[] }>;
   profileReviewed: boolean;
+  brainPromptExported: boolean;
 }): Array<{ label: string; done: boolean; active: boolean }> {
   const imported = (profile?.stats.sourceCount ?? 0) > 0;
   const understood = sections.length > 0 && profileReviewed;
@@ -3843,7 +3899,7 @@ export function brainFirstRunSteps({
     { label: "Review Brain profile", done: understood },
     { label: "Confirm/forget/boost memories", done: reviewed },
     { label: "Start Create with this Brain", done: false },
-    { label: "Export coding prompt", done: false },
+    { label: "Export coding prompt", done: brainPromptExported },
   ];
   const activeIndex = baseSteps.findIndex((step) => !step.done);
 
@@ -3851,6 +3907,16 @@ export function brainFirstRunSteps({
     ...step,
     active: index === (activeIndex === -1 ? baseSteps.length - 1 : activeIndex),
   }));
+}
+
+function createBrainExportGoal(profile: BrainMemoryProfileData): string {
+  const activeProject = profile.profile.activeProjects?.[0]?.label ?? profile.profile.ideaClusters?.[0]?.label ?? "the current Penny build";
+  const buildStyle =
+    profile.profile.preferredBuildStyle?.[0]?.summary ??
+    profile.profile.tasteSignals?.[0]?.summary ??
+    "small, reversible implementation steps with visible provenance";
+
+  return `Use this private Brain profile to plan the next buildable step for ${activeProject}. Preserve the user's judgment and prefer ${buildStyle}.`;
 }
 
 function profileReviewFingerprint(profile: BrainMemoryProfileData | null): string | null {

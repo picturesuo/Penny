@@ -3849,6 +3849,67 @@
     line-height: 1.3;
   }
 
+  .brain-memory-export-panel {
+    display: grid;
+    gap: 12px;
+    border: 1px solid #111111;
+    border-radius: 12px;
+    background: #f8f3e8;
+    padding: 12px;
+  }
+
+  .brain-memory-export-panel > div:first-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .brain-memory-export-panel strong {
+    font-size: 13px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .brain-memory-export-panel span {
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .brain-memory-export-result {
+    display: grid;
+    gap: 8px;
+  }
+
+  .brain-memory-export-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .brain-memory-export-meta span {
+    border: 1px solid rgb(17 17 17 / 0.2);
+    border-radius: 999px;
+    background: #ffffff;
+    padding: 5px 8px;
+    color: #111111;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .brain-memory-export-result textarea {
+    width: 100%;
+    min-height: 210px;
+    resize: vertical;
+    border: 1px solid #111111;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 12px;
+    color: #111111;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
   .brain-search-panel {
     border-bottom: 1px solid #d2d2d2;
     padding-bottom: 18px;

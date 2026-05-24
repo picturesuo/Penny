@@ -123,6 +123,8 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Source deleted\. Related chunks and source-backed memories were removed from retrieval and Create/);
   assert.match(markup, /Delete Founder workflow notes/);
   assert.match(markup, /Use this Brain to create something/);
+  assert.match(markup, /Coding-agent prompt/);
+  assert.match(markup, /Private Brain context, formatted for Codex and Claude Code/);
 });
 
 test("Brain first-run flow requires an explicit profile review action", () => {
@@ -139,12 +141,21 @@ test("Brain first-run flow requires an explicit profile review action", () => {
     recentNodes: profile.recentMemoryNodes,
     sections,
     profileReviewed: false,
+    brainPromptExported: false,
   });
   const afterReview = brainFirstRunSteps({
     profile,
     recentNodes: profile.recentMemoryNodes,
     sections,
     profileReviewed: true,
+    brainPromptExported: false,
+  });
+  const afterExport = brainFirstRunSteps({
+    profile,
+    recentNodes: profile.recentMemoryNodes,
+    sections,
+    profileReviewed: true,
+    brainPromptExported: true,
   });
 
   assert.equal(beforeReview[1]?.label, "Review Brain profile");
@@ -153,6 +164,8 @@ test("Brain first-run flow requires an explicit profile review action", () => {
   assert.equal(afterReview[1]?.done, true);
   assert.equal(afterReview[2]?.label, "Confirm/forget/boost memories");
   assert.equal(afterReview[2]?.active, true);
+  assert.equal(afterExport[4]?.label, "Export coding prompt");
+  assert.equal(afterExport[4]?.done, true);
 });
 
 test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest gated messaging", () => {
