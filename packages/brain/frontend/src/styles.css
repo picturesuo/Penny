@@ -1201,10 +1201,13 @@
   }
 
   .create-demo-fixture-labels {
-    display: flex;
     grid-column: 1 / -1;
     flex-wrap: wrap;
     gap: 7px;
+  }
+
+  .create-brain-panel .create-demo-fixture-labels {
+    display: flex;
   }
 
   .create-demo-fixture-labels span {
