@@ -481,7 +481,7 @@ export function CreateWorkspace({
         <article className="check-main-cycle create-workspace-card">
           <header className="check-cycle-hero">
             <span>CREATE KERNEL</span>
-            <h1>Five directions. One buildable spec.</h1>
+            <h1>Five directions. One buildable Idea Spec.</h1>
             <p>Use Brain context, keep judgment human, and export the shape when it is ready.</p>
           </header>
 
@@ -761,7 +761,7 @@ export function createJudgmentNextPlaceCopy({
   }
 
   return {
-    title: nextBestMove?.title ?? "Pick the card with the most creative energy",
+    title: nextBestMove ? `Pick a direction; possible move: ${nextBestMove.title}` : "Pick the card with the most creative energy",
     detail: nextBestMove?.action ?? "Select, reject, or comment. The next step will stay visible without making one card the boss.",
   };
 }
@@ -1373,16 +1373,6 @@ export function CreateOptionBoard({
         <span>Directions</span>
         <strong>Five equal options</strong>
       </header>
-      {nextBestMove ? (
-        <section
-          className={`create-next-best-move${nextBestMove.grounded ? " is-grounded" : " is-context-light"}`}
-          title={nextBestMove.whyItMatters}
-        >
-          <span>Possible move</span>
-          <strong>{nextBestMove.title}</strong>
-          <p>{nextBestMove.action}</p>
-        </section>
-      ) : null}
       <div className="create-option-grid">
         {options.map((option) => {
           const selected = selectedOptionIds.includes(option.id);
@@ -1467,6 +1457,16 @@ export function CreateOptionBoard({
           );
         })}
       </div>
+      {nextBestMove ? (
+        <section
+          className={`create-next-best-move${nextBestMove.grounded ? " is-grounded" : " is-context-light"}`}
+          title={nextBestMove.whyItMatters}
+        >
+          <span>Possible move</span>
+          <strong>{nextBestMove.title}</strong>
+          <p>{nextBestMove.action}</p>
+        </section>
+      ) : null}
       {activeDetailOption ? (
         <CreateOptionDetailsDrawer
           option={activeDetailOption}
