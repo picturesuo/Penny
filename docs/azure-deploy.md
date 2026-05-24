@@ -218,6 +218,16 @@ pnpm check:public-repo-publish
 
 Strict mode fails on proof-media warnings too. If it fails, keep the repo private or publish from a sanitized mirror/new repository instead of flipping this repository public.
 
+To prepare that sanitized mirror:
+
+```sh
+pnpm prepare:public-snapshot -- --out tmp/penny-public-snapshot --force
+cd tmp/penny-public-snapshot
+node scripts/check-public-repo-safety.mjs --strict
+```
+
+The snapshot is a new one-commit Git repository generated from the current tracked tree. It excludes `docs/proof/**` and tracked local env files, and writes `PUBLIC-SNAPSHOT.md` with the source commit. After reviewing the snapshot, publish that directory to a new public GitHub repo instead of changing visibility on the private repository's full history.
+
 ## Cost Guardrails
 
 - Set a monthly Azure budget alert immediately after creating the resource group.
