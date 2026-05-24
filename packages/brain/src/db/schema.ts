@@ -2135,6 +2135,90 @@ export const createExportFeedback = pgTable(
   ],
 );
 
+export const createOptionSets = pgTable(
+  "create_option_sets",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    createProjectId: text("create_project_id").notNull(),
+    createSessionId: text("create_session_id").notNull(),
+    sourceOfTruth: text("source_of_truth").notNull(),
+    rawIdea: text("raw_idea").notNull(),
+    options: jsonb("options").notNull().default([]),
+    nextBestMove: jsonb("next_best_move").notNull().default({}),
+    rankedCandidates: jsonb("ranked_candidates").notNull().default([]),
+    memoryUsed: jsonb("memory_used").notNull().default([]),
+    sourcesUsed: jsonb("sources_used").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("create_option_sets_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("create_option_sets_create_session_idx").on(table.createProjectId, table.createSessionId),
+    index("create_option_sets_created_at_idx").on(table.createdAt),
+    check("create_option_sets_project_present", sql`length(trim(${table.createProjectId})) > 0`),
+    check("create_option_sets_session_present", sql`length(trim(${table.createSessionId})) > 0`),
+    check("create_option_sets_raw_idea_present", sql`length(trim(${table.rawIdea})) > 0`),
+    check(
+      "create_option_sets_source_valid",
+      sql`${table.sourceOfTruth} IN ('rough_idea_context_deterministic_create_lenses', 'rough_idea_context_model_backed_create_lenses')`,
+    ),
+  ],
+);
+
+export const createArtifacts = pgTable(
+  "create_artifacts",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    createProjectId: text("create_project_id").notNull(),
+    createSessionId: text("create_session_id").notNull(),
+    title: text("title").notNull(),
+    version: integer("version").notNull(),
+    rawIdea: text("raw_idea").notNull(),
+    sections: jsonb("sections").notNull().default([]),
+    sourceOptionSetIds: jsonb("source_option_set_ids").$type<string[]>().notNull().default([]),
+    judgmentEventIds: jsonb("judgment_event_ids").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("create_artifacts_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("create_artifacts_create_session_idx").on(table.createProjectId, table.createSessionId),
+    index("create_artifacts_updated_at_idx").on(table.updatedAt),
+    check("create_artifacts_project_present", sql`length(trim(${table.createProjectId})) > 0`),
+    check("create_artifacts_session_present", sql`length(trim(${table.createSessionId})) > 0`),
+    check("create_artifacts_title_present", sql`length(trim(${table.title})) > 0`),
+    check("create_artifacts_version_positive", sql`${table.version} > 0`),
+    check("create_artifacts_raw_idea_present", sql`length(trim(${table.rawIdea})) > 0`),
+  ],
+);
+
+export const createJudgmentEvents = pgTable(
+  "create_judgment_events",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    createProjectId: text("create_project_id").notNull(),
+    createSessionId: text("create_session_id").notNull(),
+    optionSetId: text("option_set_id").notNull(),
+    selectedOptionIds: jsonb("selected_option_ids").$type<string[]>().notNull().default([]),
+    userComment: text("user_comment").notNull(),
+    inferredSignals: jsonb("inferred_signals").$type<string[]>().notNull().default([]),
+    artifactDelta: jsonb("artifact_delta").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("create_judgment_events_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("create_judgment_events_create_session_idx").on(table.createProjectId, table.createSessionId),
+    index("create_judgment_events_option_set_idx").on(table.optionSetId),
+    index("create_judgment_events_created_at_idx").on(table.createdAt),
+    check("create_judgment_events_project_present", sql`length(trim(${table.createProjectId})) > 0`),
+    check("create_judgment_events_session_present", sql`length(trim(${table.createSessionId})) > 0`),
+    check("create_judgment_events_option_set_present", sql`length(trim(${table.optionSetId})) > 0`),
+    check("create_judgment_events_comment_max", sql`length(${table.userComment}) <= 8000`),
+  ],
+);
+
 export const wikiPages = pgTable(
   "wiki_pages",
   {
@@ -2251,7 +2335,10 @@ export const pennySchema = {
   contextChunks,
   contextProviderEnum,
   contextSources,
+  createArtifacts,
   createExportFeedback,
+  createJudgmentEvents,
+  createOptionSets,
   derivedEffectKindEnum,
   derivedEffectStatusEnum,
   derivedEffects,
