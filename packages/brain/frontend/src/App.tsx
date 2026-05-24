@@ -36,6 +36,7 @@ import type {
   BrainMemoryProfileData,
   BrainMove,
   BrainRecentIdea,
+  MemoryNode,
   CanvasNode,
   CanvasNodeAction,
   ChallengeResponseKind,
@@ -948,7 +949,7 @@ export function App() {
     }
   }
 
-  function handleStartCreateWithBrain(profile: BrainMemoryProfileData) {
+  function handleStartCreateWithBrain(profile: BrainMemoryProfileData, focusMemory?: MemoryNode) {
     setSelectedDocumentId(null);
     setData(null);
     setMoves([]);
@@ -960,7 +961,7 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
-    const createSeedText = createPromptFromBrainProfile(profile);
+    const createSeedText = createPromptFromBrainProfile(profile, focusMemory);
     rememberCreateWorkspaceBoot({ seedText: createSeedText, brainProfile: profile });
     setCreateInitialSeedText(createSeedText);
     setCreateBrainProfile(profile);
@@ -1070,7 +1071,7 @@ export function App() {
   );
 }
 
-export function createPromptFromBrainProfile(profile: BrainMemoryProfileData): string {
+export function createPromptFromBrainProfile(profile: BrainMemoryProfileData, focusMemory?: MemoryNode): string {
   const sourceLabels = profile.sources
     .slice(0, 3)
     .map((source) => source.label.trim())
@@ -1090,7 +1091,9 @@ export function createPromptFromBrainProfile(profile: BrainMemoryProfileData): s
       .join(". ");
 
   return [
-    "Use my Brain context to create five concrete directions for Penny's next buildable artifact.",
+    focusMemory
+      ? `Use this Brain memory as the seed: ${focusMemory.title}. ${focusMemory.summary}`
+      : "Use my Brain context to create five concrete directions for Penny's next buildable artifact.",
     contextLine ? `Ground the directions in this context: ${contextLine}` : "Ground the directions in the imported Brain memories.",
   ].join(" ");
 }

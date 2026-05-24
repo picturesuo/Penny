@@ -22,6 +22,17 @@ test("createPromptFromBrainProfile turns imported Brain context into a Create se
   assert.doesNotMatch(prompt, /live Gmail|live WhatsApp|SMS/i);
 });
 
+test("createPromptFromBrainProfile can seed Create from a specific Brain memory", () => {
+  const profile = brainProfile();
+  const prompt = createPromptFromBrainProfile(profile, profile.recentMemoryNodes[0]);
+
+  assert.match(prompt, /Use this Brain memory as the seed/);
+  assert.match(prompt, /Small reversible builds/);
+  assert.match(prompt, /source-backed context/);
+  assert.match(prompt, /Ground the directions in this context/);
+  assert.doesNotMatch(prompt, /live Gmail|live WhatsApp|SMS/i);
+});
+
 function brainProfile(): BrainMemoryProfileData {
   const permission = {
     visibility: "private" as const,

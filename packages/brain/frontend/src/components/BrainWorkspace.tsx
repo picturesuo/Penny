@@ -200,7 +200,7 @@ interface BrainWorkspaceProps {
   onReworkDocument: () => Promise<void>;
   onCanvasOpenChange: (open: boolean) => void;
   onCanvasNodeAction: (action: CanvasNodeAction, node: CanvasNode) => void;
-  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
+  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData, focusMemory?: MemoryNode) => void) | undefined;
 }
 
 interface GraphPoint {
@@ -2350,7 +2350,7 @@ function BrainDocumentsIndex({
   onGoogleConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onMemoryReview: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
   onProfileReview: (fingerprint: string) => Promise<void>;
-  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
+  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData, focusMemory?: MemoryNode) => void) | undefined;
   focusSeedRequest?: number | undefined;
 }) {
   const documents = documentsData?.documents ?? [];
@@ -2518,7 +2518,7 @@ export function BrainMemoryPanel({
   onConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onReviewMemory?: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
   onReviewProfile?: (fingerprint: string) => Promise<void>;
-  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
+  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData, focusMemory?: MemoryNode) => void) | undefined;
   showDemoFixture?: boolean | undefined;
 }) {
   const [draft, setDraft] = useState("");
@@ -2972,6 +2972,13 @@ export function BrainMemoryPanel({
             reviewingId={reviewingId ?? null}
             disabled={disabled}
             onReviewMemory={onReviewMemory}
+            onStartCreateWithMemory={
+              profile && onStartCreateWithBrain
+                ? (node) => {
+                    onStartCreateWithBrain(profile, node);
+                  }
+                : undefined
+            }
           />
         </div>
       </div>
@@ -3897,6 +3904,7 @@ function BrainMemoryProfileSummary({
   reviewingId,
   disabled,
   onReviewMemory,
+  onStartCreateWithMemory,
 }: {
   profile: BrainMemoryProfileData | null;
   recentNodes: MemoryNode[];
@@ -3904,6 +3912,7 @@ function BrainMemoryProfileSummary({
   reviewingId: string | null;
   disabled: boolean;
   onReviewMemory: ((nodeId: string, action: MemoryReviewAction) => Promise<void>) | undefined;
+  onStartCreateWithMemory?: ((node: MemoryNode) => void) | undefined;
 }) {
   const sourceById = new Map((profile?.sources ?? []).map((source) => [source.id, source]));
   const [forgetConfirmingId, setForgetConfirmingId] = useState<string | null>(null);
@@ -3970,6 +3979,18 @@ function BrainMemoryProfileSummary({
                 ))}
               </div>
               <div className="brain-memory-review-actions" aria-label={`Review ${node.title}`}>
+                <button
+                  type="button"
+                  title="Use in Create"
+                  aria-label={`Use ${node.title} in Create`}
+                  disabled={disabled || busy || !onStartCreateWithMemory}
+                  onClick={() => {
+                    setForgetConfirmingId(null);
+                    onStartCreateWithMemory?.(node);
+                  }}
+                >
+                  <Sparkles size={14} aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   title="Mark correct"
