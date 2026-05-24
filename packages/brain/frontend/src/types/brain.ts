@@ -1285,6 +1285,13 @@ export interface BrainImportInput {
   content?: string;
   text?: string;
   rawRetention?: boolean;
+  privacy?: {
+    visibility?: "private" | "private_memory";
+    trainingUse?: false;
+    rawRetention?: boolean;
+    source?: "user_upload" | "manual_import";
+    allowedUses?: Array<"private_memory" | "create_retrieval">;
+  };
 }
 
 export interface BrainImportResponse {

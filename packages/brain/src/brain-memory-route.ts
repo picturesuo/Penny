@@ -338,6 +338,15 @@ const sourceImportKinds = [
 
 const SourceImportKindSchema = z.enum(sourceImportKinds);
 const MemoryReviewActionSchema = z.enum(["correct", "wrong", "forget", "boost"] satisfies MemoryReviewAction[]);
+const BrainImportPrivacySchema = z
+  .object({
+    visibility: z.enum(["private", "private_memory"]).optional().default("private_memory"),
+    trainingUse: z.literal(false).optional().default(false),
+    rawRetention: z.boolean().optional().default(false),
+    source: z.enum(["user_upload", "manual_import"]).optional().default("manual_import"),
+    allowedUses: z.array(z.enum(["private_memory", "create_retrieval"])).max(2).optional().default(["private_memory", "create_retrieval"]),
+  })
+  .strict();
 const minimumUsableMemoryConfidence = 0.2;
 const maxImportContentLength = 2_000_000;
 const maxNormalizedImportLength = 650_000;
@@ -356,6 +365,7 @@ const BrainImportBodySchema = z
     content: z.string().max(maxImportContentLength).optional(),
     text: z.string().max(maxImportContentLength).optional(),
     rawRetention: z.boolean().optional().default(false),
+    privacy: BrainImportPrivacySchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -390,6 +400,19 @@ const defaultPermission: SourcePermission = {
   source: "user_upload",
   allowedUses: ["private_memory", "create_retrieval"],
 };
+
+function rawRetentionForImport(input: BrainImportInput): boolean {
+  return input.privacy?.rawRetention ?? input.rawRetention;
+}
+
+function permissionForImport(input: BrainImportInput): SourcePermission {
+  return {
+    visibility: "private",
+    trainingUse: false,
+    source: input.privacy?.source ?? defaultPermission.source,
+    allowedUses: input.privacy?.allowedUses ?? defaultPermission.allowedUses,
+  };
+}
 
 const defaultStores = new Map<string, ScopeMemoryStore>();
 let defaultBrainMemoryServiceCache: BrainMemoryRouteService | null = null;
@@ -544,18 +567,32 @@ function ycFounderFixtureImportInputs(content: string): {
         kind,
         label,
         fileName: stringValue(sourceRecord.fileName),
-        mimeType: "text/plain",
-        sourceUri: stringValue(sourceRecord.sourceUri),
-        content: sourceContent,
-        rawRetention: false,
-      }) as z.infer<typeof BrainImportBodySchema>,
-    ];
-  });
+	        mimeType: "text/plain",
+	        sourceUri: stringValue(sourceRecord.sourceUri),
+	        content: sourceContent,
+	        rawRetention: false,
+	        privacy: fixtureSourcePrivacy(sourceRecord),
+	      }) as z.infer<typeof BrainImportBodySchema>,
+	    ];
+	  });
 
   return {
     demoPrompt: stringValue(record.demoPrompt) ?? null,
     safetyCopy: stringValue(recordValue(record.safety)?.copy) ?? null,
     importInputs,
+  };
+}
+
+function fixtureSourcePrivacy(sourceRecord: Record<string, unknown>) {
+  const privacy = recordValue(sourceRecord.privacy);
+  const rawRetention = privacy && typeof privacy.rawRetention === "boolean" ? privacy.rawRetention : false;
+
+  return {
+    visibility: "private_memory" as const,
+    trainingUse: false as const,
+    rawRetention,
+    source: "manual_import" as const,
+    allowedUses: ["private_memory", "create_retrieval"] as Array<"private_memory" | "create_retrieval">,
   };
 }
 
@@ -745,12 +782,12 @@ export function createDbBrainMemoryService(
           kind: input.kind,
           label: baseLabel,
           scope,
-          privacy: {
-            visibility: "private" as const,
-            trainingUse: false as const,
-            rawRetention: input.rawRetention,
-          },
-          permission: defaultPermission,
+	        privacy: {
+	          visibility: "private" as const,
+	          trainingUse: false as const,
+	          rawRetention: rawRetentionForImport(input),
+	        },
+	        permission: permissionForImport(input),
           textHash: hashText(normalized),
           contentLength: normalized.length,
           chunkCount: chunks.length,
@@ -1130,12 +1167,12 @@ export function createInMemoryBrainMemoryService(
           kind: input.kind,
           label: baseLabel,
           scope,
-          privacy: {
-            visibility: "private" as const,
-            trainingUse: false as const,
-            rawRetention: input.rawRetention,
-          },
-          permission: defaultPermission,
+	          privacy: {
+	            visibility: "private" as const,
+	            trainingUse: false as const,
+	            rawRetention: rawRetentionForImport(input),
+	          },
+	          permission: permissionForImport(input),
           textHash: hashText(normalized),
           contentLength: normalized.length,
           chunkCount: chunks.length,

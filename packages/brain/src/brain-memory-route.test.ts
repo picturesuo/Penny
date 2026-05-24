@@ -639,6 +639,12 @@ test("GET /api/brain/demo-fixture/yc-founder returns a private YC founder fixtur
   assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /LinkedIn-style founder context fixture/);
   assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /Manual WhatsApp-style transcript fixture/);
   assert.match(payload.data.importInputs.map((input: { content: string }) => input.content).join("\n"), /trainingUse=false/);
+  assert.ok(payload.data.importInputs.every((input: { privacy?: { visibility?: string; trainingUse?: boolean; rawRetention?: boolean; source?: string } }) => (
+    input.privacy?.visibility === "private_memory"
+    && input.privacy.trainingUse === false
+    && input.privacy.rawRetention === false
+    && input.privacy.source === "manual_import"
+  )));
 
   let profile: BrainMemoryProfile | null = null;
 
@@ -657,6 +663,8 @@ test("GET /api/brain/demo-fixture/yc-founder returns a private YC founder fixtur
   assert.ok(profile.stats.sourceCount >= 5);
   assert.ok(profile.stats.memoryNodeCount >= 14);
   assert.ok(profile.sources.every((source) => source.privacy.trainingUse === false));
+  assert.ok(profile.sources.every((source) => source.privacy.rawRetention === false));
+  assert.ok(profile.sources.every((source) => source.permission.source === "manual_import"));
   assert.ok(profile.recentMemoryNodes.every((node) => node.permission.trainingUse === false));
   const profileText = [
     ...profile.recentMemoryNodes.map((node) => node.summary),
