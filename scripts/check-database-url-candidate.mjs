@@ -73,6 +73,10 @@ if (readiness.status !== 0) {
         console.error(`  missing: ${check.missing.join(", ")}`);
       }
     }
+    const hint = databaseUrlHint(parsed, failed);
+    if (hint) {
+      console.error(`Hint: ${hint}`);
+    }
   } else {
     console.error(redactDatabaseUrls(output || `public readiness exited with ${readiness.status ?? "unknown status"}`));
   }
@@ -137,14 +141,36 @@ function parseDatabaseUrl(value) {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase();
+    const username = decodeURIComponent(url.username || "");
     return {
       ok: url.protocol === "postgres:" || url.protocol === "postgresql:",
       local: ["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname),
       azure: hostname.endsWith(".postgres.database.azure.com"),
+      supabasePooler: hostname.endsWith(".pooler.supabase.com"),
+      supabaseDirect: /^db\.[a-z0-9]+\.supabase\.co$/i.test(hostname),
+      supabaseProjectInUser: /^postgres\.[a-z0-9]+$/i.test(username),
     };
   } catch {
-    return { ok: false, local: false, azure: false };
+    return { ok: false, local: false, azure: false, supabasePooler: false, supabaseDirect: false, supabaseProjectInUser: false };
   }
+}
+
+function databaseUrlHint(parsed, failedChecks) {
+  const messages = failedChecks.map((check) => check.message).join("\n");
+
+  if (parsed.supabasePooler && /tenant\/user .* not found/i.test(messages)) {
+    return "This looks like a Supabase pooler URL, but Supavisor rejected the tenant/user. Copy a fresh Session pooler or Direct connection string from the Supabase dashboard, confirm the project is active, then rerun this command.";
+  }
+
+  if (parsed.supabaseDirect && /ENOTFOUND|does not resolve|getaddrinfo/i.test(messages)) {
+    return "This looks like a Supabase direct URL, but the hostname did not resolve. Confirm the project ref and that the Supabase project is not paused or deleted.";
+  }
+
+  if (parsed.azure && /ENOTFOUND|does not resolve|getaddrinfo/i.test(messages)) {
+    return "This looks like Azure Postgres, but the host did not resolve. Confirm the Flexible Server name and that Azure provisioning has completed.";
+  }
+
+  return "";
 }
 
 function parseJsonReport(output) {
