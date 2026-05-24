@@ -10,6 +10,7 @@ import {
   CreateBrainOnboardingPanel,
   CreateWorkspace,
   CreateComparisonPanel,
+  CreateEvidenceLedgerPanel,
   CreateExportFeedbackPanel,
   CreateJudgmentNextPlace,
   CreateLearnBridgePanel,
@@ -43,15 +44,33 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   assert.match(markup, /data-create-lens="Practical"/);
   assert.match(markup, /data-testid="create-option-details-button"/);
   assert.match(markup, /Advance through Personal/);
-  assert.match(markup, /Evidence 3/);
+  assert.match(markup, /Past evidence 2/);
   assert.match(markup, /Taste 1/);
-  assert.match(markup, /Evidence 1/);
+  assert.match(markup, /Past evidence 0/);
   assert.match(markup, /Taste 0/);
   assert.match(markup, /Context-light/);
   assert.match(markup, /Details/);
   assert.match(markup, /Learn this/);
   assert.match(markup, /data-testid="create-option-learn-this-button"/);
   assert.doesNotMatch(markup, /intentMatch|buildability|novelty|rawScores/i);
+});
+
+test("CreateEvidenceLedgerPanel separates past evidence from interpreted taste", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CreateEvidenceLedgerPanel, {
+      options: [memoryGroundedOption(), contextLightOption()],
+      selectedOptionIds: ["create-option-personal"],
+    }),
+  );
+
+  assert.match(markup, /data-testid="create-evidence-ledger"/);
+  assert.match(markup, /Selected Personal/);
+  assert.match(markup, /Evidence from past/);
+  assert.match(markup, /Project: founder workflow/);
+  assert.match(markup, /Founder workflow notes/);
+  assert.match(markup, /Taste interpreted/);
+  assert.match(markup, /Preference: source-backed cards/);
+  assert.doesNotMatch(markup, /Rough idea/);
 });
 
 test("CreateOptionDetailsDrawer renders rationale, memories, sources, and grounding details", () => {
@@ -92,6 +111,8 @@ test("CreateJudgmentNextPlace keeps selection, rejection, and comment flow visib
   assert.match(markup, /Personal/);
   assert.match(markup, /Rejected/);
   assert.match(markup, /Critical/);
+  assert.match(markup, /Comment/);
+  assert.match(markup, /Combine the personal evidence with the practical scope/);
 });
 
 test("Create next place advances from options to artifact, Learn/export, and feedback", () => {
@@ -296,6 +317,11 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
         busy: false,
         onToggleOption: () => undefined,
       }),
+      createElement(CreateEvidenceLedgerPanel, {
+        key: "ledger",
+        options,
+        selectedOptionIds: ["create-option-personal", "create-option-critical"],
+      }),
       createElement(CreateOptionDetailsDrawer, {
         key: "drawer",
         option: optionForLens("Personal"),
@@ -315,6 +341,7 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
           ],
         },
         selectedOptions: [optionForLens("Personal"), optionForLens("Critical")],
+        userComment: "Keep the founder/builder evidence visible.",
       }),
       createElement(CreateVerificationPanel, {
         key: "verification",
@@ -366,6 +393,7 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /data-testid="create-brain-context"/);
   assert.match(markup, /Possible move/);
   assert.match(markup, /data-testid="create-option-board"/);
+  assert.match(markup, /data-testid="create-evidence-ledger"/);
   assert.match(markup, /data-testid="create-evidence-drawer"/);
   assert.match(markup, /data-testid="create-artifact-panel"/);
   assert.match(markup, /Personal/);
@@ -379,6 +407,11 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Inferred/);
   assert.match(markup, /Show full section text/);
   assert.match(markup, /Selected Create directions/);
+  assert.match(markup, /Idea Spec inputs/);
+  assert.match(markup, /Selected history/);
+  assert.match(markup, /Keep the founder\/builder evidence visible/);
+  assert.match(markup, /2 past evidence refs/);
+  assert.match(markup, /1 taste signals kept separate/);
   assert.match(markup, /Expand Product thesis/);
   assert.match(markup, /Verification/);
   assert.match(markup, /Personal memory grounding/);
