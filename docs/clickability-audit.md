@@ -15,11 +15,12 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
 - Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
 - Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
-- `pnpm test`: passed, 664 tests.
+- `pnpm test`: passed, 665 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
 - In-app browser smoke: imported a Brain note, rendered the Brain export panel, and exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails.
-- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.4s.
+- In-app browser smoke: Create path renders six step buttons and the Judgment step button scrolls to the judgment section.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 5.5s.
 
 ## Control Findings
 
@@ -41,7 +42,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Brain | Export Coding Prompt | Export a coding prompt from the Brain flow. | Works; after imported Brain memory exists, Brain renders a coding-agent prompt panel and exports a prompt for Codex, Claude Code, and Cursor with private context, source evidence, memory evidence, and human-judgment guardrails. | `POST /api/brain/export-coding-prompt` builds from the private Brain memory profile; the frontend calls it from the Brain panel and shows a textarea fallback. | Keep. Later: add copy/download affordances once the prompt format settles. |
 | Brain | Gmail disabled copy | Show honest Gmail unavailable/privacy state. | Works; status says unconfigured with missing Nango config and privacy copy says consent/no human review/trainingUse=false/delete-revoke. | Gmail connector status route reports gated/unconfigured state. | Keep. Ensure button remains disabled unless config is present. |
 | Create | Brain pill/button | Return to Brain from Create. | Works when scoped to Create sidebar/header; global role query is ambiguous because many controls include "Brain". | Multiple visible buttons/text include "Brain"; accessible names are not unique. | Add a unique `aria-label`, e.g. `Open Brain from Create`. |
-| Create | Step nav | Move between Rough idea, Five directions, Judgment, Prompt artifact, Verification, Export. | Fails as navigation; list is static. | `CreatePathSidebar` renders `<li>` items, no buttons or handlers. | Make steps clickable/focusable, or present as progress only. |
+| Create | Step nav | Move between Rough idea, Five directions, Judgment, Prompt artifact, Verification, Export. | Works; the sidebar renders focusable step buttons and scrolls to the matching Create section while marking the current step with `aria-current="step"`. | `CreatePathSidebar` now receives `onStepSelect`; `CreateWorkspace` registers section refs for rough idea, five directions, judgment, Idea Spec, verification, and export. | Keep. Later: add keyboard-shortcut jumps only if recording/editing proves mouse navigation too slow. |
 | Create | Rough idea textarea | Editable idea input. | Works. | Local state `draftText`. | Persist draft when Create is started from Brain. |
 | Create | Generate control | Generate five directions from current prompt and Brain context. | Works; five cards appear. | `handleGenerateDirections` calls `/api/create/next`. | Keep; assert five lens labels every run. |
 | Create | Option cards | Toggle Personal, Practical, Valuable, Critical, Weird selections. | Works; selected cards update state. | `toggleOption` updates local `selectedOptionIds`. | Persist selected IDs with the Create artifact/session. |
