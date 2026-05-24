@@ -28,12 +28,14 @@ Build frontend assets into `packages/brain/public`:
 pnpm build
 ```
 
-Verify before deploy:
+Verify before deploy or broad demo claims:
 
 ```sh
 pnpm test
 pnpm typecheck
 pnpm build
+pnpm check:public-readiness
+pnpm smoke:public-staging
 ```
 
 Database migration:
@@ -64,9 +66,14 @@ PENNY_API_TOKEN=<32+-character-random-token>
 PENNY_SESSION_SECRET=<32+-character-random-secret>
 PENNY_CORS_ORIGINS=https://<alpha-host>
 PENNY_RATE_LIMIT_MAX=120
+PENNY_RATE_LIMIT_WINDOW_MS=60000
+PENNY_AUTH_FAILURE_RATE_LIMIT_MAX=10
+PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS=60000
 PENNY_TRUST_AUTH_HEADERS=false
 PENNY_STRUCTURED_LOGS=true
 PENNY_CREATE_MODEL_BACKED=false
+ENABLE_GMAIL_CONNECTOR=false
+ENABLE_RESTRICTED_GOOGLE_SCOPES=false
 ```
 
 Startup validation is strict when `NODE_ENV=production` or `PENNY_DEPLOY_ENV` is `staging`, `production`, or `private-alpha`. Strict startup refuses dev auth, missing/short tokens, missing/short session secrets, wildcard CORS, local/non-Postgres database URLs, disabled rate limits, trusted auth headers, and model-backed Create without `XAI_API_KEY`.
@@ -105,7 +112,7 @@ Startup migration behavior:
 - Startup verifies the required Penny tables after migrations or separate prep. If the schema is missing Brain memory or Create feedback tables, startup fails with a `pnpm db:migrate` instruction.
 - `PENNY_SKIP_DATABASE_PREP=true` skips startup prep in local/dev only. Strict deployments reject it because it bypasses the schema readiness check.
 
-The Brain memory persistence migration is `drizzle/0029_add_brain_memory_persistence.sql`. Create export feedback is stored by `drizzle/0030_add_create_export_feedback.sql`.
+The Brain memory persistence migration is `drizzle/0029_add_brain_memory_persistence.sql`. Create export feedback is stored by `drizzle/0030_add_create_export_feedback.sql`. Create option sets, artifacts, and judgment events are stored by `drizzle/0034_add_create_workspace_persistence.sql`.
 
 ## Auth And CORS
 
@@ -150,22 +157,24 @@ Do not open a public demo until these are resolved or explicitly accepted:
 - Token auth and rate limiting configured.
 - HTTPS in front of the app.
 - Backup/restore plan for Postgres.
-- Durable Create storage if multiple private-alpha users need session continuity beyond the current process.
 - Manual review that imported context, source previews, prompt exports, and logs do not expose another user's data.
 - Clear operator access policy for logs and database.
+- Deployed target proof: `pnpm check:public-readiness` and `pnpm smoke:public-staging` pass against the real private-alpha host, not only a synthetic or local target.
 
 ## Smoke Check
 
 After deploy:
 
-1. Open the frontend and log in with the private access token.
-2. Import the Penny demo fixture or a small ChatGPT export.
-3. Confirm Brain profile source/memory counts and `trainingUse=false` copy.
-4. Boost or mark one memory correct.
-5. Start Create from Brain.
-6. Generate five cards.
-7. Select two or more cards, add a comment, and update the artifact.
-8. Export the coding-agent prompt.
-9. Save Useful or Not useful export feedback with reason tags.
-10. Confirm the exported prompt includes personal context, source/memory evidence, selected option history, acceptance tests, do-not-break list, and definition of done.
-11. Confirm structured logs show the import, Create generation, prompt export, and auth failure events without raw private content.
+1. Run `pnpm check:public-readiness` with the deployed environment variables or target schema proof.
+2. Run `pnpm smoke:public-staging` against the deployed URL with `PENNY_PUBLIC_SMOKE_BASE_URL` and `PENNY_PUBLIC_SMOKE_API_TOKEN`.
+3. Open the frontend and log in with the private access token.
+4. Import the Penny demo fixture or a small ChatGPT export.
+5. Confirm Brain profile source/memory counts and `trainingUse=false` copy.
+6. Boost or mark one memory correct.
+7. Start Create from Brain.
+8. Generate five cards.
+9. Select two or more cards, add a comment, and update the artifact.
+10. Export the coding-agent prompt.
+11. Save Useful or Not useful export feedback with reason tags.
+12. Confirm the exported prompt includes personal context, source/memory evidence, selected option history, acceptance tests, do-not-break list, and definition of done.
+13. Confirm structured logs show the import, Create generation, prompt export, and auth failure events without raw private content.
