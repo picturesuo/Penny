@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, CheckCircle2, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
 import { compareCreateProviders, createNext, exportCodingPrompt, submitCreateExportFeedback } from "../api/brainClient";
 import type {
   BrainData,
@@ -1431,52 +1431,73 @@ export function CreateArtifactPanel({
         <span>Idea Spec v{artifact.version}</span>
         <strong>{artifact.title}</strong>
       </header>
+      {selectedOptions.length ? (
+        <div className="create-artifact-selected-lenses" aria-label="Selected Create directions">
+          {selectedOptions.map((option) => (
+            <span key={option.id}>{option.lens}</span>
+          ))}
+        </div>
+      ) : null}
       <div className="yc-artifact-outline" aria-label="YC artifact outline" data-testid="yc-artifact-outline">
         {ycArtifactOutline(artifact).map((section) => {
           const expanded = expandedSectionIds.includes(section.title);
 
           return (
-          <article key={section.title} className={section.status === "updated" ? "is-updated" : ""} data-testid="yc-artifact-section">
-            <span>{section.title}</span>
-            <p>{expanded ? section.body : artifactOutlinePreview(section.body)}</p>
-            <div className="yc-artifact-section-actions" aria-label={`${section.title} section actions`}>
-              <button type="button" onClick={() => setExpandedSectionIds((current) => toggleValue(current, section.title))}>
-                {expanded ? "Collapse" : "Expand"}
-              </button>
-              <button type="button" onClick={() => setRefinedSectionIds((current) => toggleValue(current, section.title))}>
-                Use selected mix
-              </button>
-              <button type="button" onClick={() => setCommentSectionIds((current) => toggleValue(current, section.title))}>
-                Add comment
-              </button>
-            </div>
-            {expanded ? (
-              <p className="yc-artifact-section-note">
-                Expanded demo note: keep {section.title.toLowerCase()} tied to {selectedLensLabel}, source evidence, and the current rough idea.
-              </p>
-            ) : null}
-            {refinedSectionIds.includes(section.title) ? (
-              <p className="yc-artifact-section-note">
-                Selected mix applied: {selectedLensLabel} is now the working pressure for this section.
-              </p>
-            ) : null}
-            {commentSectionIds.includes(section.title) ? (
-              <label className="yc-artifact-section-comment">
-                <span>Section comment</span>
-                <textarea
-                  value={sectionComments[section.title] ?? ""}
-                  onChange={(event) =>
-                    setSectionComments((current) => ({
-                      ...current,
-                      [section.title]: event.target.value,
-                    }))
-                  }
-                  placeholder={`Add a note for ${section.title.toLowerCase()}.`}
-                  rows={2}
-                />
-              </label>
-            ) : null}
-          </article>
+            <article key={section.title} className={section.status === "updated" ? "is-updated" : ""} data-testid="yc-artifact-section">
+              <div className="yc-artifact-section-head">
+                <div>
+                  <span>{section.title}</span>
+                  <p className="yc-artifact-section-preview">{artifactOutlinePreview(section.body)}</p>
+                </div>
+                <button
+                  type="button"
+                  className="yc-artifact-section-toggle"
+                  aria-expanded={expanded}
+                  aria-label={`${expanded ? "Collapse" : "Expand"} ${section.title}`}
+                  title={expanded ? "Collapse section" : "Expand section"}
+                  onClick={() => setExpandedSectionIds((current) => toggleValue(current, section.title))}
+                >
+                  {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                </button>
+              </div>
+              {expanded ? (
+                <div className="yc-artifact-section-expanded">
+                  <p className="yc-artifact-section-body">{section.body}</p>
+                  <div className="yc-artifact-section-actions" aria-label={`${section.title} section actions`}>
+                    <button type="button" onClick={() => setRefinedSectionIds((current) => toggleValue(current, section.title))}>
+                      Use selected mix
+                    </button>
+                    <button type="button" onClick={() => setCommentSectionIds((current) => toggleValue(current, section.title))}>
+                      Add comment
+                    </button>
+                  </div>
+                  <p className="yc-artifact-section-note">
+                    Expanded demo note: keep {section.title.toLowerCase()} tied to {selectedLensLabel}, source evidence, and the current rough idea.
+                  </p>
+                  {refinedSectionIds.includes(section.title) ? (
+                    <p className="yc-artifact-section-note">
+                      Selected mix applied: {selectedLensLabel} is now the working pressure for this section.
+                    </p>
+                  ) : null}
+                  {commentSectionIds.includes(section.title) ? (
+                    <label className="yc-artifact-section-comment">
+                      <span>Section comment</span>
+                      <textarea
+                        value={sectionComments[section.title] ?? ""}
+                        onChange={(event) =>
+                          setSectionComments((current) => ({
+                            ...current,
+                            [section.title]: event.target.value,
+                          }))
+                        }
+                        placeholder={`Add a note for ${section.title.toLowerCase()}.`}
+                        rows={2}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
           );
         })}
       </div>
@@ -1507,7 +1528,15 @@ export function artifactOutlinePreview(body: string): string {
     return clipDisplayText(`User comment: ${userComment}`, 150);
   }
 
-  return clipDisplayText(body, 150);
+  return clipDisplayText(stripArtifactPreviewMarkup(body), 150);
+}
+
+function stripArtifactPreviewMarkup(body: string): string {
+  return body
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "")
+    .replace(/`{1,3}/g, "")
+    .trim();
 }
 
 export function CreateVerificationPanel({ verification }: { verification: VerificationSummary | null }) {

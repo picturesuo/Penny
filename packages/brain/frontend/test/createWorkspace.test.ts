@@ -272,6 +272,7 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
             },
           ],
         },
+        selectedOptions: [optionForLens("Personal"), optionForLens("Critical")],
       }),
       createElement(CreateVerificationPanel, {
         key: "verification",
@@ -335,9 +336,8 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Grounded/);
   assert.match(markup, /Inferred/);
   assert.match(markup, /Show full section text/);
-  assert.match(markup, /Expand/);
-  assert.match(markup, /Use selected mix/);
-  assert.match(markup, /Add comment/);
+  assert.match(markup, /Selected Create directions/);
+  assert.match(markup, /Expand Product thesis/);
   assert.match(markup, /Verification/);
   assert.match(markup, /Personal memory grounding/);
   assert.match(markup, /Export feedback/);
@@ -355,6 +355,7 @@ test("artifactOutlinePreview keeps Create outline cards scannable", () => {
   assert.match(preview, /^Memory layer should preserve explicit user judgment/);
   assert.ok(preview.length <= 150);
   assert.match(preview, /\.\.\.$/);
+  assert.equal(artifactOutlinePreview("### Core loop\n- Capture rough idea\n- Return five choices"), "Core loop Capture rough idea Return five choices");
   assert.equal(
     commentPreview,
     "User comment: Make this founder/builder focused. Keep the memory-native creativity angle.",
