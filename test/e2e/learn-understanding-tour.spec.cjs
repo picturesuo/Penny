@@ -26,15 +26,14 @@ test("Learn turns arbitrary source material into a quiet source-to-concept tour"
 
   const tour = page.getByTestId("learn-understanding-tour");
   await expect(tour).toBeVisible({ timeout: 30_000 });
-  await expect(tour).toContainText("Grounding");
-  await expect(tour).toContainText("What changes");
-  await expect(tour).toContainText("Can you use it?");
-  await expect(tour).toContainText(/current source/i);
-  await expect(tour).toContainText(/pricing memo|customer urgency|product scope/i);
+  await expect(tour).toContainText(/Penny should help founders/i);
   await expect(page.getByTestId("learn-meaning-map")).toContainText(/Source/);
   await expect(page.getByTestId("learn-meaning-map")).toContainText(/Concept/);
   await expect(page.getByTestId("learn-meaning-map")).toContainText(/Use/);
   await expect(page.getByTestId("learn-meaning-map")).toContainText(/Check/);
+  await expect(page.getByTestId("learn-meaning-map")).toContainText(/Use on one case/);
+  await expect(page.getByTestId("learn-meaning-map")).toContainText(/Apply to source/);
+  await expect(tour).not.toContainText(/Grounding|What changes|Can you use it/i);
   await expect(tour).not.toContainText(/Your turn|Definition|Misconceptions|Good example|Bad example/i);
   await captureProof(page, "learn-understanding-tour");
 });
