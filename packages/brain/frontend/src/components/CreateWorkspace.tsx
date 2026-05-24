@@ -148,6 +148,7 @@ export function CreateWorkspace({
     () => options.filter((option) => selectedOptionIds.includes(option.id)),
     [options, selectedOptionIds],
   );
+  const hasPendingJudgment = Boolean(selectedOptionIds.length || rejectedOptionIds.length || userComment.trim());
   const canvasNodes = useMemo(
     () =>
       createCanvasNodes({
@@ -160,7 +161,14 @@ export function CreateWorkspace({
       }),
     [artifact, brainProfile, createCanvas, options, promptExport, selectedOptions],
   );
-  const activeStepIndex = createActiveStepIndex({ optionSet, judgmentEvent, artifact, verification, promptExport });
+  const activeStepIndex = createActiveStepIndex({
+    optionSet,
+    hasPendingJudgment,
+    judgmentEvent,
+    artifact,
+    verification,
+    promptExport,
+  });
 
   useEffect(() => {
     if (!sourceText || bootstrappedTextRef.current === sourceText) {
@@ -1823,7 +1831,7 @@ export function CreateArtifactPanel({
   userComment?: string;
 }) {
   const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
-  const [refinedSectionIds, setRefinedSectionIds] = useState<string[]>([]);
+  const [contextSectionIds, setContextSectionIds] = useState<string[]>([]);
   const [commentSectionIds, setCommentSectionIds] = useState<string[]>([]);
   const [fullSectionsVisible, setFullSectionsVisible] = useState(false);
   const [sectionComments, setSectionComments] = useState<Record<string, string>>({});
@@ -1913,24 +1921,25 @@ export function CreateArtifactPanel({
                 <div className="yc-artifact-section-expanded">
                   <p className="yc-artifact-section-body">{section.body}</p>
                   <div className="yc-artifact-section-actions" aria-label={`${section.title} section actions`}>
-                    <button type="button" onClick={() => setRefinedSectionIds((current) => toggleValue(current, section.title))}>
-                      Use selected mix
+                    <button type="button" onClick={() => setContextSectionIds((current) => toggleValue(current, section.title))}>
+                      Show working context
                     </button>
                     <button type="button" onClick={() => setCommentSectionIds((current) => toggleValue(current, section.title))}>
-                      Add comment
+                      Add draft note
                     </button>
                   </div>
                   <p className="yc-artifact-section-note">
-                    Expanded demo note: keep {section.title.toLowerCase()} tied to {selectedLensLabel}, source evidence, and the current rough idea.
+                    Section source: generated from the current Idea Spec, selected directions, evidence, and rough idea.
                   </p>
-                  {refinedSectionIds.includes(section.title) ? (
+                  {contextSectionIds.includes(section.title) ? (
                     <p className="yc-artifact-section-note">
-                      Selected mix applied: {selectedLensLabel} is now the working pressure for this section.
+                      Working context: selected {selectedLensLabel}; rejected {rejectedLensLabel}; comment{" "}
+                      {userComment.trim() ? clipDisplayText(userComment, 120) : "none yet"}.
                     </p>
                   ) : null}
                   {commentSectionIds.includes(section.title) ? (
                     <label className="yc-artifact-section-comment">
-                      <span>Section comment</span>
+                      <span>Draft section note</span>
                       <textarea
                         value={sectionComments[section.title] ?? ""}
                         onChange={(event) =>
@@ -1939,7 +1948,7 @@ export function CreateArtifactPanel({
                             [section.title]: event.target.value,
                           }))
                         }
-                        placeholder={`Add a note for ${section.title.toLowerCase()}.`}
+                        placeholder={`Draft a local note for ${section.title.toLowerCase()}.`}
                         rows={2}
                       />
                     </label>
@@ -2487,6 +2496,7 @@ function uniqueById<T extends { id: string }>(values: T[]): T[] {
 
 function createActiveStepIndex(input: {
   optionSet: OptionSet | null;
+  hasPendingJudgment?: boolean;
   judgmentEvent: JudgmentEvent | null;
   artifact: CodingPromptArtifact | null;
   verification: VerificationSummary | null;
@@ -2505,6 +2515,10 @@ function createActiveStepIndex(input: {
   }
 
   if (input.judgmentEvent) {
+    return 2;
+  }
+
+  if (input.hasPendingJudgment) {
     return 2;
   }
 
