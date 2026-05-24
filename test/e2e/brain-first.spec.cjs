@@ -71,7 +71,7 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   });
   await page.locator(".brain-quick-list .brain-quick-note .quick-note-open").first().click();
   await page.getByRole("button", { name: "Save to Brain" }).click();
-  await expect(page.getByText("Quick note added to Brain")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Quick note saved into private Brain memory")).toBeVisible({ timeout: 10_000 });
   await captureProof(page, testInfo, "02-quick-note-saved");
   await page.getByRole("button", { name: "All notes" }).click();
 
@@ -79,7 +79,7 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await expect(page.locator(".brain-workspace-shell")).toBeVisible();
   await expect(page.locator("#brainDocumentSeed")).toBeFocused();
   await page.locator("#brainDocumentSeed").fill("A controllable AI thinking instrument should turn vague ideas into durable build specs.");
-  await page.getByLabel("Brain document library").getByRole("button", { name: "Create" }).click();
+  await page.getByLabel("Brain document library").getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("region", { name: "Brain document" })).toBeVisible({ timeout: 30_000 });
   await captureProof(page, testInfo, "03-document-created");
   await page.getByRole("button", { name: "All docs" }).click();
