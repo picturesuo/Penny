@@ -17,6 +17,7 @@ import {
   CreateOptionDetailsDrawer,
   CreateProviderStatusPanel,
   CreateVerificationPanel,
+  artifactOutlinePreview,
   createLearnBridgeConcept,
   isCreateComparisonDevMode,
 } from "../src/components/CreateWorkspace";
@@ -333,8 +334,7 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Taste interpreted/);
   assert.match(markup, /Grounded/);
   assert.match(markup, /Inferred/);
-  assert.match(markup, /Final coding-agent prompt/);
-  assert.match(markup, /Source \/ Memory Evidence/);
+  assert.match(markup, /Show full section text/);
   assert.match(markup, /Expand/);
   assert.match(markup, /Use selected mix/);
   assert.match(markup, /Add comment/);
@@ -342,6 +342,23 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Personal memory grounding/);
   assert.match(markup, /Export feedback/);
   assert.match(markup, /Feedback saved/);
+});
+
+test("artifactOutlinePreview keeps Create outline cards scannable", () => {
+  const preview = artifactOutlinePreview(
+    "Memory layer should preserve explicit user judgment, selected directions, source evidence, fixture labels, and coding-agent export constraints without dumping the entire prompt into the card.",
+  );
+  const commentPreview = artifactOutlinePreview(
+    "Selected option history:\n- Personal: Make it grounded.\nUser comment: Make this founder/builder focused. Keep the memory-native creativity angle.",
+  );
+
+  assert.match(preview, /^Memory layer should preserve explicit user judgment/);
+  assert.ok(preview.length <= 150);
+  assert.match(preview, /\.\.\.$/);
+  assert.equal(
+    commentPreview,
+    "User comment: Make this founder/builder focused. Keep the memory-native creativity angle.",
+  );
 });
 
 test("Create UI smoke renders real Gmail evidence in details and prompt artifact", () => {
@@ -382,7 +399,7 @@ test("Create UI smoke renders real Gmail evidence in details and prompt artifact
   assert.match(markup, /Launch partner evidence/);
   assert.match(markup, /gmail:message:gmail-create-msg-1/);
   assert.match(markup, /Gmail-grounded coding prompt/);
-  assert.match(markup, /Source \/ Memory Evidence/);
+  assert.match(markup, /Show full section text/);
   assert.doesNotMatch(markup, /Private raw Gmail body|rawBody|plainTextBody|credentialRef|accessToken|refreshToken/i);
 });
 

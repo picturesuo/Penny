@@ -1404,6 +1404,7 @@ export function CreateArtifactPanel({
   const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
   const [refinedSectionIds, setRefinedSectionIds] = useState<string[]>([]);
   const [commentSectionIds, setCommentSectionIds] = useState<string[]>([]);
+  const [fullSectionsVisible, setFullSectionsVisible] = useState(false);
   const [sectionComments, setSectionComments] = useState<Record<string, string>>({});
 
   if (!artifact) {
@@ -1431,13 +1432,16 @@ export function CreateArtifactPanel({
         <strong>{artifact.title}</strong>
       </header>
       <div className="yc-artifact-outline" aria-label="YC artifact outline" data-testid="yc-artifact-outline">
-        {ycArtifactOutline(artifact).map((section) => (
+        {ycArtifactOutline(artifact).map((section) => {
+          const expanded = expandedSectionIds.includes(section.title);
+
+          return (
           <article key={section.title} className={section.status === "updated" ? "is-updated" : ""} data-testid="yc-artifact-section">
             <span>{section.title}</span>
-            <p>{section.body}</p>
+            <p>{expanded ? section.body : artifactOutlinePreview(section.body)}</p>
             <div className="yc-artifact-section-actions" aria-label={`${section.title} section actions`}>
               <button type="button" onClick={() => setExpandedSectionIds((current) => toggleValue(current, section.title))}>
-                {expandedSectionIds.includes(section.title) ? "Collapse" : "Expand"}
+                {expanded ? "Collapse" : "Expand"}
               </button>
               <button type="button" onClick={() => setRefinedSectionIds((current) => toggleValue(current, section.title))}>
                 Use selected mix
@@ -1446,7 +1450,7 @@ export function CreateArtifactPanel({
                 Add comment
               </button>
             </div>
-            {expandedSectionIds.includes(section.title) ? (
+            {expanded ? (
               <p className="yc-artifact-section-note">
                 Expanded demo note: keep {section.title.toLowerCase()} tied to {selectedLensLabel}, source evidence, and the current rough idea.
               </p>
@@ -1473,18 +1477,37 @@ export function CreateArtifactPanel({
               </label>
             ) : null}
           </article>
-        ))}
+          );
+        })}
       </div>
-      <div className="create-artifact-sections">
-        {artifact.sections.map((section) => (
-          <article key={section.id} className={section.status === "updated" ? "is-updated" : ""}>
-            <span>{section.title}</span>
-            <p>{section.body}</p>
-          </article>
-        ))}
+      <div className="create-artifact-full-toggle">
+        <button type="button" onClick={() => setFullSectionsVisible((visible) => !visible)}>
+          {fullSectionsVisible ? "Hide full section text" : "Show full section text"}
+        </button>
+        <span>{artifact.sections.length} sections available</span>
       </div>
+      {fullSectionsVisible ? (
+        <div className="create-artifact-sections">
+          {artifact.sections.map((section) => (
+            <article key={section.id} className={section.status === "updated" ? "is-updated" : ""}>
+              <span>{section.title}</span>
+              <p>{section.body}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
+}
+
+export function artifactOutlinePreview(body: string): string {
+  const userComment = body.match(/\bUser comment:\s*([^\n]+)/i)?.[1]?.trim();
+
+  if (userComment && !/^no user comment supplied\.?$/i.test(userComment)) {
+    return clipDisplayText(`User comment: ${userComment}`, 150);
+  }
+
+  return clipDisplayText(body, 150);
 }
 
 export function CreateVerificationPanel({ verification }: { verification: VerificationSummary | null }) {
@@ -1756,6 +1779,7 @@ function ycArtifactOutline(artifact: CodingPromptArtifact): Array<{
   const userIntent = section("User intent");
   const memoryOrchestration = section("AI/memory orchestration");
   const selectedText = selectedArtifactText(userIntent);
+  const userJudgment = userJudgmentText(userIntent);
   const dataSources = namedBlock(userIntent, "Personal context used") || namedBlock(memoryOrchestration, "Personal context used in this artifact") || memoryOrchestration;
   const updated = artifact.sections.some((item) => item.status === "updated");
   const status = updated ? "updated" : "ready";
@@ -1763,7 +1787,10 @@ function ycArtifactOutline(artifact: CodingPromptArtifact): Array<{
   return [
     {
       title: "Product thesis",
-      body: clipDisplayText(`${section("Product goal")} ${selectedText}`, 560),
+      body: clipDisplayText(
+        [section("Product goal"), userJudgment ? `User comment: ${userJudgment}` : "", selectedText].filter(Boolean).join("\n\n"),
+        560,
+      ),
       status,
     },
     {
@@ -1841,6 +1868,10 @@ function selectedArtifactText(userIntent: string): string {
   return namedBlock(userIntent, "Selected option history") || "No selected Create directions yet.";
 }
 
+function userJudgmentText(userIntent: string): string {
+  return userIntent.match(/\bUser judgment\/comment:\s*([^\n]+)/i)?.[1]?.trim() ?? "";
+}
+
 function clipDisplayText(text: string, maxLength: number): string {
   const clean = text.replace(/\s+/g, " ").trim();
 
@@ -1848,7 +1879,7 @@ function clipDisplayText(text: string, maxLength: number): string {
     return clean;
   }
 
-  return `${clean.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+  return `${clean.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
 function compactBrainSignal(signal: string): string {
