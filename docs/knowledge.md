@@ -305,3 +305,6 @@
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
 - Label each note by source when useful: `user`, `repo`, or `external`.
+
+## Implementation Notes
+- Brain profile review is durable as of May 24, 2026: `POST /api/brain/memory/profile/review` records a `profile_reviewed` Brain development event, `GET /api/brain/memory/profile` returns `profileReview`, and the Brain first-run UI compares the stored fingerprint before marking review complete.
