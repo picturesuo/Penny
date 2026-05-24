@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createPennySql } from "../packages/brain/src/db/client.ts";
+import { requiredPennySchemaTables } from "../packages/brain/src/server.ts";
 import { evaluatePennyPublicReadiness } from "../packages/brain/src/public-readiness.ts";
 
 type CliOptions = {
+  printRequiredSchemaTables: boolean;
   schemaTablesFile: string | null;
   gmailReadinessFile: string | null;
   gmailSmokeFile: string | null;
@@ -14,6 +16,12 @@ type CliOptions = {
 };
 
 const options = parseArgs(process.argv.slice(2));
+
+if (options.printRequiredSchemaTables) {
+  console.log(JSON.stringify(requiredPennySchemaTables, null, 2));
+  process.exit(0);
+}
+
 const existingTablesResult = await loadExistingTables(options);
 const gmailBundleResult = verifyGmailBundle(options);
 const report = evaluatePennyPublicReadiness({
@@ -131,6 +139,7 @@ function parseArgs(args: string[]): CliOptions {
   }
 
   return {
+    printRequiredSchemaTables: args.includes("--print-required-schema-tables"),
     schemaTablesFile: optionValue(args, "--schema-tables-file"),
     gmailReadinessFile: optionValue(args, "--gmail-readiness"),
     gmailSmokeFile: optionValue(args, "--gmail-smoke"),
@@ -166,8 +175,10 @@ function printUsage(): void {
   console.error(`Usage:
   pnpm check:public-readiness
   pnpm check:public-readiness -- --schema-tables-file=tmp/schema-tables.json
+  pnpm check:public-readiness -- --print-required-schema-tables
 
 Options:
+  --print-required-schema-tables   Print the required public schema table names as JSON, then exit.
   --schema-tables-file=<file>       JSON array, newline list, or comma list of public schema table names.
                                    If omitted, the checker queries DATABASE_URL directly.
   --gmail-readiness=<file>          Gmail strict-staging readiness evidence.
