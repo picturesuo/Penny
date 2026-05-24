@@ -3839,6 +3839,9 @@ function BrainProfileReviewCard({
   disabled: boolean;
   onReview: () => void;
 }) {
+  const reviewHistory = profile.profileReviewHistory?.length ? profile.profileReviewHistory : profile.profileReview ? [profile.profileReview] : [];
+  const latestReview = reviewHistory[0] ?? null;
+
   return (
     <section className={`brain-profile-review-card${reviewed ? " is-reviewed" : ""}`} aria-label="Review Brain profile">
       <div>
@@ -3861,6 +3864,24 @@ function BrainProfileReviewCard({
           <dd>{profile.stats.profileSignalCount}</dd>
         </div>
       </dl>
+      {latestReview ? (
+        <details className="brain-profile-review-history" aria-label="Profile review history">
+          <summary>
+            <span>
+              Latest <time dateTime={latestReview.reviewedAt}>{formatDate(latestReview.reviewedAt)}</time>
+            </span>
+            {reviewHistory.length > 1 ? <span>{reviewHistory.length} checks</span> : null}
+          </summary>
+          <ol>
+            {reviewHistory.slice(0, 3).map((review, index) => (
+              <li key={`${review.fingerprint}:${review.reviewedAt}`}>
+                <span>{index === 0 ? "Latest" : "Earlier"}</span>
+                <time dateTime={review.reviewedAt}>{formatDate(review.reviewedAt)}</time>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
       <button type="button" className="secondary-command" disabled={disabled || reviewed || reviewing} onClick={onReview}>
         <CheckCircle2 size={15} aria-hidden="true" />
         <span>{reviewing ? "Reviewing..." : "Profile looks right"}</span>

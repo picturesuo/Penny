@@ -137,6 +137,54 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.doesNotMatch(markup, /Download \.md/);
 });
 
+test("BrainMemoryPanel renders compact profile review history", () => {
+  const profile = memoryProfile();
+  const latestReview = {
+    fingerprint: memoryProfileReviewFingerprint(profile),
+    reviewedAt: "2026-05-04T12:00:00.000Z",
+    sourceOfTruth: "local_memory",
+    summary: "User confirmed the Brain profile was accurate enough to guide Create.",
+  };
+  const reviewedProfile: BrainMemoryProfileData = {
+    ...profile,
+    profileReview: latestReview,
+    profileReviewHistory: [
+      latestReview,
+      {
+        fingerprint: "older-review",
+        reviewedAt: "2026-05-03T12:00:00.000Z",
+        sourceOfTruth: "local_memory",
+        summary: "User confirmed the Brain profile was accurate enough to guide Create.",
+      },
+    ],
+  };
+  const markup = renderToStaticMarkup(
+    createElement(BrainMemoryPanel, {
+      profile: reviewedProfile,
+      status: "ready",
+      error: null,
+      notice: null,
+      noticeAction: null,
+      disabled: false,
+      onImport: async () => undefined,
+      onDemoFixtureImport: async () => undefined,
+      onDeleteSource: async () => undefined,
+      onConnectorSourceDelete: async () => undefined,
+      onReviewProfile: async () => undefined,
+      onStartCreateWithBrain: () => undefined,
+      showDemoFixture: true,
+    }),
+  );
+
+  assert.match(markup, /Profile reviewed/);
+  assert.match(markup, /aria-label="Profile review history"/);
+  assert.match(markup, /Latest/);
+  assert.match(markup, /2 checks/);
+  assert.match(markup, /Earlier/);
+  assert.match(markup, /dateTime="2026-05-04T12:00:00.000Z"/);
+  assert.match(markup, /dateTime="2026-05-03T12:00:00.000Z"/);
+});
+
 test("BrainPromptExportActions renders copy and download affordances", () => {
   const markup = renderToStaticMarkup(
     createElement(BrainPromptExportActions, {
@@ -1022,4 +1070,17 @@ function memoryProfile(): BrainMemoryProfileData {
     },
     profileReview: null,
   };
+}
+
+function memoryProfileReviewFingerprint(profile: BrainMemoryProfileData): string {
+  const sourcePart = profile.sources.map((source) => `${source.id}:${source.updatedAt}`).join("|");
+  const memoryPart = profile.recentMemoryNodes.map((node) => `${node.id}:${node.lastSeenAt}:${node.confidence}`).join("|");
+
+  return [
+    profile.stats.sourceCount,
+    profile.stats.memoryNodeCount,
+    profile.stats.profileSignalCount,
+    sourcePart,
+    memoryPart,
+  ].join("::");
 }

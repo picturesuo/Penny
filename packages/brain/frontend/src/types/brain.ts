@@ -1252,6 +1252,13 @@ export interface RetrievalResult {
   permission: SourcePermission;
 }
 
+export interface BrainMemoryProfileReviewData {
+  fingerprint: string;
+  reviewedAt: string;
+  sourceOfTruth: "brain_development_events" | "local_memory" | string;
+  summary: string;
+}
+
 export interface BrainMemoryProfileData {
   sourceOfTruth: "private_user_memory_sources_chunks_nodes_edges_profile_signals" | string;
   scope: BrainScope;
@@ -1281,12 +1288,8 @@ export interface BrainMemoryProfileData {
     memoryEdgeCount: number;
     profileSignalCount: number;
   };
-  profileReview: {
-    fingerprint: string;
-    reviewedAt: string;
-    sourceOfTruth: "brain_development_events" | "local_memory" | string;
-    summary: string;
-  } | null;
+  profileReview: BrainMemoryProfileReviewData | null;
+  profileReviewHistory?: BrainMemoryProfileReviewData[];
 }
 
 export interface BrainImportInput {
