@@ -239,6 +239,13 @@
       "when": 1779489600000,
       "tag": "0033_add_codebase_brain",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779609600000,
+      "tag": "0034_add_create_workspace_persistence",
+      "breakpoints": true
     }
   ]
 }
