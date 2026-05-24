@@ -18,7 +18,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - `pnpm test`: passed, 660 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.1s.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 5.6s.
 
 ## Control Findings
 
@@ -35,7 +35,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Brain | Review Brain Profile | Mark profile review complete. | Works; Brain shows a profile review card and the first-run flow only marks review done after `Profile looks right`. | `brainFirstRunSteps` now requires explicit local profile review state instead of treating displayed sections as review. | Later: persist profile-review moves if this becomes more than a first-run UI judgment. |
 | Brain | Confirm memory | Update memory review state. | Works; memory cards show explicit `Memory state` labels and the update notice is a single `role=status` region with a stable test id and memory-specific text. | Icon-only button calls `reviewBrainMemory(node.id, "correct")`; UI now reflects the reviewed node state. | Later: add undo for destructive review actions. |
 | Brain | Boost memory | Increase memory importance. | Works; boosted/high-confidence nodes get a visible state label and the update notice names the reviewed memory. | Icon-only button calls `reviewBrainMemory(node.id, "boost")`. | Later: show exact rank effect in Create evidence if needed. |
-| Brain | Forget memory | Remove memory from retrieval. | Button is wired in code but was not destructive-clicked in this sweep. | Icon-only button calls `reviewBrainMemory(node.id, "forget")`; no confirmation. | Add confirmation or undo, then test the visible node removal/count decrease. |
+| Brain | Forget memory | Remove memory from retrieval. | Safer now; first click arms the memory card with `Click trash again to forget`, second click calls `reviewBrainMemory(node.id, "forget")`. | The destructive action is still icon-first, but no longer one-click. | Later: add undo and a browser test that verifies visible removal/count decrease after confirming. |
 | Brain | Start Create With This Brain | Open Create carrying actual Brain context. | Works; Create opens with Brain context and memory/source counts. Rough idea is empty. | `handleStartCreateWithBrain` sets `createBrainProfile` but `createInitialSeedText=null`. | Carry a selected note/document or prompt user in-place; do not start a blank Create loop. |
 | Brain | Export Coding Prompt | Export a coding prompt from the Brain flow. | Missing; only checklist text says "Export coding prompt." | No Brain export control is rendered. Export exists only inside Create after artifact generation. | Add a real Brain-to-export route or remove this checklist item until Create export exists. |
 | Brain | Gmail disabled copy | Show honest Gmail unavailable/privacy state. | Works; status says unconfigured with missing Nango config and privacy copy says consent/no human review/trainingUse=false/delete-revoke. | Gmail connector status route reports gated/unconfigured state. | Keep. Ensure button remains disabled unless config is present. |
