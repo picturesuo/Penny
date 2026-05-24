@@ -2441,6 +2441,10 @@ function subjectFromText(text: string): string {
   return clean.split(/\s+/).filter(Boolean).slice(0, 10).join(" ") || "this product";
 }
 
+function subjectForTitle(subject: string): string {
+  return /^(a|an|the|this|penny's)\b/i.test(subject) ? subject : `the ${subject}`;
+}
+
 function titleFromText(text: string): string {
   const sentence = text
     .trim()
