@@ -247,9 +247,10 @@ To update the existing mirror, dry-run first, then publish:
 ```sh
 pnpm publish:public-snapshot -- --snapshot tmp/penny-public-snapshot --repo picturesuo/penny-public --dry-run
 pnpm publish:public-snapshot -- --snapshot tmp/penny-public-snapshot --repo picturesuo/penny-public
+pnpm check:public-mirror -- --repo picturesuo/penny-public
 ```
 
-The publish command uses the GitHub Git Data API instead of `git push`, because large proof history and local HTTP pack behavior have made normal pushes unreliable. By default it force-points the public branch at a one-commit sanitized snapshot so the mirror never inherits private repo history.
+The publish command uses the GitHub Git Data API instead of `git push`, because large proof history and local HTTP pack behavior have made normal pushes unreliable. By default it force-points the public branch at a one-commit sanitized snapshot so the mirror never inherits private repo history. The mirror check clones the public repo and verifies strict public safety, one-commit history, no `docs/proof/**` files, and only allowlisted media.
 
 Current public mirror:
 
