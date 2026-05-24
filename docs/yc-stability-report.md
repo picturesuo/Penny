@@ -5,7 +5,7 @@ Date: May 23, 2026
 ## Scope
 This report covers the local YC recording path:
 
-`Build with Penny` -> YC founder fixture import -> Create five cards -> visible Canvas -> inspect Personal evidence -> select Personal, Valuable, and Critical -> update artifact -> Learn this -> Back to Create -> Export prompt.
+`Start Create` -> YC founder fixture import -> Create five cards -> visible Canvas -> inspect Personal evidence -> select Personal, Valuable, and Critical -> update artifact -> Learn this -> Back to Create -> Export prompt.
 
 Visual evidence is captured under `docs/proof/yc-recording/`, including named screenshots for Landing, fixture/Create/Canvas, evidence, selections/comment, artifact, Learn, return-state preservation, and Export.
 

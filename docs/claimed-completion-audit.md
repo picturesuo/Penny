@@ -21,7 +21,7 @@ Date: May 23, 2026
 - `packages/brain/src/create-route.ts`
 
 ## Real Work Found
-- Public landing has a visible `Build with Penny` CTA wired through `LandingPage` and `App`.
+- Public landing has a visible `Start Create` CTA wired through `LandingPage` and `App`.
 - The CTA requests `/api/brain/demo-fixture/yc-founder`, imports the fixture through the normal Brain import route, opens Create, and preloads the YC Create prompt.
 - The YC fixture exists and includes Lovable hackathon, vague ideas -> buildable specs, before coding agents, memory-native workbench, human judgment, not GPT wrapper, and rejected notes app/dashboard/chatbot/assistant directions.
 - Create renders the rough idea, five option cards, multi-select, comment, evidence drawer, artifact, Learn bridge, and export panel.

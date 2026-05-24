@@ -100,7 +100,7 @@ You own only the YC-safe Brain fixture and its import/evidence display. Read tes
 ### create-ui
 
 ```text
-You own landing -> Create and Create board polish. Read LandingPage, App routing, CreateWorkspace, create-route, and yc-recording e2e. The demo must start from landing with Build with Penny/Start Create, load the YC fixture, show the rough idea, five equal cards (Personal, Practical, Valuable, Critical, Weird), source chips, evidence drawer, multi-select, comment box, artifact outline, and export. Do not turn this into a chatbot or generic dashboard.
+You own landing -> Create and Create board polish. Read LandingPage, App routing, CreateWorkspace, create-route, and yc-recording e2e. The demo must start from landing with Start Create, load the YC fixture, show the rough idea, five equal cards (Personal, Practical, Valuable, Critical, Weird), source chips, evidence drawer, multi-select, comment box, artifact outline, and export. Do not turn this into a chatbot or generic dashboard.
 ```
 
 ### learn-canvas
@@ -148,7 +148,7 @@ PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-
 The demo is ready when a human can record this path twice without improvising:
 
 1. Landing says what Penny is and offers one obvious Create path.
-2. Build with Penny loads the YC-safe fixture.
+2. Start Create loads the YC-safe fixture.
 3. Create shows five equal personal options with source evidence.
 4. User selects Personal + Valuable + Critical and adds the demo comment.
 5. Artifact updates into the requested YC outline.

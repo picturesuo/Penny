@@ -12,7 +12,7 @@ Path verified in an isolated local Chrome profile against `http://localhost:3007
 
 ## Click Path Completed
 1. Public landing page opened at `http://localhost:3007`.
-2. Clicked `Build with Penny`.
+2. Clicked `Start Create`.
 3. Confirmed Create opened with the YC fixture labels: Email fixture, Gmail-style context, Manual messages context, Founder notes, trainingUse=false.
 4. Confirmed visible Canvas: Penny -> Brain sources -> Create options -> Learn explanation -> Export prompt.
 5. Selected Personal, Valuable, and Critical.
