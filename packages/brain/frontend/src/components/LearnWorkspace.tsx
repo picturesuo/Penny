@@ -534,7 +534,7 @@ export function MicroLessonSlide({
   activeLessonIndex: number;
   lessonCount: number;
 }) {
-  const displayExplanation = truncateWords(lesson.shortExplanation, 34);
+  const displayExplanation = truncateWords(lesson.shortExplanation, 26);
   const focusFit = microLessonFocusFit(displayExplanation);
 
   return (
@@ -566,6 +566,7 @@ export function MicroLessonSlide({
 
 export function LearnUnderstandingTour({ lesson }: { lesson: LearnLesson }) {
   const sourceSpan = lesson.sourceSpans[0] ?? null;
+  const meaningMap = meaningMapItemsForLesson(lesson);
   const tourItems = [
     {
       label: sourceSpan?.label ?? "Source",
@@ -593,8 +594,27 @@ export function LearnUnderstandingTour({ lesson }: { lesson: LearnLesson }) {
           <p>{truncateWords(item.body, 18)}</p>
         </article>
       ))}
+      <ol className="learn-meaning-map" aria-label="Meaning map" data-testid="learn-meaning-map">
+        {meaningMap.map((item) => (
+          <li key={`${item.label}-${item.text}`}>
+            <span>{item.label}</span>
+            <strong>{item.text}</strong>
+          </li>
+        ))}
+      </ol>
     </section>
   );
+}
+
+export function meaningMapItemsForLesson(lesson: LearnLesson) {
+  const sourceText = lesson.sourceSpans[0]?.text ?? lesson.learningGoal;
+
+  return [
+    { label: "Source", text: truncateWords(sourceText, 8) },
+    { label: "Concept", text: truncateWords(lesson.title, 5) },
+    { label: "Use", text: "Use it on one concrete case" },
+    { label: "Check", text: "Apply it to the current source" },
+  ];
 }
 
 export function microLessonFocusFit(text: string) {

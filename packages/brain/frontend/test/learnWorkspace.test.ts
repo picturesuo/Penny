@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LearnWorkspace, askPennyContextForStep, visibleLearningPathSteps } from "../src/components/LearnWorkspace";
+import {
+  LearnWorkspace,
+  askPennyContextForStep,
+  meaningMapItemsForLesson,
+  visibleLearningPathSteps,
+} from "../src/components/LearnWorkspace";
 
 test("LearnWorkspace first screen opens directly to the lesson view", () => {
   const markup = renderToStaticMarkup(
@@ -47,6 +52,12 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /Grounding/);
   assert.match(markup, /What changes/);
   assert.match(markup, /Can you use it/);
+  assert.match(markup, /data-testid="learn-meaning-map"/);
+  assert.match(markup, /Meaning map/);
+  assert.match(markup, /Source/);
+  assert.match(markup, /Concept/);
+  assert.match(markup, /Use/);
+  assert.match(markup, /Check/);
   assert.doesNotMatch(markup, /Use &quot;Name the program&quot; to answer what YC would actually evaluate/);
   assert.doesNotMatch(markup, /Do not treat investor interest as stronger than founder proof/);
   assert.doesNotMatch(markup, /What shall we think through/);
@@ -120,6 +131,23 @@ test("LearnWorkspace renders a Create option Learn bridge with option-specific c
   assert.match(markup, /Apply to my artifact/);
   assert.match(markup, /What this option means/);
   assert.match(markup, /Why Penny suggested it/);
+});
+
+test("meaningMapItemsForLesson turns arbitrary source material into a compact source path", () => {
+  const items = meaningMapItemsForLesson(
+    lesson(
+      "Find customer urgency",
+      "Understand a messy pricing memo",
+      ["name budget pressure", "separate nice-to-have from urgent pain"],
+      "The memo says customers like the prototype, but only two teams named a budget-backed deadline.",
+    ),
+  );
+
+  assert.deepEqual(items.map((item) => item.label), ["Source", "Concept", "Use", "Check"]);
+  assert.match(items[0]?.text ?? "", /memo says customers like/i);
+  assert.match(items[1]?.text ?? "", /Find customer urgency/);
+  assert.equal(items[2]?.text, "Use it on one concrete case");
+  assert.equal(items[3]?.text, "Apply it to the current source");
 });
 
 test("LearnWorkspace renders backend expert learning plan subgroups", () => {
