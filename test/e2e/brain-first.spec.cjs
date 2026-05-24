@@ -71,7 +71,7 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   });
   await page.locator(".brain-quick-list .brain-quick-note .quick-note-open").first().click();
   await page.getByRole("button", { name: "Save to Brain" }).click();
-  await expect(page.getByText("Quick note saved into private Brain memory")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Quick note (saved into private Brain memory|added to Brain)/)).toBeVisible({ timeout: 10_000 });
   await captureProof(page, testInfo, "02-quick-note-saved");
   await page.getByRole("button", { name: "All notes" }).click();
 
@@ -88,10 +88,20 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
 
   await page.getByLabel("Source label").fill("Brain-first imported context");
   await page.getByPlaceholder(/Paste notes/).fill(
-    "I prefer Penny to be a controllable thinking instrument with memory, explicit judgment, and buildable exports.",
+    "I prefer Penny to be a controllable thinking instrument with memory, explicit judgment, and buildable exports. Reversible memory proof: this imported memory should be forgettable and restorable before Create uses it.",
   );
   await page.getByRole("button", { name: /Import to Brain/ }).click();
   await expect(page.getByText("Last import completed")).toBeVisible({ timeout: 20_000 });
+  const importedMemory = page.locator(".brain-memory-node").filter({ hasText: "Brain-first imported context" });
+  await expect(importedMemory).toHaveCount(1, { timeout: 10_000 });
+  await importedMemory.getByTitle("Forget memory").click();
+  await expect(importedMemory).toContainText("Click trash again to forget.");
+  await importedMemory.getByTitle("Confirm forget memory").click();
+  await expect(page.getByTestId("brain-memory-notice")).toContainText(/forgotten/i, { timeout: 10_000 });
+  await expect(importedMemory).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo forget" }).click();
+  await expect(page.getByTestId("brain-memory-notice")).toContainText(/restored/i, { timeout: 10_000 });
+  await expect(importedMemory).toHaveCount(1);
   await page.getByRole("button", { name: "Export coding prompt" }).click();
   await expect(page.getByLabel("Brain coding prompt export text")).toHaveValue(/Private Context Summary|Human Judgment/i, {
     timeout: 15_000,
