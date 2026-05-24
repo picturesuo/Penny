@@ -198,6 +198,60 @@ test("created Brain recents are returned by a later read", async () => {
   );
 });
 
+test("dev fallback keeps quick notes and saved Brain objects without DATABASE_URL", async () => {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousSkipDatabasePrep = process.env.PENNY_SKIP_DATABASE_PREP;
+  const previousAuthMode = process.env.PENNY_AUTH_MODE;
+  process.env.DATABASE_URL = "postgresql://stale-user:stale-pass@invalid.invalid:5432/penny";
+  process.env.PENNY_SKIP_DATABASE_PREP = "true";
+  process.env.PENNY_AUTH_MODE = "dev";
+
+  const fallbackScope: BrainScope = {
+    userId: `fallback-user-${Date.now()}`,
+    workspaceId: "fallback-workspace",
+    projectId: "fallback-project",
+    sphereId: "fallback-sphere",
+  };
+
+  try {
+    const created = await handleBrainRecentsRequest(
+      scopedJsonRequestFor(
+        "http://localhost/api/brain/recents",
+        { rawIdea: "Brain-first test quick note for Create memory." },
+        fallbackScope,
+      ),
+    );
+    const createdBody = (await created.json()) as { data: { recent: BrainRecentDto; recents: BrainRecentDto[] } };
+    const listed = await handleBrainRecentsRequest(scopedRequestFor("http://localhost/api/brain/recents", fallbackScope));
+    const listedBody = (await listed.json()) as { data: BrainRecentsPayload };
+    const saved = await handleSaveBrainObjectRequest(
+      scopedJsonRequestFor(
+        "http://localhost/api/brain/objects/save",
+        {
+          recentId: createdBody.data.recent.id,
+          objectType: "quick_note",
+          title: "Brain-first test quick note for Create memory.",
+        },
+        fallbackScope,
+      ),
+    );
+    const objects = await handleBrainObjectsRequest(scopedRequestFor("http://localhost/api/brain/objects", fallbackScope));
+    const objectsBody = (await objects.json()) as { data: BrainObjectsPayload };
+
+    assert.equal(created.status, 201);
+    assert.equal(createdBody.data.recents[0]?.rawIdea, "Brain-first test quick note for Create memory.");
+    assert.equal(listed.status, 200);
+    assert.equal(listedBody.data.recents[0]?.id, createdBody.data.recent.id);
+    assert.equal(saved.status, 201);
+    assert.equal(objects.status, 200);
+    assert.match(objectsBody.data.objects[0]?.preview ?? "", /Brain-first test quick note/);
+  } finally {
+    restoreEnv("DATABASE_URL", previousDatabaseUrl);
+    restoreEnv("PENNY_SKIP_DATABASE_PREP", previousSkipDatabasePrep);
+    restoreEnv("PENNY_AUTH_MODE", previousAuthMode);
+  }
+});
+
 test("POST /api/brain/recents accepts Learn session outputs for later Brain saves", async () => {
   const sessionId = uuidAt(101);
   const created: CreateBrainRecentInput[] = [];
@@ -572,6 +626,15 @@ function sameScope(left: BrainScope, right: BrainScope): boolean {
     left.projectId === right.projectId &&
     left.sphereId === right.sphereId
   );
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
 }
 
 function sessionRow(id: string): BrainObjectsState["sessions"][number] {

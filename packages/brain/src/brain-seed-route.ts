@@ -4,12 +4,14 @@ import {
   CommandIdempotencyRequestFields,
   commandRequestHash,
   createDbCommandIdempotencyStore,
+  createMemoryCommandIdempotencyStore,
   resolveCommandIdempotencyKey,
   runIdempotentCommand,
   stripCommandIdempotencyFields,
   type CommandIdempotencyStore,
 } from "./command-idempotency.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
+import { rememberDevPersistedBrainSeed, shouldUseLocalInMemoryPennyData } from "./dev-brain-store.ts";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
@@ -31,6 +33,8 @@ import {
 } from "./seed-persistence.ts";
 import { buildExpertLearningPlan } from "./learn-plan.ts";
 import { scopeValues } from "./scope.ts";
+
+const memoryBrainSeedIdempotencyStore = createMemoryCommandIdempotencyStore();
 
 export const BrainSeedRouteRequestSchema = z
   .object({
@@ -147,19 +151,26 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
   const provider = options.provider ?? createDefaultBrainSeedProvider();
   const generateSeed = options.generateSeed ?? generateBrainSeed;
   const db = resolveRouteDb(options);
+  const memoryPersistence = !db && !options.prepareSeedRun && !options.persistSeed;
   const prepareSeedRun =
     options.prepareSeedRun ??
-    ((input: BrainSeedInput, prepareOptions: { db?: PennyDatabase; run: BrainSeedRunInput }) =>
-      createBrainSeedPrelude(requireRouteDb(prepareOptions.db), input, prepareOptions.run));
+    (memoryPersistence
+      ? ((input: BrainSeedInput, prepareOptions: { run: BrainSeedRunInput }) => createMemoryBrainSeedPrelude(input, prepareOptions.run))
+      : ((input: BrainSeedInput, prepareOptions: { db?: PennyDatabase; run: BrainSeedRunInput }) =>
+          createBrainSeedPrelude(requireRouteDb(prepareOptions.db), input, prepareOptions.run)));
   const persistSeed =
     options.persistSeed ??
-    ((seed: BrainSeedOutput, persistOptions: { db?: PennyDatabase; prelude: BrainSeedPrelude }) =>
-      persistBrainSeed(requireRouteDb(persistOptions.db), persistOptions.prelude, seed));
+    (memoryPersistence
+      ? ((seed: BrainSeedOutput, persistOptions: { prelude: BrainSeedPrelude }) => persistMemoryBrainSeed(persistOptions.prelude, seed))
+      : ((seed: BrainSeedOutput, persistOptions: { db?: PennyDatabase; prelude: BrainSeedPrelude }) =>
+          persistBrainSeed(requireRouteDb(persistOptions.db), persistOptions.prelude, seed)));
   const failSeedRun =
     options.failSeedRun ??
-    ((prelude: BrainSeedPrelude, error: unknown, failOptions: { db?: PennyDatabase }) =>
-      failBrainSeedRun(requireRouteDb(failOptions.db), prelude, error));
-  const idempotencyStore = options.idempotencyStore ?? (db ? createDbCommandIdempotencyStore(db) : undefined);
+    (memoryPersistence
+      ? ((prelude: BrainSeedPrelude, error: unknown) => failMemoryBrainSeedRun(prelude, error))
+      : ((prelude: BrainSeedPrelude, error: unknown, failOptions: { db?: PennyDatabase }) =>
+          failBrainSeedRun(requireRouteDb(failOptions.db), prelude, error)));
+  const idempotencyStore = options.idempotencyStore ?? (db ? createDbCommandIdempotencyStore(db) : memoryBrainSeedIdempotencyStore);
 
   return runIdempotentCommand({
     route: "POST /brain/seed",
@@ -423,12 +434,216 @@ function buildBrainSeedRunInput(
   };
 }
 
+function createMemoryBrainSeedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): BrainSeedPrelude {
+  const now = run.startedAt ?? new Date();
+  const scope = scopeValues(run.scope);
+  const sessionId = input.sessionId ?? randomUUID();
+  const sourceId = randomUUID();
+
+  return {
+    session: {
+      id: sessionId,
+      ...scope,
+      status: "open",
+      title: input.rawIdea.slice(0, 120),
+      createdAt: now,
+      endedAt: null,
+    },
+    source: {
+      id: sourceId,
+      ...scope,
+      sessionId,
+      kind: "raw_idea",
+      rawText: input.rawIdea,
+      createdAt: now,
+    },
+    submittedSourceSpan: {
+      id: randomUUID(),
+      sourceId,
+      claimId: null,
+      claimVersionId: null,
+      startOffset: 0,
+      endOffset: input.rawIdea.length,
+      label: "submitted_text",
+      createdAt: now,
+    },
+    brainRun: {
+      id: randomUUID(),
+      ...scope,
+      sessionId,
+      sourceId,
+      operation: run.operation,
+      provider: run.provider,
+      model: run.model ?? null,
+      status: "running",
+      input: run.input,
+      output: null,
+      error: null,
+      createdAt: now,
+      completedAt: null,
+    },
+  };
+}
+
+function persistMemoryBrainSeed(prelude: BrainSeedPrelude, seed: BrainSeedOutput): PersistedBrainSeed {
+  const now = new Date();
+  const sessionId = prelude.session.id;
+  const sourceId = prelude.source.id;
+  const scope = scopeValues(prelude.session);
+  const claims = seed.thoughtMap.claims.map((claim) => ({
+    id: randomUUID(),
+    seedId: claim.id,
+    ...scope,
+    sessionId,
+    sourceId,
+    kind: claim.kind,
+    createdAt: now,
+  }));
+  const claimIds = new Map(claims.map((claim) => [claim.seedId, claim.id]));
+  const claimVersions = seed.thoughtMap.claims.map((claim) => ({
+    id: randomUUID(),
+    seedId: claim.id,
+    claimId: requireMappedMemoryId(claimIds, claim.id),
+    sourceId,
+    brainRunId: prelude.brainRun.id,
+    moveId: null,
+    content: claim.text,
+    status: "exploratory" as const,
+    confidence: claim.confidence,
+    isCurrent: true,
+    validFrom: now,
+    validUntil: null,
+    supersededByVersionId: null,
+    createdAt: now,
+  }));
+  const claimVersionIds = new Map(claimVersions.map((version) => [version.seedId, version.id]));
+  const edges = seed.thoughtMap.edges.map((edge) => ({
+    id: randomUUID(),
+    seedId: edge.id,
+    ...scope,
+    sessionId,
+    fromClaimId: requireMappedMemoryId(claimIds, edge.fromClaimId),
+    toClaimId: requireMappedMemoryId(claimIds, edge.toClaimId),
+    kind: edge.kind,
+    status: "active" as const,
+    label: edge.label,
+    createdAt: now,
+  }));
+  const edgeIds = new Map(edges.map((edge) => [edge.seedId, edge.id]));
+  const moves = [
+    {
+      id: randomUUID(),
+      seedId: "move.source_recorded",
+      ...scope,
+      sessionId,
+      kind: "source.recorded" as const,
+      summary: "Submitted the raw seed idea as the session source.",
+      payload: {
+        sourceIds: [sourceId],
+        sourceSpanIds: [prelude.submittedSourceSpan.id],
+        claimIds: [],
+        edgeIds: [],
+      },
+      createdAt: now,
+    },
+    {
+      id: randomUUID(),
+      seedId: "move.seed_claim_created",
+      ...scope,
+      sessionId,
+      kind: "seed_claim_created" as const,
+      summary: "Created the stable seed claim and its first current version.",
+      payload: {
+        claimIds: [requireMappedMemoryId(claimIds, seed.seedClaim.id)],
+        edgeIds: [],
+      },
+      createdAt: now,
+    },
+    {
+      id: randomUUID(),
+      seedId: "move.assumptions_extracted",
+      ...scope,
+      sessionId,
+      kind: "assumptions_extracted" as const,
+      summary: "Created assumption claims and current versions from the seed extraction.",
+      payload: {
+        claimIds: seed.assumptions.map((assumption) => requireMappedMemoryId(claimIds, assumption.id)),
+        edgeIds: Array.from(edgeIds.values()),
+      },
+      createdAt: now,
+    },
+    {
+      id: randomUUID(),
+      seedId: "move.first_challenge_suggested",
+      ...scope,
+      sessionId,
+      kind: "first_challenge_suggested" as const,
+      summary: "Suggested the first challenge against the weakest load-bearing claim.",
+      payload: {
+        claimIds: [requireMappedMemoryId(claimIds, seed.firstChallenge.targetClaimId)],
+        edgeIds: [],
+      },
+      createdAt: now,
+    },
+  ];
+  const persisted: PersistedBrainSeed = {
+    session: prelude.session,
+    source: prelude.source,
+    submittedSourceSpan: prelude.submittedSourceSpan,
+    claims,
+    claimVersions,
+    edges,
+    moves,
+    brainRun: {
+      ...prelude.brainRun,
+      status: "succeeded",
+      output: seed,
+      error: null,
+      completedAt: now,
+    },
+    idMaps: {
+      claimIds,
+      claimVersionIds,
+      edgeIds,
+    },
+  };
+
+  rememberDevPersistedBrainSeed(persisted);
+  return persisted;
+}
+
+function failMemoryBrainSeedRun(prelude: BrainSeedPrelude, error: unknown): Promise<void> {
+  prelude.brainRun.status = "failed";
+  prelude.brainRun.error = {
+    name: error instanceof Error ? error.name : "Error",
+    message: formatErrorMessage(error),
+  };
+  prelude.brainRun.completedAt = new Date();
+
+  return Promise.resolve();
+}
+
+function requireMappedMemoryId(ids: Map<string, string>, seedId: string): string {
+  const persistedId = ids.get(seedId);
+
+  if (!persistedId) {
+    throw new Error(`Missing persisted id for ${seedId}.`);
+  }
+
+  return persistedId;
+}
+
 function resolveRouteDb(options: BrainSeedRouteOptions): PennyDatabase | undefined {
   if (options.db) {
     return options.db;
   }
 
   if (options.prepareSeedRun && options.persistSeed) {
+    return undefined;
+  }
+
+  const databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL;
+  if (!databaseUrl?.trim() || shouldUseLocalInMemoryPennyData(databaseUrl)) {
     return undefined;
   }
 

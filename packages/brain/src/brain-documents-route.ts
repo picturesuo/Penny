@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, moves, sessions, sources } from "./db/schema.ts";
+import { listDevPersistedBrainSeeds, shouldUseLocalInMemoryPennyData } from "./dev-brain-store.ts";
 import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
 import { loadScopedSourcesForSession } from "./source-loading.ts";
 
@@ -180,7 +181,7 @@ export async function handleBrainDocumentsRequest(
   const loadDocuments =
     options.loadDocuments ??
     ((requestScope: BrainScope, loadOptions: { db?: PennyDatabase }) =>
-      loadBrainDocuments(requireDocumentsDb(loadOptions.db), requestScope));
+      loadOptions.db ? loadBrainDocuments(loadOptions.db, requestScope) : loadDevBrainDocuments(requestScope));
 
   try {
     return jsonResponse({ data: await loadDocuments(scope, dbOption(db)) }, 200);
@@ -259,6 +260,20 @@ export async function loadBrainDocuments(db: PennyDatabase, scope: BrainScope): 
     edges: edgeRows,
     moves: moveRows,
     artifacts: artifactRows,
+  });
+}
+
+export function loadDevBrainDocuments(scope: BrainScope): BrainDocumentsPayload {
+  const seeds = listDevPersistedBrainSeeds(scope);
+
+  return buildBrainDocuments({
+    sessions: seeds.map((seed) => seed.session),
+    sources: seeds.map((seed) => seed.source),
+    claims: seeds.flatMap((seed) => seed.claims),
+    claimVersions: seeds.flatMap((seed) => seed.claimVersions),
+    edges: seeds.flatMap((seed) => seed.edges),
+    moves: seeds.flatMap((seed) => seed.moves),
+    artifacts: [],
   });
 }
 
@@ -1162,6 +1177,11 @@ function resolveDocumentsDb(options: BrainDocumentsRouteOptions, hasInjectedLoad
   }
 
   if (hasInjectedLoader) {
+    return undefined;
+  }
+
+  const databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL;
+  if (!databaseUrl?.trim() || shouldUseLocalInMemoryPennyData(databaseUrl)) {
     return undefined;
   }
 

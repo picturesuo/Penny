@@ -107,10 +107,10 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await page.locator('[data-testid="create-option-card"][data-create-lens="Critical"] .create-option-select-button').click();
   await expect(page.getByTestId("yc-demo-canvas")).toContainText("Selected Personal + Critical");
   await page.locator('[data-testid="create-option-card"][data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
-  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used/);
+  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used|Evidence used/);
   await page.locator(".create-judgment-panel textarea").fill("Keep the artifact source-grounded and practical.");
   await captureProof(page, testInfo, "06-selections-evidence-comment");
-  await page.getByRole("button", { name: "Update artifact" }).click();
+  await page.getByRole("button", { name: /Update artifact|Update Idea Spec/ }).click();
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/source-grounded|Personal|Critical/i, {
     timeout: 20_000,
   });
@@ -118,8 +118,8 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
 
   await page.getByTestId("create-learn-this-button").click();
   await expect(page.getByRole("heading", { name: "Explain simply" })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "3 Show how this applies to my artifact" }).click();
-  await expect(page.getByRole("heading", { name: "Show how this applies to my artifact" })).toBeVisible();
+  await page.getByRole("button", { name: /3 Show how this applies to my artifact|3 Apply to my artifact/ }).click();
+  await expect(page.getByRole("heading", { name: /Show how this applies to my artifact|Apply to my artifact/ })).toBeVisible();
   await captureProof(page, testInfo, "08-learn-applies");
   await page.getByTestId("learn-back-to-create").click();
   await expect(page.locator('[data-testid="create-option-card"][data-create-lens="Personal"]')).toHaveClass(/is-selected/);
@@ -131,7 +131,7 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used|## Product Goal/i, {
     timeout: 15_000,
   });
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/Artifact\/export.*\.md/s);
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/(?:Artifact\/export|Export).*\.md/s);
   await captureProof(page, testInfo, "10-export");
 
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -147,7 +147,7 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await expect(page.locator(".create-judgment-panel textarea")).toHaveValue(/source-grounded/);
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/source-grounded|Personal|Critical/i);
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used|## Product Goal/i);
-  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/Artifact\/export.*\.md/s);
+  await expect(page.getByTestId("yc-demo-canvas")).toContainText(/(?:Artifact\/export|Export).*\.md/s);
   await captureProof(page, testInfo, "11-refresh-restored");
 });
 

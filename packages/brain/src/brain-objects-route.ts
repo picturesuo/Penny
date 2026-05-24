@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -83,6 +84,11 @@ type ArtifactRow = OptionalBrainScope<typeof artifacts.$inferSelect>;
 type BrainObjectRow = OptionalBrainScope<typeof brainObjects.$inferSelect>;
 type BrainRecentRow = OptionalBrainScope<typeof brainRecents.$inferSelect>;
 type SessionNoteRow = OptionalBrainScope<typeof sessionNotes.$inferSelect>;
+type MemoryBrainObjectsStore = {
+  objects: BrainObjectDto[];
+  recents: BrainRecentDto[];
+  notes: BrainSessionNoteDto[];
+};
 type ScopeColumn = AnyPgColumn;
 type ScopeTable = {
   userId: ScopeColumn;
@@ -208,6 +214,8 @@ export type BrainObjectsRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
 };
+
+const memoryBrainObjectsStores = new Map<string, MemoryBrainObjectsStore>();
 
 export async function handleBrainObjectsRequest(
   request: Request,
@@ -783,6 +791,10 @@ function resolveService(options: BrainObjectsRouteOptions): BrainObjectsRouteSer
     return options.service;
   }
 
+  if (!options.db && !resolvedDatabaseUrl(options.databaseUrl)) {
+    return memoryBrainObjectsService();
+  }
+
   const db = options.db ?? createPennyDb(options.databaseUrl);
   return {
     listObjects: (scope) => loadBrainObjects(db, scope),
@@ -793,6 +805,218 @@ function resolveService(options: BrainObjectsRouteOptions): BrainObjectsRouteSer
     getSessionNote: (scope, sessionId) => getSessionNote(db, scope, sessionId),
     saveSessionNote: (input) => saveSessionNote(db, input),
   };
+}
+
+function memoryBrainObjectsService(): BrainObjectsRouteService {
+  return {
+    async listObjects(scope) {
+      const store = memoryStoreForScope(scope);
+      const objects = [...store.objects, ...store.notes.map(memoryNoteObject)].sort(
+        (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
+      );
+
+      return {
+        sourceOfTruth: "sessions_sources_claims_claim_versions_claim_edges_moves_artifacts_brain_objects_session_notes",
+        objects,
+        meta: {
+          objectCount: objects.length,
+          sessionCount: 0,
+          savedObjectCount: store.objects.length,
+          noteCount: store.notes.length,
+        },
+      };
+    },
+    async saveObject(input) {
+      const store = memoryStoreForScope(input.scope);
+      const recent = input.recentId ? store.recents.find((candidate) => candidate.id === input.recentId) : null;
+
+      if (input.recentId && !recent) {
+        throw new BrainObjectsNotFoundError("Recent item was not found in this scope.");
+      }
+
+      const body = textValue(input.content ?? input.body ?? recent?.content);
+      if (!body) {
+        throw new BrainObjectsValidationError("Saving a Brain object requires content.");
+      }
+
+      const now = new Date().toISOString();
+      const objectType = input.objectType?.trim() || (recent?.kind === "raw_idea" ? "saved_idea" : recent?.kind) || "learn_output";
+      const sessionId = input.sessionId ?? recent?.sessionId ?? null;
+      const object: BrainObjectDto = {
+        id: `brain_object:${randomUUID()}`,
+        objectType,
+        backing: null,
+        scope: input.scope,
+        sessionId,
+        parentId: sessionId ? `session:${sessionId}` : null,
+        title: input.title?.trim() || recent?.title || clipText(body, 120),
+        summary: input.summary ?? recent?.summary ?? null,
+        preview: body,
+        status: objectType,
+        createdAt: now,
+        updatedAt: now,
+        refs: refs({}),
+      };
+
+      store.objects.unshift(object);
+      return object;
+    },
+    async listRecents(scope) {
+      return visibleMemoryRecents(memoryStoreForScope(scope));
+    },
+    async createRecent(input) {
+      const store = memoryStoreForScope(input.scope);
+      const body = textValue(input.rawIdea ?? input.content);
+      if (!body) {
+        throw new BrainObjectsValidationError("A recent item requires rawIdea or content.");
+      }
+
+      const now = new Date().toISOString();
+      const recent: BrainRecentDto = {
+        id: randomUUID(),
+        scope: input.scope,
+        sessionId: input.sessionId ?? null,
+        kind: input.kind?.trim() || (input.rawIdea ? "raw_idea" : "learn_output"),
+        title: input.title?.trim() || clipText(body, 120),
+        summary: input.summary ?? null,
+        status: "active",
+        rawIdea: body,
+        content: body,
+        payload: input.payload ?? {},
+        archivedAt: null,
+        archiveExpiresAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      store.recents.unshift(recent);
+      return { recent, ...visibleMemoryRecents(store) };
+    },
+    async updateRecentStatus(input) {
+      const store = memoryStoreForScope(input.scope);
+      const recent = store.recents.find((candidate) => candidate.id === input.recentId);
+
+      if (!recent) {
+        throw new BrainObjectsNotFoundError("Recent item was not found in this scope.");
+      }
+
+      const now = new Date().toISOString();
+      recent.status = input.status;
+      recent.updatedAt = now;
+      recent.archivedAt = input.status === "archived" ? now : null;
+      recent.archiveExpiresAt = input.status === "archived" ? archiveExpiryIso(now) : null;
+      recent.payload = input.status === "archived" ? { ...recent.payload, status: "archived", archivedAt: now } : activeRecentPayload(recent.payload);
+
+      return visibleMemoryRecents(store);
+    },
+    async getSessionNote(scope, sessionId) {
+      return memoryStoreForScope(scope).notes.find((note) => note.sessionId === sessionId) ?? null;
+    },
+    async saveSessionNote(input) {
+      const store = memoryStoreForScope(input.scope);
+      const now = new Date().toISOString();
+      const existing = store.notes.find((note) => note.sessionId === input.sessionId);
+
+      if (existing) {
+        existing.content = input.content;
+        existing.updatedAt = now;
+        return existing;
+      }
+
+      const note: BrainSessionNoteDto = {
+        id: randomUUID(),
+        scope: input.scope,
+        sessionId: input.sessionId,
+        content: input.content,
+        createdAt: now,
+        updatedAt: now,
+      };
+      store.notes.unshift(note);
+      return note;
+    },
+  };
+}
+
+function memoryStoreForScope(scope: BrainScope): MemoryBrainObjectsStore {
+  const key = JSON.stringify([scope.userId, scope.workspaceId, scope.projectId, scope.sphereId]);
+  const existing = memoryBrainObjectsStores.get(key);
+
+  if (existing) {
+    return existing;
+  }
+
+  const store: MemoryBrainObjectsStore = { objects: [], recents: [], notes: [] };
+  memoryBrainObjectsStores.set(key, store);
+  return store;
+}
+
+function visibleMemoryRecents(store: MemoryBrainObjectsStore): BrainRecentsPayload {
+  const sorted = [...store.recents].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+
+  return {
+    recents: sorted.filter((recent) => recent.status !== "archived").slice(0, 20),
+    archived: sorted.filter((recent) => recent.status === "archived").slice(0, 20),
+  };
+}
+
+function memoryNoteObject(note: BrainSessionNoteDto): BrainObjectDto {
+  return {
+    id: `session_note:${note.sessionId}`,
+    objectType: "working_note",
+    backing: null,
+    scope: note.scope,
+    sessionId: note.sessionId,
+    parentId: `session:${note.sessionId}`,
+    title: "Working notes",
+    summary: clipText(note.content || "No notes saved.", 240),
+    preview: note.content,
+    status: "saved",
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    refs: refs({}),
+  };
+}
+
+function resolvedDatabaseUrl(configured: string | undefined): string | null {
+  const value = configured ?? process.env.DATABASE_URL;
+  const databaseUrl = value?.trim();
+
+  if (!databaseUrl || shouldUseLocalInMemoryBrainObjects(databaseUrl)) {
+    return null;
+  }
+
+  return databaseUrl;
+}
+
+function shouldUseLocalInMemoryBrainObjects(databaseUrl: string | undefined): boolean {
+  if (!databaseUrl || brainObjectsRuntimeKind() !== "dev-test") {
+    return false;
+  }
+
+  const authMode = process.env.PENNY_AUTH_MODE?.trim().toLowerCase();
+  return readEnvFlag("PENNY_SKIP_DATABASE_PREP", false) && (!authMode || authMode === "dev");
+}
+
+function brainObjectsRuntimeKind(): "dev-test" | "production" {
+  return process.env.NODE_ENV === "production" ? "production" : "dev-test";
+}
+
+function readEnvFlag(name: string, fallback: boolean): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+
+  if (!value) {
+    return fallback;
+  }
+
+  if (["1", "true", "yes", "on"].includes(value)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(value)) {
+    return false;
+  }
+
+  return fallback;
 }
 
 async function requireScopedSession(
