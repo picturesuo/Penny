@@ -18,7 +18,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - `pnpm test`: passed, 660 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.0s.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.1s.
 
 ## Control Findings
 
@@ -33,8 +33,8 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Brain | Add Folder | Create a folder or clearly disable it. | Disabled and labeled unavailable in the demo. | The visible command is intentionally not in scope. | Keep disabled until folder persistence is real. |
 | Brain | Import Context | Import pasted context and show source-backed memories. | Works on current localhost; import completed and memory/source counts updated. | Brain memory route has explicit in-memory dev fallback. | Keep, then assert refresh behavior. Align recents/objects with this route's fallback model. |
 | Brain | Review Brain Profile | Mark profile review complete. | Works; Brain shows a profile review card and the first-run flow only marks review done after `Profile looks right`. | `brainFirstRunSteps` now requires explicit local profile review state instead of treating displayed sections as review. | Later: persist profile-review moves if this becomes more than a first-run UI judgment. |
-| Brain | Confirm memory | Update memory review state. | Works in code and UI shows a notice; audit locator hit multiple matching status elements. | Icon-only button calls `reviewBrainMemory(node.id, "correct")`; notice text is non-unique. | Add stable labels/test ids after behavior; show one clear live region. |
-| Brain | Boost memory | Increase memory importance. | Works in code and UI shows a notice; same status text ambiguity. | Icon-only button calls `reviewBrainMemory(node.id, "boost")`. | Same as above; add visible state change such as boosted label/weight. |
+| Brain | Confirm memory | Update memory review state. | Works; memory cards show explicit `Memory state` labels and the update notice is a single `role=status` region with a stable test id and memory-specific text. | Icon-only button calls `reviewBrainMemory(node.id, "correct")`; UI now reflects the reviewed node state. | Later: add undo for destructive review actions. |
+| Brain | Boost memory | Increase memory importance. | Works; boosted/high-confidence nodes get a visible state label and the update notice names the reviewed memory. | Icon-only button calls `reviewBrainMemory(node.id, "boost")`. | Later: show exact rank effect in Create evidence if needed. |
 | Brain | Forget memory | Remove memory from retrieval. | Button is wired in code but was not destructive-clicked in this sweep. | Icon-only button calls `reviewBrainMemory(node.id, "forget")`; no confirmation. | Add confirmation or undo, then test the visible node removal/count decrease. |
 | Brain | Start Create With This Brain | Open Create carrying actual Brain context. | Works; Create opens with Brain context and memory/source counts. Rough idea is empty. | `handleStartCreateWithBrain` sets `createBrainProfile` but `createInitialSeedText=null`. | Carry a selected note/document or prompt user in-place; do not start a blank Create loop. |
 | Brain | Export Coding Prompt | Export a coding prompt from the Brain flow. | Missing; only checklist text says "Export coding prompt." | No Brain export control is rendered. Export exists only inside Create after artifact generation. | Add a real Brain-to-export route or remove this checklist item until Create export exists. |
