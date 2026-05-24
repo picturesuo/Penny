@@ -59,12 +59,13 @@ Keep out of the recorded path:
 - Do not redesign the whole frontend; keep the Penny mark/vibe and limit visual work to newspaper hierarchy, warm paper, restrained borders, and spacing.
 - Do not pitch semantic memory or embeddings before lexical/graph memory proves the MVP loop.
 
-## Current Demo Gaps
+## Resolved Demo Gaps
 
-- `test/fixtures/penny-yc-founder-fixture.json` is not present yet.
-- `docs/yc-demo-runbook.md` is not present yet.
-- `docs/stability-report.md` is not present yet.
-- Playwright browser e2e coverage is not present in `package.json` scripts yet.
-- Landing does not yet show a dedicated "Build with Penny" or "Start with Create" CTA that loads the YC founder fixture and opens Create with the required prompt.
-- Create does not yet show the exact YC artifact sections as a guaranteed fixture-backed path.
-- Learn does not yet expose the required "Brain Ranker weights explicit judgment events over implicit behavior" option as a one-click Create-adjacent lesson.
+- `test/fixtures/penny-yc-founder-fixture.json` is present and imports safe email-style, messages-style, LinkedIn-style, founder-note, and rejected-direction context.
+- `docs/yc-demo-runbook.md`, `docs/yc-demo-script.md`, and `docs/yc-stability-report.md` are present.
+- Browser e2e coverage exists for the YC fixture path, Brain-first path, and Learn source-to-concept tour.
+- Landing shows `Start Create` and loads the YC founder fixture into Create.
+- Create shows the required YC artifact sections in the fixture-backed path.
+- Learn exposes the Brain Ranker technical option from Create with a return path back to Create.
+
+Remaining non-demo work: production auth/rate limiting/Postgres, real connector proof, backend-derived non-demo Canvas, and deciding whether quick notes become Brain profile memories.
