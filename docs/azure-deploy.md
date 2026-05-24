@@ -214,6 +214,8 @@ DATABASE_URL='postgresql://pennyadmin:<password>@penny-prod-postgres.postgres.da
 
 That command verifies the candidate under strict private-alpha readiness before writing the GitHub secret. Do not use the current `.env.local` database candidate for deploy; as of May 24, 2026, it fails schema connectivity with `tenant/user ... not found`.
 
+If using Supabase instead of Azure Postgres for the first private alpha database, copy a fresh Session pooler or Direct connection string from the Supabase dashboard, confirm the project is active, run `pnpm db:migrate` against that URL, then run the same `pnpm check:database-url-candidate -- --set-github-secret` gate. The current `.env.local` value has a Supabase pooler shape, but the pooler rejects the tenant/user, and the derived direct host does not resolve.
+
 The current machine also needs `az login` before `scripts/azure-bootstrap.sh` or direct Azure resource checks can run.
 
 The workflow builds and pushes the container, applies strict Penny settings, restarts App Service, and runs `scripts/smoke-public-staging.mjs` against the deployed URL.
