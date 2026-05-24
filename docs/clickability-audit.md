@@ -1,21 +1,24 @@
 # Clickability Audit
 
-Date: May 23, 2026
+Date: May 24, 2026
 
 ## Verdict
 
-FAIL.
+PASS for the current YC demo path and the local Brain-first dogfood path.
 
-The visible YC fixture path can still reach Create, Learn, and export, but the normal Brain-first path is broken on the current localhost server. The hardest blocker is `/api/brain/recents`: quick notes and saved Brain objects call the DB-backed Brain objects route, which throws when `DATABASE_URL` is empty. Brain memory import has an in-memory dev fallback; Brain recents/objects do not.
+The visible YC fixture path reaches Create, Learn, Canvas, and export. The normal Brain-first path now also works in local demo mode with `PENNY_SKIP_DATABASE_PREP=true`: quick notes, save-to-Brain, document seed, import, Create, Learn, export, and refresh restore all pass in `test/e2e/brain-first.spec.cjs`.
+
+This is still not a production-readiness pass. Public/staging still needs real Postgres, auth, rate limiting, and connector proof before any broad demo claims.
 
 ## Audit Commands
 
-- Server already running on `http://localhost:3007` with `DATABASE_URL=` and `PENNY_SKIP_DATABASE_PREP=true`.
-- Live visible-control sweep from the public landing page with a temporary Playwright spec.
-- Direct API check: `POST /api/brain/recents` returned `500` with `DATABASE_URL is required to create the Penny database client.`
-- Direct API check: `POST /api/brain/import` returned `200` and imported source-backed memories.
-- Gmail status check: Gmail is unconfigured and reports missing `NANGO_PUBLIC_KEY` and `NANGO_GMAIL_INTEGRATION_ID`.
-- Existing YC e2e check: `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-yc-recording-check` passed in 3.0s. This does not prove the Brain-first path.
+- Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
+- Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
+- Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
+- `pnpm test`: passed, 658 tests.
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.5s.
 
 ## Control Findings
 
@@ -23,11 +26,11 @@ The visible YC fixture path can still reach Create, Learn, and export, but the n
 | --- | --- | --- | --- | --- | --- |
 | Landing | Start with your Brain | Open Brain from a fresh public landing page. | Works; Brain workspace becomes visible. | `LandingPage` calls `onModeSelect("Brain")`. | Keep. Add e2e coverage that does not jump to internal routes. |
 | Landing | Start Create | Load fixture and open Create. | Works; existing YC e2e passes. | Fixture import uses Brain memory route, which has in-memory fallback. | Keep as demo shortcut, but do not treat as proof of the Brain-first product loop. |
-| Brain | Quick Note send | Save a visible, persisted quick note row. | Fails on current localhost; no row appears. Direct API returns `500`. | `brain-objects-route.ts` resolves default service with `createPennyDb()` and no `DATABASE_URL`; no in-memory dev fallback. | Add in-memory Brain objects/recents service for local dev or start normal localhost with a real DB. Surface API errors beside the quick note form. |
-| Brain | Quick Note Save to Brain | Promote a quick note into Brain memory/document state. | Not reachable after send failure. Code saves a Brain object only, not Brain memory/profile. | Same DB route failure; even success would not refresh documents/profile or create memory nodes. | Persist quick notes into a real Brain item and refresh docs/memory counts. |
-| Brain | New Document | Open editor/creation surface inside Brain. | Fails; sidebar button navigates back to landing. | `BrainSidebar` receives `onNewDocument={onNewThought}`; `handleNewThought` resets app to landing. | Replace with a Brain-local document editor/seed focus. Keep logo reset separate. |
-| Brain | Start a document form | Create a persisted Brain document from typed thought. | Code path is real via `handleSeed`, but not reached by the misleading New Document button. | The real creation UI is a form in the index, separate from the sidebar command. | Make New Document focus/open this form or a document editor. |
-| Brain | Add Folder | Create a folder or clearly disable it. | A folder appears, but it is local React state only and is lost on refresh. | `BrainSidebar` stores `localFolders`, renames, and document drops in component state. | Persist folders and document-folder assignment, or disable and label `not in demo`. |
+| Brain | Quick Note send | Save a visible, persisted quick note row. | Works in local demo mode and browser e2e. | `brain-objects-route.ts` now uses a scoped in-memory service when database prep is skipped in dev. | Keep DB-backed production behavior; keep local fallback covered. |
+| Brain | Quick Note Save to Brain | Promote a quick note into Brain state. | Works in Brain-first e2e through the save-to-Brain action. | Local fallback stores saved Brain objects in the same scoped in-memory service. | Later: decide whether quick notes should also create profile memory nodes. |
+| Brain | New Document | Open editor/creation surface inside Brain. | Works; sidebar New Document focuses the Brain document seed input. | Brain-first e2e asserts the focused seed form. | Keep. |
+| Brain | Start a document form | Create a Brain document from typed thought. | Works in local demo mode through `/brain/seed` fallback and document listing fallback. | `brain-seed-route.ts` stores a scoped in-memory persisted seed; `brain-documents-route.ts` lists it. | Keep local fallback dev-only. |
+| Brain | Add Folder | Create a folder or clearly disable it. | Disabled and labeled unavailable in the demo. | The visible command is intentionally not in scope. | Keep disabled until folder persistence is real. |
 | Brain | Import Context | Import pasted context and show source-backed memories. | Works on current localhost; import completed and memory/source counts updated. | Brain memory route has explicit in-memory dev fallback. | Keep, then assert refresh behavior. Align recents/objects with this route's fallback model. |
 | Brain | Review Brain Profile | Mark profile review complete. | Passive checklist/profile view only; no explicit review control. | `brainFirstRunSteps` infers "Review Brain profile" from profile sections, not user action. | Add an explicit review/confirm profile control or remove it from the checklist. |
 | Brain | Confirm memory | Update memory review state. | Works in code and UI shows a notice; audit locator hit multiple matching status elements. | Icon-only button calls `reviewBrainMemory(node.id, "correct")`; notice text is non-unique. | Add stable labels/test ids after behavior; show one clear live region. |
@@ -47,22 +50,21 @@ The visible YC fixture path can still reach Create, Learn, and export, but the n
 | Create | Learn this | Open Learn from a technical Create option. | Works; Learn opens focused explanation and Back to Create preserves state while Create remains mounted. | `onLearnThis` sets `learnFocusNode` and switches mode. | Persist Create state so refresh/back survives remount, not just hidden component state. |
 | Learn | Explain simply / worked example / applies to artifact | Each choice changes visible lesson content. | Works in the Create Learn bridge path. | `LearnWorkspace` builds three focused steps for the Create bridge node. | Keep; assert content changes in the real e2e. |
 | Learn | Back to Create | Return with prompt/sources/selections/comment/artifact/evidence preserved. | Works without refresh because Create stays mounted and hidden. | `shouldRenderCreateWorkspace` keeps component mounted. | Persist the state; hidden mounted state is not enough for refresh. |
-| Create | Canvas | Show Brain sources -> Create options -> Learn explanation -> Artifact/export. | Partial/fake; sidebar shows a static `YC demo Canvas` list. No reachable interactive Canvas from Create. | `CreatePathSidebar` renders hard-coded `ycDemoCanvasNodes`; Brain has the real Canvas workspace. | Add real Create Canvas/export view sourced from Brain/Create/Learn state. |
+| Create | Canvas | Show Brain sources -> Create options -> Learn explanation -> Artifact/export. | Works for the demo: Canvas updates with imported Brain context, selected options, Learn bridge, and exported `.md` prompt. | Create renders a deterministic visual outline of the current demo state. | Later: connect Create Canvas to backend session canvas for non-demo sessions. |
 | Create | Export | Produce copyable prompt/spec text. | Works after artifact generation; textarea fallback is present. | `handleExportPrompt` calls `/api/create/export-coding-prompt`. | Add copy button with textarea fallback, and cover it from the Brain-first path. |
 
 ## Immediate Failure Chain
 
 1. Fresh landing -> Brain works.
-2. Quick Note send calls `POST /api/brain/recents`.
-3. The server returns `500` because `DATABASE_URL` is empty.
-4. No quick note row appears, so Save to Brain, Create-from-note, Learn-from-note, and archive/restore cannot be trusted.
-5. The separate Brain memory import path works, which is why the fixture path can still look successful.
+2. Quick Note send calls `POST /api/brain/recents` and returns `201` in local demo mode.
+3. New Document uses `/brain/seed` and returns `201` in local demo mode.
+4. Brain import creates source-backed memories.
+5. Create uses that Brain context, preserves judgment through Learn, exports, and restores after refresh.
 
 ## Priority Fixes
 
-1. Add a local dev in-memory fallback for Brain objects/recents/session notes, or require a DB-backed localhost startup before rendering Brain controls.
-2. Replace Brain sidebar New Document reset with a real Brain document editor/focus.
-3. Persist or disable folders.
-4. Start Create from a selected Brain note/document or require rough idea entry with visible state; do not silently open blank Create.
-5. Replace static Create Canvas with real graph/export state.
-6. Rewrite e2e around the Brain-first loop and refresh checks, not only the fixture shortcut.
+1. Keep `brain-first.spec.cjs` and `yc-recording.spec.cjs` green before recording.
+2. Keep local fallback dev-only; production/staging must use real Postgres.
+3. Replace the deterministic Create Canvas with backend-derived session canvas when demo pressure is gone.
+4. Decide whether quick notes should become Brain profile memories, not only saved Brain objects.
+5. Do not demo live Gmail, SMS/iMessage, Slack, Drive, or Calendar until their proof bundles pass.
