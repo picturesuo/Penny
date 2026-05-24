@@ -82,6 +82,8 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
     "Critical",
     "Weird",
   ]);
+  await expect(page.getByTestId("create-option-board")).toContainText("YC ideation workbench");
+  await expect(page.getByTestId("create-option-board")).not.toContainText(/i want to create a yc startup around ideation/i);
   await expect(page.getByRole("region", { name: "Create graph" })).toBeVisible();
   await expect(page.getByTestId("yc-demo-canvas")).toContainText("Penny -> Brain -> Create -> Learn -> Export");
   await expect(page.getByTestId("yc-demo-canvas")).toContainText("Brain");
