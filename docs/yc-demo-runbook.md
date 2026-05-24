@@ -76,7 +76,7 @@ Close with: "Penny is not a chatbot. It is a memory-native creativity workbench 
   `pnpm typecheck`
 - Build:
   `pnpm build`
-- Browser smoke:
-  `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line`
+- Local demo browser smoke:
+  `pnpm smoke:local-demo -- --port 3007 --output .tmp-local-demo-smoke`
 - Headed proof capture:
   `PENNY_BASE_URL=http://localhost:3007 PENNY_PLAYWRIGHT_SLOWMO_MS=150 PENNY_PLAYWRIGHT_VIDEO=on PENNY_PLAYWRIGHT_TRACE=on PENNY_PLAYWRIGHT_SCREENSHOT=on PENNY_PROOF_DIR=docs/proof/yc-recording/screenshots pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --headed --reporter=line --output=docs/proof/yc-recording/playwright-headed`
