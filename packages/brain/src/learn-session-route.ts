@@ -13,6 +13,7 @@ import {
   BrainSeedValidationError,
   brainSeedSearchDecision,
   createDefaultBrainSeedProvider,
+  createHeuristicBrainSeedProvider,
   generateBrainSeed,
   resolveXaiBrainSeedModel,
   type BrainSeedInput,
@@ -33,6 +34,7 @@ import {
   type PersistedBrainSeed,
 } from "./seed-persistence.ts";
 import { ThinkingModeService, type ThinkingModeTickResponse } from "./services/thinking-mode-service.ts";
+import { scopeValues } from "./scope.ts";
 
 const UuidSchema = z.string().uuid();
 const LearnSourceMaterialSchema = z
@@ -225,6 +227,7 @@ export function buildLearnSessionPayload(
 
 function createDefaultLearnSessionService(options: LearnSessionRouteOptions): LearnSessionRouteService {
   const db = resolveRouteDb(options);
+  const localFallback = shouldUseLocalLearnSessionFallback(db);
 
   return {
     async create(input, request) {
@@ -235,16 +238,20 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
         rawIdea: seedRawIdea,
         sessionId: input.sessionId ?? randomUUID(),
       };
-      const provider = options.provider ?? createDefaultBrainSeedProvider();
+      const provider = options.provider ?? (localFallback ? createHeuristicBrainSeedProvider() : createDefaultBrainSeedProvider());
       const prepareSeedRun =
         options.prepareSeedRun ??
         ((runInput: BrainSeedInput, prepareOptions: { db?: PennyDatabase; run: BrainSeedRunInput }) =>
-          createBrainSeedPrelude(requireRouteDb(prepareOptions.db), runInput, prepareOptions.run));
+          localFallback
+            ? createLocalBrainSeedPrelude(runInput, prepareOptions.run)
+            : createBrainSeedPrelude(requireRouteDb(prepareOptions.db), runInput, prepareOptions.run));
       const generateSeed = options.generateSeed ?? generateBrainSeed;
       const persistSeedFn =
         options.persistSeed ??
         ((seed: BrainSeedOutput, persistOptions: { db?: PennyDatabase; prelude: BrainSeedPrelude }) =>
-          persistBrainSeed(requireRouteDb(persistOptions.db), persistOptions.prelude, seed));
+          localFallback
+            ? createLocalPersistedBrainSeed(seed, persistOptions.prelude)
+            : persistBrainSeed(requireRouteDb(persistOptions.db), persistOptions.prelude, seed));
       const failSeedRun =
         options.failSeedRun ??
         ((prelude: BrainSeedPrelude, error: unknown, failOptions: { db?: PennyDatabase }) =>
@@ -252,6 +259,10 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
       const tickAutopilot =
         options.tickAutopilot ??
         (async (tickInput: { sessionId: EntityId; resume?: boolean; limit?: number }) => {
+          if (localFallback) {
+            return localLearnAutopilotResponse(tickInput.sessionId);
+          }
+
           const repository = createBrainRepository(requireRouteDb(db));
           const service = new ThinkingModeService(repository);
 
@@ -314,6 +325,284 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
         throw error;
       }
     },
+  };
+}
+
+function shouldUseLocalLearnSessionFallback(db: PennyDatabase | undefined): boolean {
+  const authMode = process.env.PENNY_AUTH_MODE?.trim();
+
+  return !db && readEnvFlag("PENNY_SKIP_DATABASE_PREP", false) && (!authMode || authMode === "dev");
+}
+
+function createLocalBrainSeedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): BrainSeedPrelude {
+  const now = new Date();
+  const sessionId = input.sessionId ?? randomUUID();
+  const sourceId = randomUUID();
+  const scope = scopeValues(run.scope);
+
+  return {
+    session: {
+      id: sessionId,
+      ...scope,
+      status: "open",
+      title: input.rawIdea.slice(0, 120),
+      createdAt: now,
+      endedAt: null,
+    },
+    source: {
+      id: sourceId,
+      ...scope,
+      sessionId,
+      kind: "raw_idea",
+      rawText: input.rawIdea,
+      createdAt: now,
+    },
+    submittedSourceSpan: {
+      id: randomUUID(),
+      sourceId,
+      claimId: null,
+      claimVersionId: null,
+      startOffset: 0,
+      endOffset: input.rawIdea.length,
+      label: "submitted_text",
+      createdAt: now,
+    },
+    brainRun: {
+      id: randomUUID(),
+      ...scope,
+      sessionId,
+      sourceId,
+      operation: run.operation,
+      provider: run.provider,
+      model: run.model ?? null,
+      status: "running",
+      input: run.input,
+      output: null,
+      error: null,
+      createdAt: run.startedAt ?? now,
+      completedAt: null,
+    },
+  };
+}
+
+function createLocalPersistedBrainSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): PersistedBrainSeed {
+  const now = new Date();
+  const sessionId = prelude.session.id;
+  const sourceId = prelude.source.id;
+  const scope = scopeValues(prelude.session);
+  const claims = seed.thoughtMap.claims.map((claim) => ({
+    id: randomUUID(),
+    seedId: claim.id,
+    ...scope,
+    sessionId,
+    sourceId,
+    kind: claim.kind,
+    createdAt: now,
+  }));
+  const claimIds = new Map(claims.map((claim) => [claim.seedId, claim.id]));
+  const claimVersions = seed.thoughtMap.claims.map((claim) => ({
+    id: randomUUID(),
+    seedId: claim.id,
+    claimId: requireMappedId(claimIds, claim.id),
+    sourceId,
+    brainRunId: prelude.brainRun.id,
+    moveId: null,
+    content: claim.text,
+    status: "exploratory" as const,
+    confidence: claim.confidence,
+    isCurrent: true,
+    validFrom: now,
+    validUntil: null,
+    supersededByVersionId: null,
+    createdAt: now,
+  }));
+  const claimVersionIds = new Map(claimVersions.map((version) => [version.seedId, version.id]));
+  const edges = seed.thoughtMap.edges.map((edge) => ({
+    id: randomUUID(),
+    seedId: edge.id,
+    ...scope,
+    sessionId,
+    fromClaimId: requireMappedId(claimIds, edge.fromClaimId),
+    toClaimId: requireMappedId(claimIds, edge.toClaimId),
+    kind: edge.kind,
+    status: "active" as const,
+    label: edge.label,
+    createdAt: now,
+  }));
+  const edgeIds = new Map(edges.map((edge) => [edge.seedId, edge.id]));
+  const moves = [
+    localSeedMove("move.source_recorded", "source.recorded", prelude, []),
+    localSeedMove("move.seed_claim_created", "seed_claim_created", prelude, [requireMappedId(claimIds, seed.seedClaim.id)]),
+    localSeedMove(
+      "move.assumptions_extracted",
+      "assumptions_extracted",
+      prelude,
+      seed.assumptions.map((assumption) => requireMappedId(claimIds, assumption.id)),
+    ),
+    localSeedMove("move.first_challenge_suggested", "first_challenge_suggested", prelude, [
+      requireMappedId(claimIds, seed.firstChallenge.targetClaimId),
+    ]),
+  ];
+
+  return {
+    session: prelude.session,
+    source: prelude.source,
+    submittedSourceSpan: prelude.submittedSourceSpan,
+    claims,
+    claimVersions,
+    edges,
+    moves,
+    brainRun: {
+      ...prelude.brainRun,
+      status: "succeeded",
+      output: seed,
+      error: null,
+      completedAt: now,
+    },
+    idMaps: {
+      claimIds,
+      claimVersionIds,
+      edgeIds,
+    },
+  };
+}
+
+function localSeedMove(
+  seedId: string,
+  kind: PersistedBrainSeed["moves"][number]["kind"],
+  prelude: BrainSeedPrelude,
+  claimIds: string[],
+): PersistedBrainSeed["moves"][number] & { seedId: string } {
+  return {
+    id: randomUUID(),
+    seedId,
+    ...scopeValues(prelude.session),
+    sessionId: prelude.session.id,
+    kind,
+    summary: seedId,
+    payload: {
+      claimIds,
+      edgeIds: [],
+      sourceIds: [prelude.source.id],
+      sourceSpanIds: [prelude.submittedSourceSpan.id],
+    },
+    createdAt: new Date(),
+  };
+}
+
+function localLearnAutopilotResponse(sessionId: EntityId): ThinkingModeTickResponse {
+  const targetClaimId = randomUUID();
+  const selectedCandidate = localLearnCandidate(sessionId, "learn", "learn", "Continue the Learn path", targetClaimId, 1);
+
+  return {
+    status: "ready",
+    brainId: sessionId,
+    sessionId,
+    focusState: {
+      sessionId,
+      mode: "learn",
+      focusedClaimId: targetClaimId,
+      focusedEdgeId: null,
+      source: "autopilot_suggestion",
+      suggestionMoveId: randomUUID(),
+      manualMoveId: null,
+      paused: false,
+      reason: "Local Learn fallback picked the next concept.",
+      updatedAt: new Date().toISOString(),
+    },
+    modeContract: {
+      validModes: ["Learn", "Create", "Brain"],
+      activeMode: "Learn",
+    },
+    candidates: [
+      selectedCandidate,
+      localLearnCandidate(sessionId, "check", "challenge", "Pressure-test weakest claim", targetClaimId, 2),
+      localLearnCandidate(sessionId, "verify", "verify", "Verify with evidence", targetClaimId, 3),
+    ],
+    selectedCandidate,
+    graphHash: `local-learn-${sessionId}`,
+    persistedMoveIds: [],
+    move: {
+      id: randomUUID(),
+      kind: "next_move_recomputed",
+      summary: "Local Learn fallback picked the next move.",
+      payload: {},
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
+
+function localLearnCandidate(
+  sessionId: EntityId,
+  userAction: "learn" | "check" | "verify" | "save_to_brain",
+  mode: "learn" | "challenge" | "verify" | "artifact",
+  label: string,
+  targetClaimId: string,
+  rank: number,
+): ThinkingModeTickResponse["candidates"][number] {
+  const action = userAction === "check" ? "challenge" : userAction;
+  const graphHash = `local-learn-${sessionId}`;
+
+  return {
+    id: randomUUID(),
+    candidateId: `local-learn-${userAction}`,
+    fingerprint: `local-learn-${sessionId}-${userAction}`,
+    rank,
+    title: label,
+    targetClaimId,
+    targetEdgeId: null,
+    target: {
+      type: "claim",
+      id: targetClaimId,
+      claimId: targetClaimId,
+      edgeId: null,
+    },
+    action,
+    userAction,
+    mode,
+    mvpMode: mode === "learn" ? "Learn" : "Create",
+    label,
+    ctaLabel: label,
+    primaryActionLabel: label,
+    score: 800 - rank,
+    priority: {
+      rank,
+      score: 800 - rank,
+      normalized: 80 - rank,
+    },
+    confidence: 80,
+    reason: `${label}.`,
+    whyNow: `${label}.`,
+    whyPennyRecommendsThis: `Why Penny recommends this: ${label}.`,
+    reasonCodes: [userAction],
+    exitCriteria: {
+      label: `${label} completes.`,
+      acceptedMoveKinds: [],
+    },
+    scoreBreakdown: {
+      leverage: 80,
+      fragility: 70,
+      stakes: 70,
+      readiness: 80,
+      momentum: 70,
+      novelty: 60,
+      shape: 0,
+      penalties: 0,
+    },
+    graphHash,
+    provenance: {
+      engine: "thinking-mode-next-move-v1",
+      graphHash,
+      source: "thinking_graph_snapshot",
+      ruleIds: [`local_${userAction}`],
+      claimIds: [targetClaimId],
+      edgeIds: [],
+      moveIds: [],
+      artifactIds: [],
+    },
+    candidateBrainObjects: [],
+    selected: rank === 1,
+    selectedAt: rank === 1 ? new Date().toISOString() : null,
   };
 }
 
@@ -748,6 +1037,26 @@ function requireRouteDb(db: PennyDatabase | undefined): PennyDatabase {
 
 function dbOption(db: PennyDatabase | undefined): { db?: PennyDatabase } {
   return db ? { db } : {};
+}
+
+function requireMappedId(ids: Map<string, string>, seedId: string): string {
+  const mappedId = ids.get(seedId);
+
+  if (!mappedId) {
+    throw new Error(`Missing local Learn persistence id for ${seedId}.`);
+  }
+
+  return mappedId;
+}
+
+function readEnvFlag(name: string, fallback: boolean): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+
+  if (!value) {
+    return fallback;
+  }
+
+  return value === "1" || value === "true" || value === "yes" || value === "on";
 }
 
 function jsonResponse(payload: unknown, status: number, headers: Record<string, string> = {}): Response {

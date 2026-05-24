@@ -33,6 +33,37 @@ test("POST /api/learn/session validates dropped ideas before generation", async 
   assert.equal(generated, false);
 });
 
+test("POST /api/learn/session uses a local fallback when database prep is skipped in dev", async () => {
+  const previousSkipDatabasePrep = process.env.PENNY_SKIP_DATABASE_PREP;
+  const previousAuthMode = process.env.PENNY_AUTH_MODE;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+
+  process.env.PENNY_SKIP_DATABASE_PREP = "true";
+  process.env.PENNY_AUTH_MODE = "dev";
+  delete process.env.DATABASE_URL;
+
+  try {
+    const rawIdea = "Penny should help founders learn whether a pricing memo's customer urgency and product scope are worth saving.";
+    const response = await handleLearnSessionRequest(
+      request("http://localhost/api/learn/session", {
+        rawIdea,
+        autopilot: { limit: 3 },
+      }),
+    );
+    const payload = (await response.json()) as { data: LearnSessionPayload };
+
+    assert.equal(response.status, 201, JSON.stringify(payload));
+    assert.match(payload.data.source.rawText, /pricing memo/i);
+    assert.equal(payload.data.learn.sessionV2.sourceOfTruth, "ai_generated_learn_pages_validated_locally");
+    assert.ok(payload.data.learn.sessionV2.pages.length >= 1);
+    assert.equal(payload.data.autopilot.modeContract.activeMode, "Learn");
+  } finally {
+    restoreEnv("PENNY_SKIP_DATABASE_PREP", previousSkipDatabasePrep);
+    restoreEnv("PENNY_AUTH_MODE", previousAuthMode);
+    restoreEnv("DATABASE_URL", previousDatabaseUrl);
+  }
+});
+
 test("POST /api/learn/session structures a dropped idea and ticks Autopilot", async () => {
   let preparedRun: BrainSeedRunInput | undefined;
   let tickedSessionId: string | undefined;
@@ -172,6 +203,14 @@ function request(url: string, body: unknown): Request {
     },
     body: JSON.stringify(body),
   });
+}
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
 }
 
 function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): BrainSeedPrelude {
