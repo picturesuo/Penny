@@ -378,7 +378,7 @@ function LearningPathSidebar({
 
           return (
             <li key={step.id} className={isActive ? "is-active" : ""}>
-              <button type="button" onClick={() => onStepSelect(step.id)}>
+              <button type="button" aria-current={isActive ? "step" : undefined} onClick={() => onStepSelect(step.id)}>
                 <span>{index + 1}</span>
                 <strong>{step.title}</strong>
               </button>

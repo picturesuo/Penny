@@ -105,6 +105,7 @@ test("LearnWorkspace renders the Create Learn bridge with a Back to Create contr
   assert.match(markup, /Explain simply/);
   assert.match(markup, /Show worked example/);
   assert.match(markup, /Apply to my artifact/);
+  assert.match(markup, /aria-current="step"/);
   assert.match(markup, /explicit judgment events are the things you deliberately do/i);
   assert.match(markup, /selecting cards, writing comments, and rating exports/i);
   assert.match(markup, /data-testid="learn-understanding-tour"/);
