@@ -106,7 +106,7 @@ live Gmail is either disabled or backed by a verified final staging evidence bun
 For offline schema evidence, print the exact required table list first:
 
 ```sh
-pnpm check:public-readiness -- --print-required-schema-tables > tmp/schema-tables.json
+pnpm --silent check:public-readiness -- --print-required-schema-tables > tmp/schema-tables.json
 pnpm check:public-readiness -- --schema-tables-file=tmp/schema-tables.json
 ```
 
