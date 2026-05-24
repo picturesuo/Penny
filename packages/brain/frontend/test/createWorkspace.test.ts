@@ -108,11 +108,12 @@ test("CreateEvidenceLedgerPanel separates past evidence from interpreted taste",
     createElement(CreateEvidenceLedgerPanel, {
       options: [memoryGroundedOption(), contextLightOption()],
       selectedOptionIds: ["create-option-personal"],
+      rejectedOptionIds: ["create-option-practical"],
     }),
   );
 
   assert.match(markup, /data-testid="create-evidence-ledger"/);
-  assert.match(markup, /Selected Personal/);
+  assert.match(markup, /Selected Personal; rejected Practical/);
   assert.match(markup, /Evidence from past/);
   assert.match(markup, /Project: founder workflow/);
   assert.match(markup, /Founder workflow notes/);
@@ -392,6 +393,7 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
           ],
         },
         selectedOptions: [optionForLens("Personal"), optionForLens("Critical")],
+        rejectedOptions: [optionForLens("Weird")],
         userComment: "Keep the founder/builder evidence visible.",
       }),
       createElement(CreateVerificationPanel, {
@@ -460,6 +462,8 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Selected Create directions/);
   assert.match(markup, /Idea Spec inputs/);
   assert.match(markup, /Selected history/);
+  assert.match(markup, /Rejected directions/);
+  assert.match(markup, /Rejected directions<\/span><p>Weird<\/p>/);
   assert.match(markup, /Keep the founder\/builder evidence visible/);
   assert.match(markup, /2 past evidence refs/);
   assert.match(markup, /1 taste signals kept separate/);
