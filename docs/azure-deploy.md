@@ -226,7 +226,7 @@ cd tmp/penny-public-snapshot
 node scripts/check-public-repo-safety.mjs --strict
 ```
 
-The snapshot is a new one-commit Git repository generated from the current tracked tree. It excludes `docs/proof/**` and tracked local env files, and writes `PUBLIC-SNAPSHOT.md` with the source commit. After reviewing the snapshot, publish that directory to a new public GitHub repo instead of changing visibility on the private repository's full history.
+The snapshot is a new one-commit Git repository generated from the current tracked tree. It excludes `docs/proof/**`, tracked local env files, and unallowlisted binary/media files, then writes `PUBLIC-SNAPSHOT.md` with the source commit. After reviewing the snapshot, publish that directory to a new public GitHub repo instead of changing visibility on the private repository's full history.
 
 ## Cost Guardrails
 
