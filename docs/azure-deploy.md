@@ -200,6 +200,16 @@ Required GitHub secrets are `ACR_LOGIN_SERVER`, `ACR_USERNAME`, `ACR_PASSWORD`, 
 
 The workflow builds and pushes the container, applies strict Penny settings, restarts App Service, and runs `scripts/smoke-public-staging.mjs` against the deployed URL.
 
+## Repo Visibility And Actions Minutes
+
+GitHub's billing docs say standard GitHub-hosted Actions runners are free for public repositories, while private repositories spend included minutes. Do not flip Penny public just to save minutes until the tracked repo has passed a publication review:
+
+```sh
+pnpm check:public-repo-safety
+```
+
+The checker fails on tracked env files or high-confidence secret patterns. It also warns on committed proof screenshots, videos, and traces under `docs/proof/`; those artifacts should be reviewed or moved out of the public history before changing repository visibility.
+
 ## Cost Guardrails
 
 - Set a monthly Azure budget alert immediately after creating the resource group.
