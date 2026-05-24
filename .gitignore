@@ -5,6 +5,7 @@ dist/
 coverage/
 test-results/
 tmp/
+.tmp*/
 *.tsbuildinfo
 package-lock.json
 .env
