@@ -1,12 +1,19 @@
 import { createHash } from "node:crypto";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
+import { and, desc, eq, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { resolveDefaultBrainRankerRecorder, type BrainRankerRecorder, type RecordBrainDevelopmentEventInput } from "./brain-ranker-persistence.ts";
 import { rankBrainForCreate, type BrainGroundingLabel, type BrainRankedCandidate, type BrainRankerResult, type NextBestMove } from "./brain-ranker.ts";
 import { retrieveBrainMemoryForCreate } from "./brain-memory-route.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { createExportFeedback as createExportFeedbackTable } from "./db/schema.ts";
+import {
+  createArtifacts as createArtifactsTable,
+  createExportFeedback as createExportFeedbackTable,
+  createJudgmentEvents as createJudgmentEventsTable,
+  createOptionSets as createOptionSetsTable,
+} from "./db/schema.ts";
 import { emitPennyLog } from "./observability.ts";
 import { scopeValues, type BrainScope } from "./scope.ts";
 
@@ -267,6 +274,14 @@ export type CreateRouteService = {
   exportCodingPrompt(input: ExportCodingPromptInput, request: Request): Promise<{ export: PromptExport }>;
 };
 
+export type CreateWorkspaceStateStore = {
+  getOptionSet(scope: BrainScope, optionSetId: string): Promise<OptionSet | null>;
+  saveOptionSet(scope: BrainScope, optionSet: OptionSet): Promise<void>;
+  getArtifact(scope: BrainScope, projectId: string, sessionId: string): Promise<CodingPromptArtifact | null>;
+  saveArtifact(scope: BrainScope, artifact: CodingPromptArtifact): Promise<void>;
+  appendJudgment(scope: BrainScope, judgmentEvent: JudgmentEvent): Promise<void>;
+};
+
 export type CreateExportFeedbackService = {
   submit(input: CreateExportFeedbackInput, request: Request): Promise<{ feedback: CreateExportFeedback }>;
 };
@@ -504,8 +519,10 @@ const CreateExportFeedbackBodySchema = z
   })
   .strict();
 
-const defaultCreateRouteService = createInMemoryCreateRouteService();
 const defaultCreateExportFeedbackStore = new Map<string, CreateExportFeedback>();
+const defaultCreateWorkspaceStateStore = createInMemoryCreateWorkspaceStateStore();
+let defaultCreateRouteServiceCache: CreateRouteService | null = null;
+let defaultCreateRouteServiceCacheKey: string | null = null;
 let defaultCreateExportFeedbackServiceCache: CreateExportFeedbackService | null = null;
 let defaultCreateExportFeedbackServiceCacheKey: string | null = null;
 
@@ -520,7 +537,7 @@ export async function handleCreateNextRequest(request: Request, options: CreateR
   }
 
   try {
-    const service = options.service ?? defaultCreateRouteService;
+    const service = options.service ?? resolveDefaultCreateRouteService();
     const result = await service.next(parsed.data, request);
     emitCreateNextLogs(result);
 
@@ -542,7 +559,7 @@ export async function handleCreateCompareRequest(request: Request, options: Crea
   }
 
   try {
-    const service = options.service ?? defaultCreateRouteService;
+    const service = options.service ?? resolveDefaultCreateRouteService();
     return jsonResponse({ data: await service.compare(parsed.data, request) });
   } catch (error) {
     return createErrorResponse(error);
@@ -563,7 +580,7 @@ export async function handleExportCodingPromptRequest(
   }
 
   try {
-    const service = options.service ?? defaultCreateRouteService;
+    const service = options.service ?? resolveDefaultCreateRouteService();
     const result = await service.exportCodingPrompt(parsed.data, request);
     emitPennyLog("create.prompt_export", {
       status: "completed",
@@ -661,9 +678,17 @@ export class CreateRouteValidationError extends Error {
 }
 
 export function createInMemoryCreateRouteService(options: CreateRouteServiceOptions = {}): CreateRouteService {
-  const optionSets = new Map<string, OptionSet>();
-  const artifacts = new Map<string, CodingPromptArtifact>();
-  const judgments = new Map<string, JudgmentEvent[]>();
+  return createPersistentCreateRouteService(createInMemoryCreateWorkspaceStateStore(), options);
+}
+
+export function createDbCreateRouteService(db: PennyDatabase, options: CreateRouteServiceOptions = {}): CreateRouteService {
+  return createPersistentCreateRouteService(createDbCreateWorkspaceStateStore(db), options);
+}
+
+function createPersistentCreateRouteService(
+  stateStore: CreateWorkspaceStateStore,
+  options: CreateRouteServiceOptions = {},
+): CreateRouteService {
   const optionProvider = options.optionProvider === undefined ? createDefaultCreateOptionProvider() : options.optionProvider;
   const rankerRecorder = options.rankerRecorder === undefined ? resolveDefaultBrainRankerRecorder() : options.rankerRecorder;
 
@@ -687,8 +712,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         retrievalResults: retrievedMemory.results,
         now,
       });
-      const scopedSessionKey = createScopeStorageKey(scope, sessionId);
-      const existingOptionSet = persist && input.optionSetId ? optionSets.get(createScopeStorageKey(scope, input.optionSetId)) ?? null : null;
+      const existingOptionSet = persist && input.optionSetId ? await stateStore.getOptionSet(scope, input.optionSetId) : null;
       const generated =
         existingOptionSet
           ? {
@@ -719,7 +743,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         });
       }
 
-      const priorArtifact = input.artifact ?? artifacts.get(scopedSessionKey) ?? null;
+      const priorArtifact = input.artifact ?? (persist ? await stateStore.getArtifact(scope, projectId, sessionId) : null);
       const selectedOptions = optionSet.options.filter((option) => input.selectedOptionIds.includes(option.id));
       const baseArtifact = priorArtifact ?? buildInitialArtifact({ projectId, sessionId, rawIdea, optionSet, now });
       let artifact = baseArtifact;
@@ -750,7 +774,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
           judgmentEventIds: unique([...artifact.judgmentEventIds, judgmentEvent.id]),
         };
         if (persist) {
-          judgments.set(scopedSessionKey, [...(judgments.get(scopedSessionKey) ?? []), judgmentEvent]);
+          await stateStore.appendJudgment(scope, judgmentEvent);
         }
         if (persist && rankerRecorder) {
           await recordCreateJudgmentDevelopmentEvents(rankerRecorder, {
@@ -780,8 +804,8 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
       };
 
       if (persist) {
-        optionSets.set(createScopeStorageKey(scope, optionSet.id), optionSet);
-        artifacts.set(scopedSessionKey, artifact);
+        await stateStore.saveOptionSet(scope, optionSet);
+        await stateStore.saveArtifact(scope, artifact);
       }
       const verification = verifyArtifact(artifact, optionSet, judgmentEvent);
       const canvas = buildCreateCanvasSnapshot({ optionSet, artifact, judgmentEvent });
@@ -857,6 +881,185 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
       };
     },
   };
+}
+
+export function createInMemoryCreateWorkspaceStateStore(): CreateWorkspaceStateStore {
+  const optionSets = new Map<string, OptionSet>();
+  const artifacts = new Map<string, CodingPromptArtifact>();
+  const judgments = new Map<string, JudgmentEvent[]>();
+
+  return {
+    async getOptionSet(scope, optionSetId) {
+      return optionSets.get(createScopeStorageKey(scope, optionSetId)) ?? null;
+    },
+
+    async saveOptionSet(scope, optionSet) {
+      optionSets.set(createScopeStorageKey(scope, optionSet.id), optionSet);
+    },
+
+    async getArtifact(scope, projectId, sessionId) {
+      return artifacts.get(createWorkspaceStorageKey(scope, projectId, sessionId)) ?? null;
+    },
+
+    async saveArtifact(scope, artifact) {
+      artifacts.set(createWorkspaceStorageKey(scope, artifact.projectId, artifact.sessionId), artifact);
+    },
+
+    async appendJudgment(scope, judgmentEvent) {
+      const key = createWorkspaceStorageKey(scope, judgmentEvent.projectId, judgmentEvent.sessionId);
+      judgments.set(key, [...(judgments.get(key) ?? []), judgmentEvent]);
+    },
+  };
+}
+
+export function createDbCreateWorkspaceStateStore(db: PennyDatabase): CreateWorkspaceStateStore {
+  return {
+    async getOptionSet(scope, optionSetId) {
+      const [row] = await db
+        .select()
+        .from(createOptionSetsTable)
+        .where(and(eq(createOptionSetsTable.id, optionSetId), scopeCondition(createOptionSetsTable, scope)))
+        .limit(1);
+
+      return row ? optionSetFromDbRow(row) : null;
+    },
+
+    async saveOptionSet(scope, optionSet) {
+      await db
+        .insert(createOptionSetsTable)
+        .values({
+          ...scopeDbValues(scope),
+          id: optionSet.id,
+          createProjectId: optionSet.projectId,
+          createSessionId: optionSet.sessionId,
+          sourceOfTruth: optionSet.sourceOfTruth,
+          rawIdea: optionSet.rawIdea,
+          options: optionSet.options,
+          nextBestMove: optionSet.nextBestMove,
+          rankedCandidates: optionSet.rankedCandidates,
+          memoryUsed: optionSet.memoryUsed,
+          sourcesUsed: optionSet.sourcesUsed,
+          createdAt: new Date(optionSet.createdAt),
+        })
+        .onConflictDoUpdate({
+          target: createOptionSetsTable.id,
+          set: {
+            sourceOfTruth: optionSet.sourceOfTruth,
+            rawIdea: optionSet.rawIdea,
+            options: optionSet.options,
+            nextBestMove: optionSet.nextBestMove,
+            rankedCandidates: optionSet.rankedCandidates,
+            memoryUsed: optionSet.memoryUsed,
+            sourcesUsed: optionSet.sourcesUsed,
+          },
+        });
+    },
+
+    async getArtifact(scope, projectId, sessionId) {
+      const [row] = await db
+        .select()
+        .from(createArtifactsTable)
+        .where(
+          and(
+            scopeCondition(createArtifactsTable, scope),
+            eq(createArtifactsTable.createProjectId, projectId),
+            eq(createArtifactsTable.createSessionId, sessionId),
+          ),
+        )
+        .orderBy(desc(createArtifactsTable.updatedAt))
+        .limit(1);
+
+      return row ? artifactFromDbRow(row) : null;
+    },
+
+    async saveArtifact(scope, artifact) {
+      await db
+        .insert(createArtifactsTable)
+        .values({
+          ...scopeDbValues(scope),
+          id: artifact.id,
+          createProjectId: artifact.projectId,
+          createSessionId: artifact.sessionId,
+          title: artifact.title,
+          version: artifact.version,
+          rawIdea: artifact.rawIdea,
+          sections: artifact.sections,
+          sourceOptionSetIds: artifact.sourceOptionSetIds,
+          judgmentEventIds: artifact.judgmentEventIds,
+          updatedAt: new Date(artifact.updatedAt),
+        })
+        .onConflictDoUpdate({
+          target: createArtifactsTable.id,
+          set: {
+            title: artifact.title,
+            version: artifact.version,
+            rawIdea: artifact.rawIdea,
+            sections: artifact.sections,
+            sourceOptionSetIds: artifact.sourceOptionSetIds,
+            judgmentEventIds: artifact.judgmentEventIds,
+            updatedAt: new Date(artifact.updatedAt),
+          },
+        });
+    },
+
+    async appendJudgment(scope, judgmentEvent) {
+      await db
+        .insert(createJudgmentEventsTable)
+        .values({
+          ...scopeDbValues(scope),
+          id: judgmentEvent.id,
+          createProjectId: judgmentEvent.projectId,
+          createSessionId: judgmentEvent.sessionId,
+          optionSetId: judgmentEvent.optionSetId,
+          selectedOptionIds: judgmentEvent.selectedOptionIds,
+          userComment: judgmentEvent.userComment,
+          inferredSignals: judgmentEvent.inferredSignals,
+          artifactDelta: judgmentEvent.artifactDelta,
+          createdAt: new Date(judgmentEvent.createdAt),
+        })
+        .onConflictDoNothing();
+    },
+  };
+}
+
+function resolveDefaultCreateRouteService(): CreateRouteService {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  const useLocalInMemoryFallback = shouldUseLocalInMemoryCreateRoute(databaseUrl);
+  const cacheKey =
+    databaseUrl && !useLocalInMemoryFallback ? `db:${databaseUrl}` : `memory:${createRuntimeKind()}:local-fallback`;
+
+  if (defaultCreateRouteServiceCache && defaultCreateRouteServiceCacheKey === cacheKey) {
+    return defaultCreateRouteServiceCache;
+  }
+
+  if (databaseUrl && !useLocalInMemoryFallback) {
+    defaultCreateRouteServiceCache = createDbCreateRouteService(createPennyDb(databaseUrl), {
+      rankerRecorder: resolveDefaultBrainRankerRecorder(),
+    });
+    defaultCreateRouteServiceCacheKey = cacheKey;
+    return defaultCreateRouteServiceCache;
+  }
+
+  if (createRuntimeKind() !== "dev-test") {
+    throw new Error(
+      "DATABASE_URL is required for Create workspace persistence in production. In-memory Create state is only for local dev/test.",
+    );
+  }
+
+  defaultCreateRouteServiceCache = createPersistentCreateRouteService(defaultCreateWorkspaceStateStore);
+  defaultCreateRouteServiceCacheKey = cacheKey;
+
+  return defaultCreateRouteServiceCache;
+}
+
+function shouldUseLocalInMemoryCreateRoute(databaseUrl: string | undefined): boolean {
+  if (!databaseUrl || createRuntimeKind() !== "dev-test") {
+    return false;
+  }
+
+  const authMode = process.env.PENNY_AUTH_MODE?.trim().toLowerCase();
+
+  return readEnvFlag("PENNY_SKIP_DATABASE_PREP", false) && (!authMode || authMode === "dev");
 }
 
 export function createInMemoryCreateExportFeedbackService(
@@ -2471,8 +2674,105 @@ function createScopeStorageKey(scope: BrainScope, id: string): string {
     .join("\u001f");
 }
 
+function createWorkspaceStorageKey(scope: BrainScope, projectId: string, sessionId: string): string {
+  return createScopeStorageKey(scope, `${projectId}\u001f${sessionId}`);
+}
+
+function optionSetFromDbRow(row: typeof createOptionSetsTable.$inferSelect): OptionSet {
+  return {
+    id: row.id,
+    projectId: row.createProjectId,
+    sessionId: row.createSessionId,
+    sourceOfTruth: createOptionSetSourceOfTruth(row.sourceOfTruth),
+    rawIdea: row.rawIdea,
+    options: jsonArray<CandidateOption>(row.options),
+    nextBestMove: row.nextBestMove as NextBestMove,
+    rankedCandidates: jsonArray<BrainRankedCandidate>(row.rankedCandidates),
+    memoryUsed: jsonArray<MemoryRef>(row.memoryUsed),
+    sourcesUsed: jsonArray<SourceRef>(row.sourcesUsed),
+    createdAt: isoFromDbDate(row.createdAt),
+  };
+}
+
+function artifactFromDbRow(row: typeof createArtifactsTable.$inferSelect): CodingPromptArtifact {
+  return CodingPromptArtifactSchema.parse({
+    id: row.id,
+    projectId: row.createProjectId,
+    sessionId: row.createSessionId,
+    title: row.title,
+    version: row.version,
+    rawIdea: row.rawIdea,
+    sections: jsonArray<ArtifactSection>(row.sections),
+    sourceOptionSetIds: row.sourceOptionSetIds,
+    judgmentEventIds: row.judgmentEventIds,
+    updatedAt: isoFromDbDate(row.updatedAt),
+  });
+}
+
+function createOptionSetSourceOfTruth(value: string): OptionSet["sourceOfTruth"] {
+  return value === "rough_idea_context_model_backed_create_lenses"
+    ? "rough_idea_context_model_backed_create_lenses"
+    : "rough_idea_context_deterministic_create_lenses";
+}
+
+function jsonArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function isoFromDbDate(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function scopeDbValues(scope: BrainScope): BrainScope {
+  return {
+    userId: scope.userId,
+    workspaceId: scope.workspaceId,
+    projectId: scope.projectId,
+    sphereId: scope.sphereId,
+  };
+}
+
+function scopeCondition(
+  table: {
+    userId: AnyPgColumn;
+    workspaceId: AnyPgColumn;
+    projectId: AnyPgColumn;
+    sphereId: AnyPgColumn;
+  },
+  scope: BrainScope,
+) {
+  return and(
+    scopeValueCondition(table.userId, scope.userId),
+    scopeValueCondition(table.workspaceId, scope.workspaceId),
+    scopeValueCondition(table.projectId, scope.projectId),
+    scopeValueCondition(table.sphereId, scope.sphereId),
+  );
+}
+
+function scopeValueCondition(column: AnyPgColumn, value: string | null) {
+  return value === null ? sql`${column} IS NULL` : eq(column, value);
+}
+
 function createRuntimeKind(): "dev-test" | "production" {
   return process.env.NODE_ENV === "production" ? "production" : "dev-test";
+}
+
+function readEnvFlag(name: string, fallback: boolean): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+
+  if (!value) {
+    return fallback;
+  }
+
+  if (["1", "true", "yes", "on"].includes(value)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(value)) {
+    return false;
+  }
+
+  return fallback;
 }
 
 function firstPresentHeader(request: Request, names: string[]): string | undefined {
