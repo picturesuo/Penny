@@ -356,6 +356,15 @@ test("parseBrainSeedOutput rejects generic structured provider responses", () =>
       return true;
     },
   );
+
+  assert.throws(
+    () => parseBrainSeedOutput({ ...validSeedOutput, keyInsight: "This is generic advice." }),
+    (error) => {
+      assert.ok(error instanceof BrainSeedValidationError);
+      assert.match(error.issues.join("\n"), /keyInsight must be specific structured seed content/);
+      return true;
+    },
+  );
 });
 
 test("parseBrainSeedOutput rejects maps with dangling challenge references", () => {
@@ -448,6 +457,20 @@ test("heuristic provider keeps seed extraction usable without live AI credential
   assert.deepEqual(output.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
   assert.equal("moves" in output, false);
   assert.equal("artifacts" in output, false);
+});
+
+test("heuristic provider allows prompts that reject generic advice", async () => {
+  const rawIdea =
+    "Penny should help founders learn whether a messy pricing memo's customer urgency and product scope are worth saving without turning it into generic advice.";
+  const output = await generateBrainSeed(
+    { rawIdea },
+    { provider: createHeuristicBrainSeedProvider(), brainRunId: "00000000-0000-4000-8000-000000000705" },
+  );
+
+  assert.equal(output.seedClaim.text, rawIdea);
+  assert.ok(output.assumptions.length >= 3);
+  assert.match(output.assumptions[0]?.text ?? "", /pricing memo|generic advice/i);
+  assert.equal(output.firstChallenge.failureType, "definition_failure");
 });
 
 test("heuristic provider gives the YC demo idea a sharp first-loop structure", async () => {

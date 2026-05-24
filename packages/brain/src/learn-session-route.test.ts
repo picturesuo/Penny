@@ -43,7 +43,8 @@ test("POST /api/learn/session uses a local fallback when database prep is skippe
   process.env.DATABASE_URL = "postgresql://stale-user:stale-pass@invalid.invalid:5432/penny";
 
   try {
-    const rawIdea = "Penny should help founders learn whether a pricing memo's customer urgency and product scope are worth saving.";
+    const rawIdea =
+      "Penny should help founders learn whether a pricing memo's customer urgency and product scope are worth saving without turning it into generic advice.";
     const response = await handleLearnSessionRequest(
       request("http://localhost/api/learn/session", {
         rawIdea,

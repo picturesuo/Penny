@@ -305,6 +305,15 @@ function requireNonGenericText(
   label: string,
 ) {
   const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
+  const rejectsGenericResponse =
+    /\b(without|avoid(?:ing)?|reject(?:ing)?|not|no|never|do not|don't)\b.{0,80}\bgeneric (advice|answer|response)\b/.test(
+      normalized,
+    );
+
+  if (rejectsGenericResponse) {
+    return;
+  }
+
   const genericPatterns = [
     /\bas an ai\b/,
     /\bi can help\b/,

@@ -20,7 +20,7 @@ test("Learn turns arbitrary source material into a quiet source-to-concept tour"
   await page
     .getByRole("textbox", { name: /Enter a rough thought for Penny|Ask Penny anything/ })
     .fill(
-      "Penny should help founders learn whether a messy pricing memo's customer urgency and product scope are worth saving.",
+      "Penny should help founders learn whether a messy pricing memo's customer urgency and product scope are worth saving without turning it into generic advice.",
     );
   await page.getByRole("button", { name: "Send thought" }).click();
 
