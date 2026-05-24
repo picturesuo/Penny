@@ -4,7 +4,8 @@ import { basename, extname } from "node:path";
 import { readFileSync } from "node:fs";
 
 const allowedEnvFiles = new Set([".env.example"]);
-const proofMediaExtensions = new Set([".har", ".jpg", ".jpeg", ".mov", ".mp4", ".png", ".trace", ".webm", ".webp", ".zip"]);
+const mediaExtensions = new Set([".gif", ".har", ".jpg", ".jpeg", ".mov", ".mp4", ".pdf", ".png", ".trace", ".webm", ".webp", ".zip"]);
+const publicMediaAllowlist = new Set(["docs/assets/yc-demo-recording-path.png"]);
 const maxTextBytes = 2_000_000;
 const strictMode = process.argv.includes("--strict") || process.env.PENNY_PUBLIC_REPO_STRICT === "true";
 
@@ -35,8 +36,10 @@ for (const file of trackedFiles) {
 
   const extension = extname(file).toLowerCase();
 
-  if (file.startsWith("docs/proof/") && proofMediaExtensions.has(extension)) {
+  if (file.startsWith("docs/proof/") && mediaExtensions.has(extension)) {
     warnings.push(`${file}: proof media should be reviewed or removed before publicizing`);
+  } else if (mediaExtensions.has(extension) && !publicMediaAllowlist.has(file)) {
+    warnings.push(`${file}: media file is not public allowlisted`);
   }
 
   const buffer = readFileSync(file);
@@ -56,7 +59,7 @@ for (const file of trackedFiles) {
 }
 
 if (strictMode && warnings.length > 0) {
-  blockers.push(`${warnings.length} proof media review warning${warnings.length === 1 ? "" : "s"} must be cleared before publicizing`);
+  blockers.push(`${warnings.length} public repo review warning${warnings.length === 1 ? "" : "s"} must be cleared before publicizing`);
 }
 
 if (blockers.length > 0) {
