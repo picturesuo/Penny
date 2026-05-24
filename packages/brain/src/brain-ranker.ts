@@ -12,6 +12,7 @@ export type BrainDevelopmentEventKind =
   | "memory_wrong"
   | "memory_boosted"
   | "memory_forgotten"
+  | "memory_restored"
   | "profile_reviewed"
   | "memory_used_in_create"
   | "option_selected"
