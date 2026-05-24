@@ -5,21 +5,23 @@ Date: May 24, 2026
 ## Scope
 This report covers the local YC recording path:
 
-`Start Create` -> YC founder fixture import -> Create five cards -> visible Canvas -> inspect Personal evidence -> select Personal, Valuable, and Critical -> update artifact -> Learn this -> Back to Create -> Export prompt.
+`Start Create` -> YC founder fixture import -> Create five cards -> visible Canvas -> inspect Personal evidence -> select Personal, Valuable, and Critical -> update artifact -> Learn this -> reload while still in Learn -> Back to Create -> Export prompt.
 
 Visual evidence is captured under `docs/proof/yc-recording/`, including named screenshots for Landing, fixture/Create/Canvas, evidence, selections/comment, artifact, Learn, return-state preservation, and Export.
 
 ## Environment
 - Branch: `main`
-- Local URL: `http://localhost:3039`
-- Server command: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`
+- Local URL: `http://localhost:3048`
+- Server command: `PORT=3048 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`
 - Browser verification: Playwright e2e. The in-app Browser tool hit its virtual clipboard/DOM bridge limit during fresh prompt entry on this pass, so the Learn refresh uses Playwright as the authoritative browser proof.
 
 ## Verification
-- `pnpm test`: passed, 668 tests.
+- `pnpm test`: passed, 671 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
 - Prior in-app Browser smoke on `http://localhost:3039`: imported a Brain note, rendered the Brain export panel, exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails, then verified the Create path step buttons and Create export actions.
+- `PENNY_BASE_URL=http://localhost:3048 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-yc-learn-refresh`: passed, 1 test in 3.4s; this run reloads while still in the Create-origin Learn bridge, restores the Learn panel, then returns to Create with selections, comment, artifact, and evidence drawer preserved.
+- `PENNY_BASE_URL=http://localhost:3048 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs test/e2e/yc-recording.spec.cjs test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-e2e-create-learn-persist`: passed, 3 tests in 7.1s.
 - `PENNY_BASE_URL=http://localhost:3039 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs test/e2e/yc-recording.spec.cjs test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-e2e-latest`: passed, 3 tests in 8.1s.
 - Latest targeted Learn proof: `PENNY_BASE_URL=http://localhost:3042 pnpm dlx @playwright/test test test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-learn-understanding-tour`: passed, 1 test in 1.7s.
 - `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-playwright-results`: passed, 1 test in 2.6s.
