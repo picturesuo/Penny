@@ -375,6 +375,10 @@ test("missingPennySchemaTables reports dogfood-critical migration gaps", () => {
     missingPennySchemaTables(requiredPennySchemaTables.filter((table) => table !== "create_export_feedback")),
     ["create_export_feedback"],
   );
+  assert.deepEqual(
+    missingPennySchemaTables(requiredPennySchemaTables.filter((table) => table !== "create_artifacts")),
+    ["create_artifacts"],
+  );
 });
 
 test("startup env validation keeps local dev warnings explicit", () => {
