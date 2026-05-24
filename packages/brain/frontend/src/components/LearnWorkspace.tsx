@@ -557,6 +557,41 @@ export function MicroLessonSlide({
           {lesson.shortExplanation}
         </p>
       </section>
+
+      <LearnUnderstandingTour lesson={lesson} />
+    </section>
+  );
+}
+
+export function LearnUnderstandingTour({ lesson }: { lesson: LearnLesson }) {
+  const sourceSpan = lesson.sourceSpans[0] ?? null;
+  const tourItems = [
+    {
+      label: sourceSpan?.label ?? "Source",
+      title: "Grounding",
+      body: sourceSpan?.text ?? lesson.learningGoal,
+    },
+    {
+      label: "Move",
+      title: "What changes",
+      body: `Use ${lesson.title.toLowerCase()} as the active concept.`,
+    },
+    {
+      label: "Check",
+      title: "Can you use it?",
+      body: "Try the concept against the current source.",
+    },
+  ];
+
+  return (
+    <section className="learn-understanding-tour" aria-label="Source to concept tour" data-testid="learn-understanding-tour">
+      {tourItems.map((item) => (
+        <article key={`${item.label}-${item.title}`}>
+          <span>{item.label}</span>
+          <strong>{item.title}</strong>
+          <p>{truncateWords(item.body, 18)}</p>
+        </article>
+      ))}
     </section>
   );
 }

@@ -43,6 +43,10 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /EXAMPLE/);
   assert.match(markup, /Thinking graph/);
+  assert.match(markup, /data-testid="learn-understanding-tour"/);
+  assert.match(markup, /Grounding/);
+  assert.match(markup, /What changes/);
+  assert.match(markup, /Can you use it/);
   assert.doesNotMatch(markup, /Use &quot;Name the program&quot; to answer what YC would actually evaluate/);
   assert.doesNotMatch(markup, /Do not treat investor interest as stronger than founder proof/);
   assert.doesNotMatch(markup, /What shall we think through/);
@@ -86,6 +90,8 @@ test("LearnWorkspace renders the Create Learn bridge with a Back to Create contr
   assert.match(markup, /Apply to my artifact/);
   assert.match(markup, /explicit judgment events are the things you deliberately do/i);
   assert.match(markup, /selecting cards, writing comments, and rating exports/i);
+  assert.match(markup, /data-testid="learn-understanding-tour"/);
+  assert.match(markup, /What changes/);
   assert.match(markup, /Thinking graph/);
 });
 
