@@ -32,6 +32,7 @@ Result: `HTTP/1.1 200 OK`.
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm check:local-demo-readiness -- --port 3007 --smoke-output .tmp-local-demo-readiness
 pnpm smoke:local-demo -- --port 3007 --output .tmp-local-demo-smoke
 PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs --reporter=line --output=.tmp-brain-first
 PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-yc-recording-check
@@ -44,6 +45,7 @@ Results:
 - `pnpm typecheck`: passed.
 - `pnpm test`: passed, 641 tests.
 - `pnpm build`: passed.
+- `pnpm check:local-demo-readiness`: timed wrapper for typecheck, tests, build, and local demo browser smoke.
 - `pnpm smoke:local-demo`: wrapper command for the Brain-first, YC fixture, and Learn understanding browser specs.
 - Brain-first e2e: passed, including refresh restore assertions.
 - YC recording e2e: passed.
