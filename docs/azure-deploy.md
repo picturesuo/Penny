@@ -46,11 +46,22 @@ Set these on the web app:
 NODE_ENV=production
 PORT=3000
 WEBSITES_PORT=3000
-DATABASE_URL=postgresql://<user>:<password>@<postgres-host>:5432/postgres?sslmode=require
+PENNY_DEPLOY_ENV=private-alpha
+DATABASE_URL=postgresql://<user>:<password>@<postgres-host>:5432/<database>?sslmode=require
 PENNY_AUTH_MODE=token
 PENNY_API_TOKEN=<long-random-token>
+PENNY_SESSION_SECRET=<long-random-secret>
 PENNY_CORS_ORIGINS=https://mapenny.com,https://www.mapenny.com
+PENNY_RATE_LIMIT_MAX=120
+PENNY_RATE_LIMIT_WINDOW_MS=60000
+PENNY_AUTH_FAILURE_RATE_LIMIT_MAX=10
+PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS=60000
+PENNY_TRUST_AUTH_HEADERS=false
+PENNY_STRUCTURED_LOGS=true
+PENNY_CREATE_MODEL_BACKED=false
 PENNY_AUTO_MIGRATE=true
+ENABLE_GMAIL_CONNECTOR=false
+ENABLE_RESTRICTED_GOOGLE_SCOPES=false
 ```
 
 Optional provider settings:
@@ -64,7 +75,13 @@ ANTHROPIC_API_KEY=<secret>
 
 ## First Deploy
 
-From an authenticated Azure CLI session:
+The fastest path is the checked-in bootstrap script:
+
+```sh
+scripts/azure-bootstrap.sh
+```
+
+It creates the low-cost Azure resources, writes the required App Service settings, stores the matching GitHub Actions secrets, and starts the manual deploy workflow. From an authenticated Azure CLI session, the manual equivalent is:
 
 ```sh
 az account show
@@ -117,12 +134,22 @@ az webapp config appsettings set \
     NODE_ENV=production \
     PORT=3000 \
     WEBSITES_PORT=3000 \
+    PENNY_DEPLOY_ENV=private-alpha \
     PENNY_AUTH_MODE=token \
     PENNY_AUTO_MIGRATE=true \
+    PENNY_RATE_LIMIT_MAX=120 \
+    PENNY_RATE_LIMIT_WINDOW_MS=60000 \
+    PENNY_AUTH_FAILURE_RATE_LIMIT_MAX=10 \
+    PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS=60000 \
+    PENNY_TRUST_AUTH_HEADERS=false \
+    PENNY_STRUCTURED_LOGS=true \
+    PENNY_CREATE_MODEL_BACKED=false \
+    ENABLE_GMAIL_CONNECTOR=false \
+    ENABLE_RESTRICTED_GOOGLE_SCOPES=false \
     PENNY_CORS_ORIGINS=https://mapenny.com,https://www.mapenny.com
 ```
 
-Add `DATABASE_URL`, `PENNY_API_TOKEN`, and provider API keys in the Azure Portal so shell history does not capture secrets.
+Add `DATABASE_URL`, `PENNY_API_TOKEN`, `PENNY_SESSION_SECRET`, and provider API keys in the Azure Portal so shell history does not capture secrets.
 
 Use this `DATABASE_URL` shape:
 
@@ -163,19 +190,15 @@ Then add Azure-managed certificates for both custom domains in the App Service T
 
 ## GitHub Redeploys
 
-For now, the simplest low-cost deploy loop is:
+The GitHub Actions workflow is manual-only on purpose so normal commits do not burn Actions minutes:
 
 ```sh
-az acr build \
-  --registry pennyprodacr \
-  --image penny:latest .
-
-az webapp restart \
-  --resource-group penny-prod-rg \
-  --name penny-prod
+gh workflow run deploy-azure.yml --repo picturesuo/Penny --ref main
 ```
 
-Add GitHub Actions later once the Azure subscription, ACR, and app are confirmed. The workflow will need an Azure publish profile or federated identity credentials.
+Required GitHub secrets are `ACR_LOGIN_SERVER`, `ACR_USERNAME`, `ACR_PASSWORD`, `AZURE_CREDENTIALS`, `AZURE_RESOURCE_GROUP`, `AZURE_WEBAPP_NAME`, `DATABASE_URL`, `PENNY_API_TOKEN`, `PENNY_CORS_ORIGINS`, and `PENNY_SESSION_SECRET`. `PENNY_PUBLIC_SMOKE_BASE_URL` is optional; if omitted, the workflow smokes `https://<AZURE_WEBAPP_NAME>.azurewebsites.net`.
+
+The workflow builds and pushes the container, applies strict Penny settings, restarts App Service, and runs `scripts/smoke-public-staging.mjs` against the deployed URL.
 
 ## Cost Guardrails
 
@@ -193,4 +216,12 @@ curl -I https://mapenny.com
 curl -I https://www.mapenny.com
 ```
 
-Expected result: both return HTTP 200 or a normal app redirect. API calls should require `Authorization: Bearer <PENNY_API_TOKEN>` once production token auth is enabled.
+Expected result: each frontend URL returns HTTP 200 or a normal app redirect. API calls should require `Authorization: Bearer <PENNY_API_TOKEN>` once production token auth is enabled.
+
+Then run the product smoke:
+
+```sh
+PENNY_PUBLIC_SMOKE_BASE_URL=https://<app-name>.azurewebsites.net \
+PENNY_PUBLIC_SMOKE_API_TOKEN=<token> \
+pnpm smoke:public-staging
+```
