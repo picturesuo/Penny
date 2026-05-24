@@ -16,6 +16,7 @@ import {
   CreateLearnBridgePanel,
   CreateOptionBoard,
   CreateOptionDetailsDrawer,
+  CreatePathSidebar,
   CreateProviderStatusPanel,
   CreateVerificationPanel,
   artifactOutlinePreview,
@@ -53,6 +54,27 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   assert.match(markup, /Learn this/);
   assert.match(markup, /data-testid="create-option-learn-this-button"/);
   assert.doesNotMatch(markup, /intentMatch|buildability|novelty|rawScores/i);
+});
+
+test("CreatePathSidebar renders step navigation buttons", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CreatePathSidebar, {
+      activeIndex: 2,
+      status: "Judgment recorded",
+      canvasNodes: [],
+      onOpenBrain: () => undefined,
+      onStepSelect: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /aria-label="Go to Rough idea"/);
+  assert.match(markup, /aria-label="Go to Five directions"/);
+  assert.match(markup, /aria-label="Go to Judgment"/);
+  assert.match(markup, /aria-label="Go to Idea Spec"/);
+  assert.match(markup, /aria-label="Go to Verification"/);
+  assert.match(markup, /aria-label="Go to Export"/);
+  assert.match(markup, /aria-current="step"/);
+  assert.match(markup, /Open Brain from Create/);
 });
 
 test("CreateEvidenceLedgerPanel separates past evidence from interpreted taste", () => {

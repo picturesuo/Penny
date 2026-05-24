@@ -131,6 +131,7 @@ export function CreateWorkspace({
   const [localStatus, setLocalStatus] = useState(restoredDraft?.localStatus ?? "Create ready");
   const [failure, setFailure] = useState<string | null>(null);
   const seedRef = useRef<HTMLTextAreaElement | null>(null);
+  const stepRefs = useRef<Array<HTMLElement | null>>([]);
   const bootstrappedTextRef = useRef<string | null>(null);
   const restoredDraftRef = useRef(Boolean(restoredDraft));
 
@@ -412,9 +413,31 @@ export function CreateWorkspace({
     setExportFeedbackStatus(null);
   }
 
+  function setCreateStepRef(index: number) {
+    return (node: HTMLElement | null) => {
+      stepRefs.current[index] = node;
+    };
+  }
+
+  function handleStepSelect(index: number) {
+    const target = stepRefs.current[index];
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <main className="check-workspace-shell" aria-label="Create workspace" data-testid="create-workspace">
-      <CreatePathSidebar activeIndex={activeStepIndex} status={displayStatus} canvasNodes={canvasNodes} onOpenBrain={onOpenBrain} />
+      <CreatePathSidebar
+        activeIndex={activeStepIndex}
+        status={displayStatus}
+        canvasNodes={canvasNodes}
+        onOpenBrain={onOpenBrain}
+        onStepSelect={handleStepSelect}
+      />
 
       <section className="check-center-stage" aria-label="Penny Create flow">
         <article className="check-main-cycle create-workspace-card">
@@ -429,7 +452,7 @@ export function CreateWorkspace({
           <CreateBrainOnboardingPanel profile={brainProfile ?? null} />
           <CreateProviderStatusPanel observability={observability} />
 
-          <section className="create-seed-panel" aria-label="Rough idea input">
+          <section ref={setCreateStepRef(0)} className="create-seed-panel" aria-label="Rough idea input">
             <label>
               <span>Rough idea</span>
               <textarea
@@ -445,17 +468,19 @@ export function CreateWorkspace({
             </button>
           </section>
 
-          <CreateOptionBoard
-            options={options}
-            nextBestMove={optionSet?.nextBestMove ?? null}
-            selectedOptionIds={selectedOptionIds}
-            rejectedOptionIds={rejectedOptionIds}
-            busy={busy}
-            onToggleOption={toggleOption}
-            onRejectOption={toggleRejectedOption}
-            onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
-          />
-          <CreateEvidenceLedgerPanel options={options} selectedOptionIds={selectedOptionIds} />
+          <div ref={setCreateStepRef(1)} className="create-step-anchor" data-create-step="five-directions">
+            <CreateOptionBoard
+              options={options}
+              nextBestMove={optionSet?.nextBestMove ?? null}
+              selectedOptionIds={selectedOptionIds}
+              rejectedOptionIds={rejectedOptionIds}
+              busy={busy}
+              onToggleOption={toggleOption}
+              onRejectOption={toggleRejectedOption}
+              onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
+            />
+            <CreateEvidenceLedgerPanel options={options} selectedOptionIds={selectedOptionIds} />
+          </div>
 
           <CreateLearnBridgePanel artifact={artifact} onLearnThis={onLearnThis} />
 
@@ -463,7 +488,7 @@ export function CreateWorkspace({
             <CreateComparisonPanel comparison={providerComparison} busy={busy} onCompare={() => void handleCompareProviders()} />
           ) : null}
 
-          <section className="create-judgment-panel" aria-label="Create judgment">
+          <section ref={setCreateStepRef(2)} className="create-judgment-panel" aria-label="Create judgment">
             <header>
               <span>Judgment</span>
               <strong>{selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "Select one or more cards"}</strong>
@@ -493,12 +518,14 @@ export function CreateWorkspace({
             </div>
           </section>
 
-          <div className="create-output-grid">
+          <div ref={setCreateStepRef(3)} className="create-output-grid" data-create-step="idea-spec">
             <CreateArtifactPanel artifact={artifact} selectedOptions={selectedOptions} userComment={userComment} />
-            <CreateVerificationPanel verification={verification} />
+            <div ref={setCreateStepRef(4)} className="create-step-anchor" data-create-step="verification">
+              <CreateVerificationPanel verification={verification} />
+            </div>
           </div>
 
-          <section className="create-export-panel" aria-label="Export coding prompt" data-testid="create-export-panel">
+          <section ref={setCreateStepRef(5)} className="create-export-panel" aria-label="Export coding prompt" data-testid="create-export-panel">
             <header>
               <span>Export</span>
               <strong>{promptExport ? promptExport.fileName : "Coding-agent prompt"}</strong>
@@ -774,11 +801,13 @@ export function CreatePathSidebar({
   status,
   canvasNodes,
   onOpenBrain,
+  onStepSelect,
 }: {
   activeIndex: number;
   status: string;
   canvasNodes: CreateCanvasNode[];
   onOpenBrain?: (() => void) | undefined;
+  onStepSelect?: ((index: number) => void) | undefined;
 }) {
   return (
     <aside className="check-path-sidebar" aria-label="Create path">
@@ -795,12 +824,23 @@ export function CreatePathSidebar({
       </div>
 
       <ol className="check-path-list">
-        {createPathSteps.map((step, index) => (
-          <li key={step} className={index === activeIndex ? "is-active" : ""}>
-            <span>{index + 1}</span>
-            <strong>{step}</strong>
-          </li>
-        ))}
+        {createPathSteps.map((step, index) => {
+          const active = index === activeIndex;
+
+          return (
+            <li key={step} className={active ? "is-active" : ""}>
+              <button
+                type="button"
+                aria-current={active ? "step" : undefined}
+                aria-label={`Go to ${step}`}
+                onClick={() => onStepSelect?.(index)}
+              >
+                <span>{index + 1}</span>
+                <strong>{step}</strong>
+              </button>
+            </li>
+          );
+        })}
       </ol>
 
       <section className="check-thinking-graph" aria-label="Create graph">

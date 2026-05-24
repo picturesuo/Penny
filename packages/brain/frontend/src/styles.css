@@ -679,14 +679,9 @@
   }
 
   .check-path-list li {
-    display: grid;
-    grid-template-columns: 24px minmax(0, 1fr);
-    align-items: center;
-    gap: 8px;
-    min-height: 34px;
     border: 1px solid transparent;
     border-radius: 6px;
-    padding: 5px 7px;
+    overflow: hidden;
   }
 
   .check-path-list li.is-active {
@@ -694,7 +689,27 @@
     background: #eef5ef;
   }
 
-  .check-path-list li > span,
+  .check-path-list button {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 34px;
+    border: 0;
+    background: transparent;
+    padding: 5px 7px;
+    color: #111111;
+    text-align: left;
+  }
+
+  .check-path-list button:hover,
+  .check-path-list button:focus-visible {
+    background: rgb(255 255 255 / 0.52);
+    outline: none;
+  }
+
+  .check-path-list button > span,
   .check-thinking-graph-board article > span,
   .check-row-number {
     display: grid;
@@ -1123,6 +1138,13 @@
 
   .create-workspace-card {
     width: min(100%, 1080px);
+  }
+
+  .create-step-anchor {
+    display: grid;
+    gap: 13px;
+    min-width: 0;
+    scroll-margin-top: 16px;
   }
 
   .create-seed-panel,
