@@ -18,7 +18,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - `pnpm test`: passed, 660 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 23.1s.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.0s.
 
 ## Control Findings
 
