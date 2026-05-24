@@ -62,7 +62,15 @@ test("CreatePathSidebar renders step navigation buttons", () => {
     createElement(CreatePathSidebar, {
       activeIndex: 2,
       status: "Judgment recorded",
-      canvasNodes: [],
+      canvasNodes: [
+        {
+          id: "backend-create-canvas-node",
+          label: "Create",
+          detail: "Selected Personal + Critical from backend canvas",
+          note: "Explicit judgment recorded.",
+          edgeToNext: "explains",
+        },
+      ],
       onOpenBrain: () => undefined,
       onStepSelect: () => undefined,
     }),
@@ -76,6 +84,8 @@ test("CreatePathSidebar renders step navigation buttons", () => {
   assert.match(markup, /aria-label="Go to Export"/);
   assert.match(markup, /aria-current="step"/);
   assert.match(markup, /Open Brain from Create/);
+  assert.match(markup, /Selected Personal \+ Critical from backend canvas/);
+  assert.match(markup, /Explicit judgment recorded/);
 });
 
 test("CreatePromptExportActions renders copy and download commands", () => {

@@ -7,6 +7,7 @@ import type {
   CandidateOption,
   CanvasNode,
   CodingPromptArtifact,
+  CreateCanvasSnapshot,
   CreateExportFeedbackRating,
   CreateExportFeedbackReason,
   CreateObservability,
@@ -85,6 +86,7 @@ type PersistedCreateWorkspaceDraft = {
   artifact: CodingPromptArtifact | null;
   verification: VerificationSummary | null;
   judgmentEvent: JudgmentEvent | null;
+  createCanvas?: CreateCanvasSnapshot | null;
   observability: CreateObservability | null;
   promptExport: PromptExport | null;
   localStatus: string;
@@ -120,6 +122,7 @@ export function CreateWorkspace({
   const [artifact, setArtifact] = useState<CodingPromptArtifact | null>(restoredDraft?.artifact ?? null);
   const [verification, setVerification] = useState<VerificationSummary | null>(restoredDraft?.verification ?? null);
   const [judgmentEvent, setJudgmentEvent] = useState<JudgmentEvent | null>(restoredDraft?.judgmentEvent ?? null);
+  const [createCanvas, setCreateCanvas] = useState<CreateCanvasSnapshot | null>(restoredDraft?.createCanvas ?? null);
   const [observability, setObservability] = useState<CreateObservability | null>(restoredDraft?.observability ?? null);
   const [providerComparison, setProviderComparison] = useState<CreateProviderComparisonResponse["data"] | null>(null);
   const [promptExport, setPromptExport] = useState<PromptExport | null>(restoredDraft?.promptExport ?? null);
@@ -146,13 +149,14 @@ export function CreateWorkspace({
   const canvasNodes = useMemo(
     () =>
       createCanvasNodes({
+        createCanvas,
         brainProfile: brainProfile ?? null,
         options,
         selectedOptions,
         artifact,
         promptExport,
       }),
-    [artifact, brainProfile, options, promptExport, selectedOptions],
+    [artifact, brainProfile, createCanvas, options, promptExport, selectedOptions],
   );
   const activeStepIndex = createActiveStepIndex({ optionSet, judgmentEvent, artifact, verification, promptExport });
 
@@ -186,6 +190,7 @@ export function CreateWorkspace({
       artifact,
       verification,
       judgmentEvent,
+      createCanvas,
       observability,
       promptExport,
       localStatus,
@@ -194,6 +199,7 @@ export function CreateWorkspace({
     artifact,
     draftText,
     judgmentEvent,
+    createCanvas,
     localStatus,
     observability,
     optionSet,
@@ -393,12 +399,14 @@ export function CreateWorkspace({
     artifact: CodingPromptArtifact;
     verification: VerificationSummary;
     judgmentEvent: JudgmentEvent | null;
+    canvas?: CreateCanvasSnapshot;
     observability?: CreateObservability;
   }) {
     setOptionSet(payload.optionSet);
     setArtifact(payload.artifact);
     setVerification(payload.verification);
     setJudgmentEvent(payload.judgmentEvent ?? judgmentEvent);
+    setCreateCanvas(payload.canvas ?? null);
     setObservability(payload.observability ?? null);
   }
 
@@ -949,12 +957,35 @@ type CreateCanvasNode = {
 };
 
 function createCanvasNodes(input: {
+  createCanvas: CreateCanvasSnapshot | null;
   brainProfile: BrainMemoryProfileData | null;
   options: CandidateOption[];
   selectedOptions: CandidateOption[];
   artifact: CodingPromptArtifact | null;
   promptExport: PromptExport | null;
 }): CreateCanvasNode[] {
+  if (input.createCanvas?.nodes.length) {
+    return input.createCanvas.nodes.map((node): CreateCanvasNode => {
+      if (node.label === "Export" && input.promptExport) {
+        return {
+          id: node.id,
+          label: node.label,
+          detail: input.promptExport.fileName,
+          note: "Prompt export returned by backend.",
+          edgeToNext: node.edgeToNext,
+        };
+      }
+
+      return {
+        id: node.id,
+        label: node.label,
+        detail: node.detail,
+        ...(node.note ? { note: node.note } : {}),
+        edgeToNext: node.edgeToNext,
+      };
+    });
+  }
+
   const sourceLabels = input.brainProfile?.sources.slice(0, 4).map((source) => source.label).filter(Boolean) ?? [];
   const selectedLenses = input.selectedOptions.map((option) => option.lens);
   const generatedLenses = input.options.map((option) => option.lens);
@@ -1041,6 +1072,7 @@ function persistCreateWorkspaceDraft(draft: PersistedCreateWorkspaceDraft): void
     draft.selectedOptionIds.length ||
     draft.userComment.trim() ||
     draft.artifact ||
+    draft.createCanvas ||
     draft.promptExport;
 
   if (!hasCreateState) {
@@ -1067,6 +1099,7 @@ function isCreateWorkspaceDraft(value: unknown): value is PersistedCreateWorkspa
     (value.artifact === null || isRecord(value.artifact)) &&
     (value.verification === null || isRecord(value.verification)) &&
     (value.judgmentEvent === null || isRecord(value.judgmentEvent)) &&
+    (value.createCanvas === undefined || value.createCanvas === null || isRecord(value.createCanvas)) &&
     (value.observability === null || isRecord(value.observability)) &&
     (value.promptExport === null || isRecord(value.promptExport)) &&
     typeof value.localStatus === "string"
