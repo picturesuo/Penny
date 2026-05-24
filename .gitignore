@@ -4,6 +4,7 @@ node_modules/
 dist/
 coverage/
 test-results/
+tmp/
 *.tsbuildinfo
 package-lock.json
 .env
