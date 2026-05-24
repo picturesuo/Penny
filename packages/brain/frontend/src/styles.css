@@ -6423,7 +6423,7 @@
 
   .learn-meaning-map {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     margin: 2px 0 0;
     padding: 0;
@@ -6445,6 +6445,7 @@
   }
 
   .learn-meaning-map strong {
+    min-width: 0;
     overflow: hidden;
     color: #111111;
     font-family: Georgia, "Times New Roman", serif;

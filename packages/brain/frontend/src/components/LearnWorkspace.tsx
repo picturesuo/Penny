@@ -583,13 +583,26 @@ export function LearnUnderstandingTour({ lesson }: { lesson: LearnLesson }) {
 
 export function meaningMapItemsForLesson(lesson: LearnLesson) {
   const sourceText = lesson.sourceSpans[0]?.text ?? lesson.learningGoal;
+  const useText = `Use ${truncateWords(lesson.title.toLowerCase(), 4)} on one case`;
+  const checkText = `Check against ${meaningMapSourceLabel(lesson.sourceSpans[0]?.label)}`;
 
   return [
     { label: "Source", text: truncateWords(sourceText, 8) },
-    { label: "Concept", text: truncateWords(lesson.title, 5) },
-    { label: "Use", text: "Use on one case" },
-    { label: "Check", text: "Apply to source" },
+    { label: "Map", text: truncateWords(lesson.title, 5) },
+    { label: "Teach", text: truncateWords(lesson.shortExplanation, 7) },
+    { label: "Use", text: truncateWords(useText, 8) },
+    { label: "Check", text: truncateWords(checkText, 6) },
   ];
+}
+
+function meaningMapSourceLabel(label: string | undefined): string {
+  const normalized = label?.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+
+  if (!normalized || normalized === "source idea") {
+    return "source";
+  }
+
+  return truncateWords(normalized, 3);
 }
 
 export function microLessonFocusFit(text: string) {

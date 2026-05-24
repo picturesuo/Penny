@@ -52,7 +52,8 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /data-testid="learn-meaning-map"/);
   assert.match(markup, /Meaning map/);
   assert.match(markup, /Source/);
-  assert.match(markup, /Concept/);
+  assert.match(markup, /Map/);
+  assert.match(markup, /Teach/);
   assert.match(markup, /Use/);
   assert.match(markup, /Check/);
   assert.doesNotMatch(markup, /Grounding/);
@@ -143,11 +144,12 @@ test("meaningMapItemsForLesson turns arbitrary source material into a compact so
     ),
   );
 
-  assert.deepEqual(items.map((item) => item.label), ["Source", "Concept", "Use", "Check"]);
+  assert.deepEqual(items.map((item) => item.label), ["Source", "Map", "Teach", "Use", "Check"]);
   assert.match(items[0]?.text ?? "", /memo says customers like/i);
   assert.match(items[1]?.text ?? "", /Find customer urgency/);
-  assert.equal(items[2]?.text, "Use on one case");
-  assert.equal(items[3]?.text, "Apply to source");
+  assert.match(items[2]?.text ?? "", /Find customer urgency explanation/);
+  assert.equal(items[3]?.text, "Use find customer urgency on one case");
+  assert.equal(items[4]?.text, "Check against source");
 });
 
 test("LearnWorkspace renders backend expert learning plan subgroups", () => {
