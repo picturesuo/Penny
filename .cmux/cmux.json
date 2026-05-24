@@ -2,11 +2,24 @@
   "$schema": "https://raw.githubusercontent.com/manaflow-ai/cmux/main/web/data/cmux.schema.json",
   "schemaVersion": 1,
   "actions": {
-    "penny-create-cockpit": {
-      "type": "workspaceCommand",
-      "title": "Penny Create Cockpit",
-      "subtitle": "Open the Create plan, Codex workstreams, and preview",
-      "commandName": "Penny Create Cockpit",
+    "choose-codex-cockpit": {
+      "type": "command",
+      "title": "Choose Codex Cockpit",
+      "subtitle": "Ask for project and GitHub target, then open role workspaces",
+      "command": "cmux new-workspace --name 'Choose Codex Cockpit' --cwd '/Users/bensuo/Desktop/cmux-codex-launcher' --command './scripts/cmux-launcher-entry.sh --choose' --focus true",
+      "target": "newTabInCurrentPane",
+      "palette": true,
+      "icon": {
+        "type": "symbol",
+        "name": "magnifyingglass.circle"
+      }
+    },
+    "open-penny-cockpit": {
+      "type": "command",
+      "title": "Open Penny Cockpit",
+      "subtitle": "Launch the saved Penny profile directly",
+      "command": "cmux new-workspace --name 'Open Penny Cockpit' --cwd '/Users/bensuo/Desktop/cmux-codex-launcher' --command './scripts/cmux-launcher-entry.sh --profile penny' --focus true",
+      "target": "newTabInCurrentPane",
       "palette": true,
       "icon": {
         "type": "symbol",
@@ -16,11 +29,15 @@
   },
   "ui": {
     "newWorkspace": {
-      "action": "penny-create-cockpit",
+      "action": "choose-codex-cockpit",
       "contextMenu": [
         {
-          "action": "penny-create-cockpit",
-          "title": "Penny Create Cockpit"
+          "action": "choose-codex-cockpit",
+          "title": "Choose Codex Cockpit"
+        },
+        {
+          "action": "open-penny-cockpit",
+          "title": "Open Penny Cockpit"
         },
         {
           "type": "separator"
@@ -35,72 +52,5 @@
         }
       ]
     }
-  },
-  "commands": [
-    {
-      "name": "Penny Create Cockpit",
-      "description": "Plan-first CLI coding workspace for Penny Create, with scoped Codex workstreams and local preview.",
-      "workspace": {
-        "name": "Penny Create",
-        "cwd": ".",
-        "layout": {
-          "direction": "horizontal",
-          "children": [
-            {
-              "pane": {
-                "surfaces": [
-                  {
-                    "type": "terminal",
-                    "name": "plan",
-                    "command": "cmux markdown open /Users/bensuo/Desktop/penny/docs/penny-create-operating-outline.md --focus false; printf '\\nOpened docs/penny-create-operating-outline.md in a live markdown panel. Use this terminal for notes or git checks.\\n'; exec \"$SHELL\" -l"
-                  },
-                  {
-                    "type": "terminal",
-                    "name": "lead",
-                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -c 'model_reasoning_effort=\"xhigh\"' -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You are the lead coordinator for Penny Create. Keep scope tight, ask when ambiguous, prevent connector/product-mode drift, verify git status, and commit/push each finished repo-visible file on main. Do not rebuild completed work before identifying the smallest current gap.'"
-                  },
-                  {
-                    "type": "terminal",
-                    "name": "create-ui",
-                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -c 'model_reasoning_effort=\"xhigh\"' -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You own only Landing -> Create, five equal option cards, selection/comment flow, Idea Spec UX, and evidence visibility. Preserve Create, Brain, and Learn. Do not add a chatbot surface, broad connectors, or new product modes.'"
-                  },
-                  {
-                    "type": "terminal",
-                    "name": "brain-evidence",
-                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -c 'model_reasoning_effort=\"xhigh\"' -s danger-full-access -a never 'Read AGENTS.md, docs/penny-create-operating-outline.md, and test/fixtures/penny-yc-founder-fixture.json first. You own only safe Brain fixture/manual source evidence, source chips, privacy copy, and trainingUse=false clarity. Do not add live Gmail, LinkedIn, WhatsApp, iMessage, SMS, Slack, or social connectors.'"
-                  },
-                  {
-                    "type": "terminal",
-                    "name": "learn-canvas",
-                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -c 'model_reasoning_effort=\"xhigh\"' -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You own only Learn bridge, return-to-Create state, Canvas as visual outline, and the Idea Spec ending. Keep Canvas subordinate to Create. Do not build a new canvas system.'"
-                  },
-                  {
-                    "type": "terminal",
-                    "name": "export-verify",
-                    "command": "codex -C /Users/bensuo/Desktop/penny -m gpt-5.5 -c 'model_reasoning_effort=\"xhigh\"' -s danger-full-access -a never 'Read AGENTS.md and docs/penny-create-operating-outline.md first. You own only export prompt quality and verification. Run pnpm typecheck, pnpm test, pnpm build, and the YC e2e when relevant. Make product changes only for narrow defects proven by failure.'"
-                  },
-                  {
-                    "type": "terminal",
-                    "name": "dev-server",
-                    "command": "set -a; [ -f .env.local ] && source .env.local; set +a; PENNY_SKIP_DATABASE_PREP=true PENNY_AUTH_MODE=dev PORT=3007 pnpm dev"
-                  }
-                ]
-              }
-            },
-            {
-              "pane": {
-                "surfaces": [
-                  {
-                    "type": "browser",
-                    "name": "preview",
-                    "url": "http://localhost:3007"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    }
-  ]
+  }
 }
