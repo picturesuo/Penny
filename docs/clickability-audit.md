@@ -15,10 +15,11 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
 - Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
 - Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
-- `pnpm test`: passed, 661 tests.
+- `pnpm test`: passed, 664 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 5.6s.
+- In-app browser smoke: imported a Brain note, rendered the Brain export panel, and exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 6.4s.
 
 ## Control Findings
 
@@ -37,7 +38,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Brain | Boost memory | Increase memory importance. | Works; boosted/high-confidence nodes get a visible state label and the update notice names the reviewed memory. | Icon-only button calls `reviewBrainMemory(node.id, "boost")`. | Later: show exact rank effect in Create evidence if needed. |
 | Brain | Forget memory | Remove memory from retrieval. | Safer now; first click arms the memory card with `Click trash again to forget`, second click calls `reviewBrainMemory(node.id, "forget")`. | The destructive action is still icon-first, but no longer one-click. | Later: add undo and a browser test that verifies visible removal/count decrease after confirming. |
 | Brain | Start Create With This Brain | Open Create carrying actual Brain context. | Works; Create opens with Brain context and a generated rough idea from `createPromptFromBrainProfile`. | `handleStartCreateWithBrain` sets both `createBrainProfile` and `createInitialSeedText`; frontend test covers the seed prompt. | Later: let users pick a specific Brain note/document as the seed. |
-| Brain | Export Coding Prompt | Export a coding prompt from the Brain flow. | Missing; only checklist text says "Export coding prompt." | No Brain export control is rendered. Export exists only inside Create after artifact generation. | Add a real Brain-to-export route or remove this checklist item until Create export exists. |
+| Brain | Export Coding Prompt | Export a coding prompt from the Brain flow. | Works; after imported Brain memory exists, Brain renders a coding-agent prompt panel and exports a prompt for Codex, Claude Code, and Cursor with private context, source evidence, memory evidence, and human-judgment guardrails. | `POST /api/brain/export-coding-prompt` builds from the private Brain memory profile; the frontend calls it from the Brain panel and shows a textarea fallback. | Keep. Later: add copy/download affordances once the prompt format settles. |
 | Brain | Gmail disabled copy | Show honest Gmail unavailable/privacy state. | Works; status says unconfigured with missing Nango config and privacy copy says consent/no human review/trainingUse=false/delete-revoke. | Gmail connector status route reports gated/unconfigured state. | Keep. Ensure button remains disabled unless config is present. |
 | Create | Brain pill/button | Return to Brain from Create. | Works when scoped to Create sidebar/header; global role query is ambiguous because many controls include "Brain". | Multiple visible buttons/text include "Brain"; accessible names are not unique. | Add a unique `aria-label`, e.g. `Open Brain from Create`. |
 | Create | Step nav | Move between Rough idea, Five directions, Judgment, Prompt artifact, Verification, Export. | Fails as navigation; list is static. | `CreatePathSidebar` renders `<li>` items, no buttons or handlers. | Make steps clickable/focusable, or present as progress only. |
