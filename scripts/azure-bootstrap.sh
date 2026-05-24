@@ -51,8 +51,12 @@ SUFFIX="${PENNY_DEPLOY_SUFFIX:-$(openssl rand -hex 3)}"
 ACR_NAME="${AZURE_ACR_NAME:-$ACR_PREFIX$SUFFIX}"
 PG_NAME="${AZURE_POSTGRES_NAME:-$PG_PREFIX-$SUFFIX}"
 APP_NAME="${AZURE_WEBAPP_NAME:-$APP_PREFIX-$SUFFIX}"
-DB_PASSWORD="${AZURE_DATABASE_PASSWORD:-$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 24)}"
+DB_PASSWORD="${AZURE_DATABASE_PASSWORD:-$(openssl rand -hex 18)}"
 PENNY_API_TOKEN="${PENNY_API_TOKEN:-$(openssl rand -hex 32)}"
+PENNY_SESSION_SECRET="${PENNY_SESSION_SECRET:-$(openssl rand -hex 32)}"
+PENNY_CORS_ORIGINS="${PENNY_CORS_ORIGINS:-https://$DOMAIN,https://www.$DOMAIN,https://$APP_NAME.azurewebsites.net}"
+PENNY_PUBLIC_SMOKE_BASE_URL="${PENNY_PUBLIC_SMOKE_BASE_URL:-https://$APP_NAME.azurewebsites.net}"
+DATABASE_URL_VALUE="postgresql://$DB_ADMIN:$DB_PASSWORD@$PG_NAME.postgres.database.azure.com:5432/$DB_NAME?sslmode=require"
 
 echo "Using subscription: $SUBSCRIPTION_ID"
 echo "Resource group: $RG"
@@ -163,11 +167,22 @@ az webapp config appsettings set \
     NODE_ENV=production \
     PORT=3000 \
     WEBSITES_PORT=3000 \
+    PENNY_DEPLOY_ENV=private-alpha \
     PENNY_AUTH_MODE=token \
     PENNY_API_TOKEN="$PENNY_API_TOKEN" \
+    PENNY_SESSION_SECRET="$PENNY_SESSION_SECRET" \
     PENNY_AUTO_MIGRATE=true \
-    PENNY_CORS_ORIGINS="https://$DOMAIN,https://www.$DOMAIN,https://$APP_NAME.azurewebsites.net" \
-    DATABASE_URL="postgresql://$DB_ADMIN:$DB_PASSWORD@$PG_NAME.postgres.database.azure.com:5432/$DB_NAME?sslmode=require" \
+    PENNY_CORS_ORIGINS="$PENNY_CORS_ORIGINS" \
+    PENNY_RATE_LIMIT_MAX=120 \
+    PENNY_RATE_LIMIT_WINDOW_MS=60000 \
+    PENNY_AUTH_FAILURE_RATE_LIMIT_MAX=10 \
+    PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS=60000 \
+    PENNY_TRUST_AUTH_HEADERS=false \
+    PENNY_STRUCTURED_LOGS=true \
+    PENNY_CREATE_MODEL_BACKED=false \
+    ENABLE_GMAIL_CONNECTOR=false \
+    ENABLE_RESTRICTED_GOOGLE_SCOPES=false \
+    DATABASE_URL="$DATABASE_URL_VALUE" \
   --output none
 
 ACR_LOGIN_SERVER="$(az acr show --resource-group "$RG" --name "$ACR_NAME" --query loginServer --output tsv)"
@@ -190,6 +205,11 @@ gh secret set ACR_PASSWORD --repo "$REPO" --body "$ACR_PASSWORD"
 gh secret set AZURE_CREDENTIALS --repo "$REPO" --body "$AZURE_CREDENTIALS"
 gh secret set AZURE_RESOURCE_GROUP --repo "$REPO" --body "$RG"
 gh secret set AZURE_WEBAPP_NAME --repo "$REPO" --body "$APP_NAME"
+gh secret set DATABASE_URL --repo "$REPO" --body "$DATABASE_URL_VALUE"
+gh secret set PENNY_API_TOKEN --repo "$REPO" --body "$PENNY_API_TOKEN"
+gh secret set PENNY_CORS_ORIGINS --repo "$REPO" --body "$PENNY_CORS_ORIGINS"
+gh secret set PENNY_PUBLIC_SMOKE_BASE_URL --repo "$REPO" --body "$PENNY_PUBLIC_SMOKE_BASE_URL"
+gh secret set PENNY_SESSION_SECRET --repo "$REPO" --body "$PENNY_SESSION_SECRET"
 
 gh workflow run deploy-azure.yml --repo "$REPO" --ref main
 
@@ -198,4 +218,4 @@ echo "Azure bootstrap complete."
 echo "Temporary URL: https://$APP_NAME.azurewebsites.net"
 echo "GitHub Actions deploy started: https://github.com/$REPO/actions/workflows/deploy-azure.yml"
 echo "Postgres location used: $PG_LOCATION"
-echo "Do not print or share the generated database password or PENNY_API_TOKEN."
+echo "Do not print or share the generated database password, PENNY_API_TOKEN, or PENNY_SESSION_SECRET."
