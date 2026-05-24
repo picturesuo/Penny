@@ -68,6 +68,8 @@ type PersistedCreateWorkspaceBoot = {
   updatedAt: number;
   seedText: string;
   brainProfile: BrainMemoryProfileData | null;
+  activeMode?: "Create" | "Learn";
+  learnFocusNode?: CanvasNode | null;
 };
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
@@ -142,10 +144,11 @@ export function App() {
           if (createBoot) {
             setCreateInitialSeedText(createBoot.seedText);
             setCreateBrainProfile(createBoot.brainProfile);
+            setLearnFocusNode(createBoot.learnFocusNode ?? null);
             setCreateWorkspaceMounted(true);
             setLandingVisible(false);
-            setActiveMode("Create");
-            setStatus("Create restored");
+            setActiveMode(createBoot.activeMode === "Learn" && createBoot.learnFocusNode ? "Learn" : "Create");
+            setStatus(createBoot.activeMode === "Learn" && createBoot.learnFocusNode ? "Learn restored from Create" : "Create restored");
             return;
           }
 
@@ -982,8 +985,14 @@ export function App() {
 
   function handleLearnFromCreate(node: CanvasNode) {
     setLearnFocusNode(node);
+    rememberCreateWorkspaceView({ activeMode: "Learn", learnFocusNode: node });
     setActiveMode("Learn");
     setStatus("Learn opened from Create");
+  }
+
+  function handleBackToCreateFromLearn() {
+    rememberCreateWorkspaceView({ activeMode: "Create", learnFocusNode });
+    setActiveMode("Create");
   }
 
   if (codebaseBrainPanelVisible) {
@@ -1026,7 +1035,7 @@ export function App() {
             focusNode={learnFocusNode}
             isThinking={isThinking}
             onSearchBrainRelated={handleBrainRelatedSearch}
-            {...(shouldRenderCreateWorkspace ? { onBackToCreate: () => setActiveMode("Create") } : {})}
+            {...(shouldRenderCreateWorkspace ? { onBackToCreate: handleBackToCreateFromLearn } : {})}
           />
         ) : activeMode === "Brain" ? (
           <BrainWorkspace
@@ -1255,6 +1264,30 @@ function rememberCreateWorkspaceBoot(input: { seedText: string; brainProfile: Br
       updatedAt: Date.now(),
       seedText: input.seedText,
       brainProfile: input.brainProfile,
+      activeMode: "Create",
+      learnFocusNode: null,
+    } satisfies PersistedCreateWorkspaceBoot),
+  );
+}
+
+function rememberCreateWorkspaceView(input: { activeMode: "Create" | "Learn"; learnFocusNode: CanvasNode | null }): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const boot = restoreCreateWorkspaceBoot();
+
+  if (!boot) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    CREATE_WORKSPACE_BOOT_KEY,
+    JSON.stringify({
+      ...boot,
+      updatedAt: Date.now(),
+      activeMode: input.activeMode,
+      learnFocusNode: input.learnFocusNode,
     } satisfies PersistedCreateWorkspaceBoot),
   );
 }
@@ -1302,7 +1335,9 @@ function isCreateWorkspaceBoot(value: unknown): value is PersistedCreateWorkspac
     value.version === 1 &&
     typeof value.updatedAt === "number" &&
     typeof value.seedText === "string" &&
-    (value.brainProfile === null || isRecord(value.brainProfile))
+    (value.brainProfile === null || isRecord(value.brainProfile)) &&
+    (value.activeMode === undefined || value.activeMode === "Create" || value.activeMode === "Learn") &&
+    (value.learnFocusNode === undefined || value.learnFocusNode === null || isRecord(value.learnFocusNode))
   );
 }
 

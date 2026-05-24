@@ -90,6 +90,7 @@ type PersistedCreateWorkspaceDraft = {
   observability: CreateObservability | null;
   promptExport: PromptExport | null;
   localStatus: string;
+  activeDetailOptionId?: string | null;
 };
 
 export function clearCreateWorkspaceDraftStorage(): void {
@@ -126,6 +127,7 @@ export function CreateWorkspace({
   const [observability, setObservability] = useState<CreateObservability | null>(restoredDraft?.observability ?? null);
   const [providerComparison, setProviderComparison] = useState<CreateProviderComparisonResponse["data"] | null>(null);
   const [promptExport, setPromptExport] = useState<PromptExport | null>(restoredDraft?.promptExport ?? null);
+  const [activeDetailOptionId, setActiveDetailOptionId] = useState<string | null>(restoredDraft?.activeDetailOptionId ?? null);
   const [promptExportNotice, setPromptExportNotice] = useState<string | null>(null);
   const [exportFeedbackRating, setExportFeedbackRating] = useState<CreateExportFeedbackRating | null>(null);
   const [exportFeedbackReasons, setExportFeedbackReasons] = useState<CreateExportFeedbackReason[]>([]);
@@ -194,8 +196,10 @@ export function CreateWorkspace({
       observability,
       promptExport,
       localStatus,
+      activeDetailOptionId,
     });
   }, [
+    activeDetailOptionId,
     artifact,
     draftText,
     judgmentEvent,
@@ -511,6 +515,8 @@ export function CreateWorkspace({
               busy={busy}
               onToggleOption={toggleOption}
               onRejectOption={toggleRejectedOption}
+              detailOptionId={activeDetailOptionId}
+              onDetailOptionIdChange={setActiveDetailOptionId}
               onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
             />
             <CreateEvidenceLedgerPanel options={options} selectedOptionIds={selectedOptionIds} />
@@ -1085,7 +1091,8 @@ function persistCreateWorkspaceDraft(draft: PersistedCreateWorkspaceDraft): void
     draft.userComment.trim() ||
     draft.artifact ||
     draft.createCanvas ||
-    draft.promptExport;
+    draft.promptExport ||
+    draft.activeDetailOptionId;
 
   if (!hasCreateState) {
     window.localStorage.removeItem(CREATE_WORKSPACE_DRAFT_STORAGE_KEY);
@@ -1114,7 +1121,10 @@ function isCreateWorkspaceDraft(value: unknown): value is PersistedCreateWorkspa
     (value.createCanvas === undefined || value.createCanvas === null || isRecord(value.createCanvas)) &&
     (value.observability === null || isRecord(value.observability)) &&
     (value.promptExport === null || isRecord(value.promptExport)) &&
-    typeof value.localStatus === "string"
+    typeof value.localStatus === "string" &&
+    (value.activeDetailOptionId === undefined ||
+      value.activeDetailOptionId === null ||
+      typeof value.activeDetailOptionId === "string")
   );
 }
 
@@ -1306,6 +1316,8 @@ export function CreateOptionBoard({
   busy,
   onToggleOption,
   onRejectOption,
+  detailOptionId,
+  onDetailOptionIdChange,
   onLearnThis,
 }: {
   options: CandidateOption[];
@@ -1315,16 +1327,28 @@ export function CreateOptionBoard({
   busy: boolean;
   onToggleOption: (optionId: string) => void;
   onRejectOption?: ((optionId: string) => void) | undefined;
+  detailOptionId?: string | null;
+  onDetailOptionIdChange?: ((optionId: string | null) => void) | undefined;
   onLearnThis?: ((option: CandidateOption) => void) | undefined;
 }) {
-  const [detailOptionId, setDetailOptionId] = useState<string | null>(null);
-  const activeDetailOption = detailOptionId ? options.find((option) => option.id === detailOptionId) ?? null : null;
+  const [internalDetailOptionId, setInternalDetailOptionId] = useState<string | null>(null);
+  const currentDetailOptionId = detailOptionId ?? internalDetailOptionId;
+  const activeDetailOption = currentDetailOptionId ? options.find((option) => option.id === currentDetailOptionId) ?? null : null;
+
+  function setDetailOption(optionId: string | null) {
+    if (onDetailOptionIdChange) {
+      onDetailOptionIdChange(optionId);
+      return;
+    }
+
+    setInternalDetailOptionId(optionId);
+  }
 
   useEffect(() => {
-    if (!options.length || (detailOptionId && !options.some((option) => option.id === detailOptionId))) {
-      setDetailOptionId(null);
+    if (!options.length || (currentDetailOptionId && !options.some((option) => option.id === currentDetailOptionId))) {
+      setDetailOption(null);
     }
-  }, [detailOptionId, options]);
+  }, [currentDetailOptionId, onDetailOptionIdChange, options]);
 
   if (!options.length) {
     return (
@@ -1403,7 +1427,7 @@ export function CreateOptionBoard({
                 <button
                   type="button"
                   className="create-option-detail-button"
-                  onClick={() => setDetailOptionId(option.id)}
+                  onClick={() => setDetailOption(option.id)}
                   data-testid="create-option-details-button"
                 >
                   <Info size={14} />
@@ -1441,7 +1465,7 @@ export function CreateOptionBoard({
       {activeDetailOption ? (
         <CreateOptionDetailsDrawer
           option={activeDetailOption}
-          onClose={() => setDetailOptionId(null)}
+          onClose={() => setDetailOption(null)}
           onLearnThis={onLearnThis}
         />
       ) : null}

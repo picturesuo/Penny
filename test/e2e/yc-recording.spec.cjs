@@ -29,7 +29,10 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   const scopeId = `yc-e2e-${testInfo.workerIndex}-${testInfo.repeatEachIndex}-${Date.now()}`;
 
   await page.addInitScript((scope) => {
-    window.localStorage.clear();
+    if (!window.sessionStorage.getItem(scope.storageResetKey)) {
+      window.localStorage.clear();
+      window.sessionStorage.setItem(scope.storageResetKey, "true");
+    }
 
     const originalFetch = window.fetch.bind(window);
 
@@ -54,6 +57,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
     workspaceId: `${scopeId}-workspace`,
     projectId: `${scopeId}-project`,
     sphereId: `${scopeId}-sphere`,
+    storageResetKey: `${scopeId}-storage-reset`,
   });
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
@@ -142,6 +146,14 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await expect(page.getByRole("heading", { name: "Apply to my artifact" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Current learning step" })).toContainText(/future Brain Ranker evidence/i);
   await captureProof(page, testInfo, "06-learn");
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("learn-back-to-create")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Explain simply" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Current learning step" })).toContainText(
+    /selecting cards, writing comments, and rating exports/i,
+  );
+  await captureProof(page, testInfo, "06b-learn-refresh-restored");
 
   await page.getByTestId("learn-back-to-create").click();
   await expect(page.getByTestId("create-workspace")).toBeVisible({ timeout: 10_000 });
