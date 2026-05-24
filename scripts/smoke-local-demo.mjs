@@ -31,7 +31,7 @@ if (args.includes("--help")) {
   process.exit(0);
 }
 
-const server = spawn("pnpm", ["start"], {
+const server = spawn("pnpm", ["exec", "tsx", "packages/brain/src/server.ts"], {
   env: {
     ...process.env,
     PORT: port,
