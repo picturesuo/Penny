@@ -92,6 +92,7 @@ Run before deploy:
 ```sh
 pnpm db:migrate
 pnpm check:public-readiness
+pnpm smoke:public-staging
 pnpm test
 pnpm typecheck
 pnpm build
@@ -122,6 +123,22 @@ pnpm check:public-readiness -- \
   --gmail-browser-evidence=tmp/gmail-browser-evidence.json \
   --gmail-browser-artifact-root=tmp/gmail-browser-artifacts
 ```
+
+After the readiness gate passes against the target environment, run a live target smoke with a
+throwaway scope and a token for the deployed Penny URL:
+
+```sh
+PENNY_PUBLIC_SMOKE_BASE_URL=https://<alpha-host> \
+PENNY_PUBLIC_SMOKE_API_TOKEN=<token> \
+PENNY_PUBLIC_SMOKE_RUN_ID=<safe-run-slug> \
+PENNY_PUBLIC_SMOKE_EVIDENCE_FILE=tmp/public-staging-smoke.json \
+pnpm smoke:public-staging
+```
+
+The public smoke checks the token-auth login gate, unauthenticated API rejection, Brain documents,
+Brain memory profile, Brain recents, Create five-direction generation, Create export, and absence of
+unsupported live connector claims. The evidence file stores counts, ids, lengths, and booleans only;
+it does not write the API token or exported prompt text.
 
 The Brain memory tables store scope columns on sources, chunks, nodes, edges, profile signals, ingestion jobs, and retrieval events. Brain Ranker persistence adds scoped `brain_ranker_runs`, `brain_ranked_candidates`, and `brain_development_events` for Create ranker output and learning events. Route tests cover cross-user access attempts for jobs, profiles, retrieval, memory review, source deletion, Create memory retrieval, Create artifacts, judgments, option sets, and deleted-source Create behavior.
 
