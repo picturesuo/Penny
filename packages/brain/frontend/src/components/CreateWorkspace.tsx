@@ -1684,15 +1684,15 @@ function memoryKindFromNodeType(type: BrainMemoryProfileData["recentMemoryNodes"
 function sourceImportEvidenceLabel(kind: string): string {
   switch (kind) {
     case "email_fixture":
-      return "Safe email-style fixture evidence; not live Gmail, no OAuth, trainingUse=false";
+      return "Email fixture: safe demo data; no Gmail OAuth; trainingUse=false.";
     case "linkedin_context":
-      return "Safe LinkedIn-style fixture evidence; not live LinkedIn, no OAuth, trainingUse=false";
+      return "LinkedIn-style context: fixture only; no OAuth; trainingUse=false.";
     case "manual_messages_transcript":
-      return "Manual/pasted message transcript evidence; not live SMS, iMessage, or WhatsApp, trainingUse=false";
+      return "Manual messages transcript: pasted demo text; no live SMS, iMessage, or WhatsApp; trainingUse=false.";
     case "founder_notes":
-      return "Founder-note evidence; manual/private source, trainingUse=false";
+      return "Founder notes: manual private source; trainingUse=false.";
     default:
-      return `Private Brain source evidence (${kind})`;
+      return `Private Brain source (${kind}).`;
   }
 }
 
