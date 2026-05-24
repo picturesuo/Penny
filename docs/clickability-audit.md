@@ -8,16 +8,17 @@ PASS for the current YC demo path and the local Brain-first dogfood path.
 
 The visible YC fixture path reaches Create, Learn, Canvas, and export. The normal Brain-first path now also works in local demo mode with `PENNY_SKIP_DATABASE_PREP=true`: quick notes, save-to-Brain, document seed, import, Create, Learn, export, and refresh restore all pass in `test/e2e/brain-first.spec.cjs`.
 
-This is still not a production-readiness pass. Public/staging still needs real Postgres, auth, rate limiting, and connector proof before any broad demo claims.
+This is still not a production-readiness pass. Public/staging now has an executable `pnpm check:public-readiness` gate for real Postgres schema proof, token auth, explicit rate limits, structured logs, and live Gmail staging evidence; that gate must pass against the actual target environment before any broad demo claims.
 
 ## Audit Commands
 
 - Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
 - Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
 - Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
-- `pnpm test`: passed, 671 tests.
+- `pnpm test`: passed, 675 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
+- `pnpm check:public-readiness -- --schema-tables-file=<complete required table list>`: passed with synthetic private-alpha env and live Gmail disabled; the same command failed in local/dev auth mode, as intended.
 - Latest targeted Brain-first e2e: `PENNY_BASE_URL=http://localhost:3044 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs --reporter=line --output=.tmp-brain-first-memory-undo`: passed, 1 test in 5.8s; includes quick-note save, memory import, two-click forget, undo restore, Create, Learn, export, and refresh restore.
 - Latest targeted YC e2e: `PENNY_BASE_URL=http://localhost:3048 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-yc-learn-refresh`: passed, 1 test in 3.4s; Create -> Learn now reloads while still in Learn, restores the Create-origin lesson, then returns to Create with selections, comment, artifact, and evidence drawer preserved.
 - Latest targeted browser e2e: `PENNY_BASE_URL=http://localhost:3042 pnpm dlx @playwright/test test test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-learn-understanding-tour`: passed, 1 test in 1.7s.
@@ -71,7 +72,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 ## Priority Fixes
 
 1. Keep `brain-first.spec.cjs` and `yc-recording.spec.cjs` green before recording.
-2. Keep local fallback dev-only; production/staging must use real Postgres.
+2. Keep local fallback dev-only; production/staging must pass `pnpm check:public-readiness` against the target Postgres database and connector evidence before broad claims.
 3. Keep backend Create Canvas snapshot coverage green; later merge it with a broader session canvas if cross-mode history becomes necessary.
 4. Keep quick-note-to-memory promotion server-owned and covered by the Brain-first e2e.
 5. Do not demo live Gmail, SMS/iMessage, Slack, Drive, or Calendar until their proof bundles pass.

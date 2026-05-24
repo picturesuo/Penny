@@ -53,6 +53,9 @@ PENNY_API_TOKEN=<32+-character-random-token>
 PENNY_SESSION_SECRET=<32+-character-random-secret>
 PENNY_CORS_ORIGINS=https://<alpha-host>
 PENNY_RATE_LIMIT_MAX=120
+PENNY_RATE_LIMIT_WINDOW_MS=60000
+PENNY_AUTH_FAILURE_RATE_LIMIT_MAX=10
+PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS=60000
 PENNY_TRUST_AUTH_HEADERS=false
 PENNY_STRUCTURED_LOGS=true
 PENNY_CREATE_MODEL_BACKED=false
@@ -88,9 +91,29 @@ Run before deploy:
 
 ```sh
 pnpm db:migrate
+pnpm check:public-readiness
 pnpm test
 pnpm typecheck
 pnpm build
+```
+
+`pnpm check:public-readiness` is the broad public/private-alpha gate. It queries the target
+`DATABASE_URL` unless `--schema-tables-file=<file>` is supplied for offline proof. It fails unless
+strict deploy validation is active, the Postgres schema exposes every required Penny table, token
+auth is configured, API and auth-failure rate limits are explicit, structured logs are enabled, and
+live Gmail is either disabled or backed by a verified final staging evidence bundle.
+
+If live Gmail is intentionally enabled, run the public readiness gate with the same final evidence
+used for the Gmail staging bundle:
+
+```sh
+pnpm check:public-readiness -- \
+  --gmail-readiness=tmp/gmail-readiness-evidence.json \
+  --gmail-smoke=tmp/gmail-smoke-evidence.json \
+  --gmail-destructive-smoke=tmp/gmail-smoke-destructive.json \
+  --gmail-ui-preflight=tmp/gmail-ui-preflight-evidence.json \
+  --gmail-browser-evidence=tmp/gmail-browser-evidence.json \
+  --gmail-browser-artifact-root=tmp/gmail-browser-artifacts
 ```
 
 The Brain memory tables store scope columns on sources, chunks, nodes, edges, profile signals, ingestion jobs, and retrieval events. Brain Ranker persistence adds scoped `brain_ranker_runs`, `brain_ranked_candidates`, and `brain_development_events` for Create ranker output and learning events. Route tests cover cross-user access attempts for jobs, profiles, retrieval, memory review, source deletion, Create memory retrieval, Create artifacts, judgments, option sets, and deleted-source Create behavior.
