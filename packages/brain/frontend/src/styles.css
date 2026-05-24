@@ -3752,6 +3752,33 @@
     background: #fff0b8;
   }
 
+  .brain-memory-review-state {
+    border: 1px solid #d2d2d2;
+    border-radius: 999px;
+    background: #f6f6f6;
+    padding: 4px 6px;
+    color: #111111 !important;
+    font-size: 10px !important;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .brain-memory-review-state.is-confirmed,
+  .brain-memory-review-state.is-priority {
+    border-color: #111111;
+    background: #eff7d2;
+  }
+
+  .brain-memory-review-state.is-muted {
+    border-color: #111111;
+    background: #ffd8d0;
+  }
+
+  .brain-memory-review-state.is-weak {
+    background: #fff0b8;
+  }
+
   .brain-memory-quality {
     row-gap: 4px;
   }

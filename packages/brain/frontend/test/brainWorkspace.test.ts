@@ -99,6 +99,8 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Small reversible builds/);
   assert.match(markup, /Preference - Small reversible builds/);
   assert.match(markup, /Grounded/);
+  assert.match(markup, /Memory state: Active/);
+  assert.match(markup, /data-memory-state="active"/);
   assert.match(markup, /90% confidence/);
   assert.match(markup, /chunk brain-ch/);
   assert.match(markup, /Reinforced/);
@@ -115,6 +117,7 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Revoke/);
   assert.match(markup, /Delete Gmail source/);
   assert.match(markup, /Memory updated/);
+  assert.match(markup, /data-testid="brain-memory-notice"/);
   assert.match(markup, /Source deleted\. Related chunks and source-backed memories were removed from retrieval and Create/);
   assert.match(markup, /Delete Founder workflow notes/);
   assert.match(markup, /Use this Brain to create something/);

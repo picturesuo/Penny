@@ -484,12 +484,13 @@ export function BrainWorkspace({
     setMemoryReviewingId(nodeId);
     setMemoryError(null);
     setMemoryNotice(null);
+    const targetMemoryTitle = memoryProfile?.recentMemoryNodes.find((node) => node.id === nodeId)?.title ?? "Memory";
 
     try {
       const response = await reviewBrainMemory(nodeId, { action });
       setMemoryProfile(response.data.profile);
       setMemoryStatus("ready");
-      setMemoryNotice(memoryReviewNotice(action));
+      setMemoryNotice(memoryReviewNotice(action, targetMemoryTitle));
     } catch (error) {
       setMemoryStatus("error");
       setMemoryError(error instanceof Error ? error.message : String(error));
@@ -3510,7 +3511,7 @@ function formatNullableDate(value: string | null): string {
 
 function BrainMemoryNotice({ message }: { message: string }) {
   return (
-    <div className="brain-memory-import-status is-completed" aria-live="polite">
+    <div className="brain-memory-import-status is-completed" role="status" aria-live="polite" data-testid="brain-memory-notice">
       <strong>Memory updated</strong>
       <span>{message}</span>
     </div>
@@ -3538,16 +3539,18 @@ function BrainMemoryStatusPill({ status, latestJob }: { status: BrainMemoryStatu
   return <span className={`brain-memory-status is-${status}`}>{label}</span>;
 }
 
-function memoryReviewNotice(action: MemoryReviewAction): string {
+function memoryReviewNotice(action: MemoryReviewAction, title: string): string {
+  const memoryName = truncateWords(title, 8);
+
   switch (action) {
     case "correct":
-      return "Memory marked correct. Penny will treat it as confirmed personal context.";
+      return `${memoryName} marked correct. Penny will treat it as confirmed personal context.`;
     case "boost":
-      return "Memory boosted. Penny will rank it higher when it matches Create requests.";
+      return `${memoryName} boosted. Penny will rank it higher when it matches Create requests.`;
     case "wrong":
-      return "Memory marked wrong. Penny will keep it out of normal retrieval unless reviewed again.";
+      return `${memoryName} marked wrong. Penny will keep it out of normal retrieval unless reviewed again.`;
     case "forget":
-      return "Memory forgotten. It was removed from retrieval and Create grounding.";
+      return `${memoryName} forgotten. It was removed from retrieval and Create grounding.`;
   }
 }
 
@@ -3715,9 +3718,10 @@ function BrainMemoryProfileSummary({
         {recentNodes.slice(0, 6).map((node) => {
           const source = sourceById.get(node.sourceId);
           const busy = reviewingId === node.id;
+          const reviewState = memoryReviewState(node);
 
           return (
-            <article key={node.id} className="brain-memory-node">
+            <article key={node.id} className="brain-memory-node" data-memory-state={reviewState.kind}>
               <div className="brain-memory-node-topline">
                 <span>{formatLabel(node.type)}</span>
                 <span className={`brain-memory-evidence is-${node.evidenceLevel}`}>{evidenceLabel(node.evidenceLevel)}</span>
@@ -3725,6 +3729,7 @@ function BrainMemoryProfileSummary({
               <strong title={node.title}>{truncateWords(node.title, 9)}</strong>
               <p>{truncateWords(node.summary, 18)}</p>
               <div className="brain-memory-quality">
+                <span className={`brain-memory-review-state is-${reviewState.kind}`}>Memory state: {reviewState.label}</span>
                 <span>{confidenceLabel(node.confidence)}</span>
                 <span>{source ? truncateWords(source.label, 5) : "Unknown source"}</span>
                 <span>{node.chunkIds[0] ? `chunk ${shortId(node.chunkIds[0])}` : "source chunk"}</span>
@@ -3899,6 +3904,26 @@ function evidenceLabel(level: MemoryNode["evidenceLevel"]): string {
   }
 
   return level === "grounded" ? "Grounded" : "Inferred";
+}
+
+function memoryReviewState(node: MemoryNode): { kind: "confirmed" | "priority" | "muted" | "active" | "weak"; label: string } {
+  if (node.evidenceLevel === "user_confirmed") {
+    return { kind: "confirmed", label: "Confirmed" };
+  }
+
+  if (node.confidence < 0.1) {
+    return { kind: "muted", label: "Muted" };
+  }
+
+  if (node.confidence >= 0.95) {
+    return { kind: "priority", label: "High priority" };
+  }
+
+  if (node.confidence >= 0.65) {
+    return { kind: "active", label: "Active" };
+  }
+
+  return { kind: "weak", label: "Needs review" };
 }
 
 function confidenceLabel(confidence: number): string {
