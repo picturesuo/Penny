@@ -90,15 +90,17 @@ export function landingShortcutIntent(key: string): LandingShortcutIntent | null
 export function landingSubmitIntent(destination: LandingDestination | null, rawIdea: string): LandingSubmitIntent | null {
   const trimmedIdea = rawIdea.trim();
 
-  if (!destination || !trimmedIdea) {
+  if (!trimmedIdea) {
     return null;
   }
 
-  if (destination === "QuickNote") {
+  const resolvedDestination = destination ?? "Create";
+
+  if (resolvedDestination === "QuickNote") {
     return { action: "quick-note", rawIdea: trimmedIdea };
   }
 
-  return { action: "submit-prompt", mode: destination, rawIdea: trimmedIdea };
+  return { action: "submit-prompt", mode: resolvedDestination, rawIdea: trimmedIdea };
 }
 
 export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote, onBuildWithPenny }: LandingPageProps) {
@@ -285,6 +287,20 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <p>FOR YOUR THOUGHTS</p>
           </div>
 
+          <button
+            type="button"
+            className="landing-brain-start-button landing-create-start-button"
+            disabled={disabled}
+            data-testid="landing-create-start"
+            onClick={() => onModeSelect("Create")}
+          >
+            Start with Create
+          </button>
+
+          <button type="button" className="landing-brain-start-button" disabled={disabled} onClick={() => onModeSelect("Brain")}>
+            Start with your Brain
+          </button>
+
           {onBuildWithPenny ? (
             <button
               type="button"
@@ -298,10 +314,6 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
               Start Create
             </button>
           ) : null}
-
-          <button type="button" className="landing-brain-start-button" disabled={disabled} onClick={() => onModeSelect("Brain")}>
-            Start with your Brain
-          </button>
 
           <div className="landing-prompt-box" onClick={handlePromptBoxClick}>
             <form className="landing-composer" onSubmit={handleSubmit}>
@@ -344,7 +356,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
               ) : null}
               <button
                 type="submit"
-                className={selectedShortcutKey === null ? "landing-submit-button" : "landing-submit-button is-visible"}
+                className={selectedShortcutKey === null && !rawIdea.trim() ? "landing-submit-button" : "landing-submit-button is-visible"}
                 disabled={disabled || submitIntent === null}
                 aria-label="Send thought"
               >
