@@ -228,6 +228,13 @@ node scripts/check-public-repo-safety.mjs --strict
 
 The snapshot is a new one-commit Git repository generated from the current tracked tree. It excludes `docs/proof/**`, tracked local env files, and unallowlisted binary/media files, then writes `PUBLIC-SNAPSHOT.md` with the source commit. After reviewing the snapshot, publish that directory to a new public GitHub repo instead of changing visibility on the private repository's full history.
 
+Current public mirror:
+
+- URL: `https://github.com/picturesuo/penny-public`
+- Public snapshot commit: `24d4456e6932035a69769564bb0fcf21ee12667e`
+- Source private snapshot commit recorded by the mirror: `0816aee025cf85ea9cdb4ec048ab466526172a9e`
+- Verification: a fresh clone of the public mirror passed `node scripts/check-public-repo-safety.mjs --strict` with zero warnings.
+
 ## Cost Guardrails
 
 - Set a monthly Azure budget alert immediately after creating the resource group.
