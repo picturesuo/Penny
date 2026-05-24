@@ -48,7 +48,7 @@ test("landing submit requires a selected destination and prompt", () => {
 test("landing shortcuts render in Brain, Create, Learn, Quick note order", () => {
   assert.deepEqual(
     landingShortcuts.map((shortcut) => `${shortcut.key} ${shortcut.label}`),
-    ["B for Brain", "C for Create", "L for Learn", "Q for Quick note"],
+    ["B Brain", "C Create", "L Learn", "Q Note"],
   );
 });
 
@@ -78,7 +78,7 @@ test("landing page exposes a small YC fixture fallback when fixture loader is wi
     }),
   );
 
-  assert.match(markup, /Use YC demo fixture/);
+  assert.match(markup, /Start Create/);
   assert.match(markup, /data-testid="landing-yc-demo-fixture"/);
   assert.doesNotMatch(markup, /Build with Penny/);
 });

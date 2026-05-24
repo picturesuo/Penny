@@ -29,10 +29,10 @@ type LandingSubmitIntent =
   | { action: "quick-note"; rawIdea: string };
 
 export const landingShortcuts: Array<{ key: string; label: string }> = [
-  { key: "B", label: "for Brain" },
-  { key: "C", label: "for Create" },
-  { key: "L", label: "for Learn" },
-  { key: "Q", label: "for Quick note" },
+  { key: "B", label: "Brain" },
+  { key: "C", label: "Create" },
+  { key: "L", label: "Learn" },
+  { key: "Q", label: "Note" },
 ];
 
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
@@ -295,7 +295,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                 void onBuildWithPenny();
               }}
             >
-              Use YC demo fixture
+              Start Create
             </button>
           ) : null}
 
@@ -314,7 +314,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                 value={rawIdea}
                 onChange={(event) => setRawIdea(event.target.value)}
                 disabled={disabled}
-                placeholder="Drop a rough idea, then choose Create, Learn, or Quick note..."
+                placeholder="Drop a rough idea..."
                 aria-describedby="landingStatus"
                 rows={1}
               />
