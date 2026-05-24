@@ -59,12 +59,9 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   const landingComposer = page.getByRole("textbox", { name: /Ask Penny anything|Enter a rough thought for Penny/ });
   await expect(landingComposer).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Start Create" })).toBeVisible();
   await captureProof(page, testInfo, "01-landing");
-  await landingComposer.fill(
-    "I want to create a YC startup around ideation and thinking - maybe a thinking instrument. It should use my past emails, messages, and notes to help me turn vague ideas into buildable structure. I want it to feel like a workbench that gives ideas direction without taking judgment away from the human.",
-  );
-  await page.keyboard.press("Control+C");
-  await page.getByRole("button", { name: "Send thought" }).click();
+  await page.getByRole("button", { name: "Start Create" }).click();
 
   await expect(page.getByTestId("create-workspace")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("create-brain-context")).toHaveAttribute("data-create-context", "using-brain", {
