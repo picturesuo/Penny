@@ -198,9 +198,10 @@ gh workflow run deploy-azure.yml --repo picturesuo/Penny --ref main
 
 Required GitHub secrets are `ACR_LOGIN_SERVER`, `ACR_USERNAME`, `ACR_PASSWORD`, `AZURE_CREDENTIALS`, `AZURE_RESOURCE_GROUP`, `AZURE_WEBAPP_NAME`, `DATABASE_URL`, `PENNY_API_TOKEN`, `PENNY_CORS_ORIGINS`, and `PENNY_SESSION_SECRET`. `PENNY_PUBLIC_SMOKE_BASE_URL` is optional; if omitted, the workflow smokes `https://<AZURE_WEBAPP_NAME>.azurewebsites.net`.
 
-Before starting the manual workflow, run the local preflight:
+Before starting the manual workflow, run the aggregate launch gate and deploy-secret preflight:
 
 ```sh
+pnpm check:launch-readiness
 pnpm check:github-deploy-secrets
 ```
 
@@ -255,9 +256,7 @@ The publish command uses the GitHub Git Data API instead of `git push`, because 
 Current public mirror:
 
 - URL: `https://github.com/picturesuo/penny-public`
-- Public snapshot commit: `19b3621c217cff4df8741b3df0d9924c8987ea89`
-- Source private snapshot commit recorded by the mirror: `d65d4a4e4fdb275e5bcebcf5dcf33b8d9826c1ff`
-- Verification: a fresh clone of the public mirror passed `node scripts/check-public-repo-safety.mjs --strict` with zero warnings. The mirror has one commit, no `docs/proof/**` files, and only `docs/assets/yc-demo-recording-path.png` from the public media allowlist.
+- Verification: run `pnpm check:public-mirror -- --repo picturesuo/penny-public` to print the current public commit, recorded private source commit, one-commit history status, proof-file count, media allowlist, and strict safety result.
 
 ## Cost Guardrails
 
