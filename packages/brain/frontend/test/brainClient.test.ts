@@ -9,6 +9,7 @@ import {
   createLearnSession,
   decideVerifyConfidence,
   deleteBrainSource,
+  exportBrainCodingPrompt,
   exportCodingPrompt,
   fetchBrainDemoFixtureImport,
   fetchBrainYcFounderFixtureImport,
@@ -819,6 +820,28 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     jsonResponse({ job }),
     jsonResponse(profile),
     jsonResponse({
+      sourceOfTruth: "private_user_memory_profile_export",
+      export: {
+        id: "brain-export-1",
+        format: "coding_agent_prompt",
+        targets: ["Codex", "Claude Code", "Cursor"],
+        fileName: "penny-brain-coding-prompt.md",
+        text: "# Penny Brain Coding Prompt\n\nUse small reversible builds with explicit provenance.",
+        qualitySignals: {
+          hasPrivateContext: true,
+          hasSourceEvidence: true,
+          hasMemoryEvidence: true,
+          hasHumanJudgmentGuardrails: true,
+          sourceCount: 1,
+          memoryCount: 1,
+          promptCompletenessScore: 100,
+          missing: [],
+        },
+        createdAt: "2026-05-24T00:00:00.000Z",
+      },
+      profileStats: profile.stats,
+    }),
+    jsonResponse({
       sourceOfTruth: "private_user_memory_retrieval",
       query: "small reversible builds",
       contextLight: false,
@@ -863,6 +886,7 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     });
     const fetchedJob = await fetchBrainImportJob(job.id);
     const fetchedProfile = await fetchBrainMemoryProfile();
+    const exported = await exportBrainCodingPrompt({ goal: "Build a Create artifact." });
     const retrieved = await retrieveBrainMemory({ query: "small reversible builds", limit: 4, nodeTypes: ["preference"] });
     const reviewed = await reviewBrainMemory("memory-node-1", { action: "correct" });
     const deleted = await deleteBrainSource(source.id);
@@ -870,6 +894,9 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     assert.equal(imported.data.job.id, job.id);
     assert.equal(fetchedJob.data.job.sourceId, source.id);
     assert.equal(fetchedProfile.data.sources[0]?.label, "Product notes");
+    assert.equal(exported.data.export.fileName, "penny-brain-coding-prompt.md");
+    assert.equal(exported.data.export.qualitySignals.hasHumanJudgmentGuardrails, true);
+    assert.match(exported.data.export.text, /small reversible builds/);
     assert.equal(retrieved.data.contextLight, false);
     assert.equal(retrieved.data.results[0]?.memoryRef.kind, "preference");
     assert.equal(reviewed.data.action, "correct");
@@ -886,13 +913,16 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     assert.equal(calls[1]?.method, "GET");
     assert.equal(calls[2]?.url, "/api/brain/memory/profile");
     assert.equal(calls[2]?.method, "GET");
-    assert.equal(calls[3]?.url, "/api/brain/retrieve");
-    assert.deepEqual(calls[3]?.body, { query: "small reversible builds", limit: 4, nodeTypes: ["preference"] });
-    assert.equal(calls[4]?.url, "/api/brain/memories/memory-node-1/review");
-    assert.equal(calls[4]?.method, "POST");
-    assert.deepEqual(calls[4]?.body, { action: "correct" });
-    assert.equal(calls[5]?.url, `/api/brain/sources/${source.id}`);
-    assert.equal(calls[5]?.method, "DELETE");
+    assert.equal(calls[3]?.url, "/api/brain/export-coding-prompt");
+    assert.equal(calls[3]?.method, "POST");
+    assert.deepEqual(calls[3]?.body, { goal: "Build a Create artifact." });
+    assert.equal(calls[4]?.url, "/api/brain/retrieve");
+    assert.deepEqual(calls[4]?.body, { query: "small reversible builds", limit: 4, nodeTypes: ["preference"] });
+    assert.equal(calls[5]?.url, "/api/brain/memories/memory-node-1/review");
+    assert.equal(calls[5]?.method, "POST");
+    assert.deepEqual(calls[5]?.body, { action: "correct" });
+    assert.equal(calls[6]?.url, `/api/brain/sources/${source.id}`);
+    assert.equal(calls[6]?.method, "DELETE");
   } finally {
     restoreFetch();
   }

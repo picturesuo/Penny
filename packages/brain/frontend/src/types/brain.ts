@@ -1348,6 +1348,33 @@ export interface BrainMemoryReviewResponse {
   };
 }
 
+export interface BrainCodingPromptExport {
+  sourceOfTruth: "private_user_memory_profile_export" | string;
+  export: {
+    id: string;
+    format: "coding_agent_prompt";
+    targets: string[];
+    fileName: string;
+    text: string;
+    qualitySignals: {
+      hasPrivateContext: boolean;
+      hasSourceEvidence: boolean;
+      hasMemoryEvidence: boolean;
+      hasHumanJudgmentGuardrails: boolean;
+      sourceCount: number;
+      memoryCount: number;
+      promptCompletenessScore: number;
+      missing: string[];
+    };
+    createdAt: string;
+  };
+  profileStats: BrainMemoryProfileData["stats"];
+}
+
+export interface BrainCodingPromptExportResponse {
+  data: BrainCodingPromptExport;
+}
+
 export interface BrainSourceDeleteResponse {
   data: {
     deleted: boolean;

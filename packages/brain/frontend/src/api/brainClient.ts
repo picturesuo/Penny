@@ -6,6 +6,7 @@ import type {
   BrainDemoFixtureResponse,
   BrainDocumentsResponse,
   BrainHybridSearchResponse,
+  BrainCodingPromptExportResponse,
   CodebaseAuditResponse,
   CodebaseIngestResponse,
   CodebaseSearchResponse,
@@ -280,6 +281,22 @@ export async function fetchBrainMemoryProfile(): Promise<BrainMemoryProfileRespo
   }
 
   return payload as BrainMemoryProfileResponse;
+}
+
+export async function exportBrainCodingPrompt(input: { goal?: string | null } = {}): Promise<BrainCodingPromptExportResponse> {
+  const response = await fetch("/api/brain/export-coding-prompt", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/export-coding-prompt failed with ${response.status}.`));
+  }
+
+  return payload as BrainCodingPromptExportResponse;
 }
 
 export async function retrieveBrainMemory(input: BrainRetrieveInput): Promise<BrainRetrieveResponse> {
