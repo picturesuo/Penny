@@ -519,14 +519,8 @@ export function CreateWorkspace({
               onDetailOptionIdChange={setActiveDetailOptionId}
               onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
             />
-            <CreateEvidenceLedgerPanel options={options} selectedOptionIds={selectedOptionIds} />
+            <CreateEvidenceLedgerPanel options={options} selectedOptionIds={selectedOptionIds} rejectedOptionIds={rejectedOptionIds} />
           </div>
-
-          <CreateLearnBridgePanel artifact={artifact} onLearnThis={onLearnThis} />
-
-          {isCreateComparisonDevMode() ? (
-            <CreateComparisonPanel comparison={providerComparison} busy={busy} onCompare={() => void handleCompareProviders()} />
-          ) : null}
 
           <section ref={setCreateStepRef(2)} className="create-judgment-panel" aria-label="Create judgment">
             <header>
@@ -558,8 +552,19 @@ export function CreateWorkspace({
             </div>
           </section>
 
+          <CreateLearnBridgePanel artifact={artifact} onLearnThis={onLearnThis} />
+
+          {isCreateComparisonDevMode() ? (
+            <CreateComparisonPanel comparison={providerComparison} busy={busy} onCompare={() => void handleCompareProviders()} />
+          ) : null}
+
           <div ref={setCreateStepRef(3)} className="create-output-grid" data-create-step="idea-spec">
-            <CreateArtifactPanel artifact={artifact} selectedOptions={selectedOptions} userComment={userComment} />
+            <CreateArtifactPanel
+              artifact={artifact}
+              selectedOptions={selectedOptions}
+              rejectedOptions={options.filter((option) => rejectedOptionIds.includes(option.id))}
+              userComment={userComment}
+            />
             <div ref={setCreateStepRef(4)} className="create-step-anchor" data-create-step="verification">
               <CreateVerificationPanel verification={verification} />
             </div>
@@ -1484,18 +1489,29 @@ type CreateEvidenceLedgerRow = {
 export function CreateEvidenceLedgerPanel({
   options,
   selectedOptionIds,
+  rejectedOptionIds = [],
 }: {
   options: CandidateOption[];
   selectedOptionIds: string[];
+  rejectedOptionIds?: string[];
 }) {
   if (!options.length) {
     return null;
   }
 
   const selectedOptions = options.filter((option) => selectedOptionIds.includes(option.id));
-  const visibleOptions = selectedOptions.length ? selectedOptions : options;
+  const rejectedOptions = options.filter((option) => rejectedOptionIds.includes(option.id));
+  const judgedOptions = uniqueById([...selectedOptions, ...rejectedOptions]);
+  const visibleOptions = judgedOptions.length ? judgedOptions : options;
   const scopeLabel = selectedOptions.length
-    ? `Selected ${selectedOptions.map((option) => option.lens).join(" + ")}`
+    ? [
+        `Selected ${selectedOptions.map((option) => option.lens).join(" + ")}`,
+        rejectedOptions.length ? `rejected ${rejectedOptions.map((option) => option.lens).join(" + ")}` : null,
+      ]
+        .filter(Boolean)
+        .join("; ")
+    : rejectedOptions.length
+      ? `Rejected ${rejectedOptions.map((option) => option.lens).join(" + ")}`
     : "All five options before selection";
   const evidenceRows = createEvidenceLedgerRows(visibleOptions, "evidence");
   const tasteRows = createEvidenceLedgerRows(visibleOptions, "taste");
@@ -1798,10 +1814,12 @@ export function CreateOptionDetailsDrawer({
 export function CreateArtifactPanel({
   artifact,
   selectedOptions = [],
+  rejectedOptions = [],
   userComment = "",
 }: {
   artifact: CodingPromptArtifact | null;
   selectedOptions?: CandidateOption[];
+  rejectedOptions?: CandidateOption[];
   userComment?: string;
 }) {
   const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
@@ -1823,8 +1841,10 @@ export function CreateArtifactPanel({
   }
 
   const selectedLensLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "the current selected option mix";
-  const artifactEvidenceCount = createEvidenceLedgerRows(selectedOptions, "evidence").length;
-  const artifactTasteCount = createEvidenceLedgerRows(selectedOptions, "taste").length;
+  const rejectedLensLabel = rejectedOptions.length ? rejectedOptions.map((option) => option.lens).join(" + ") : "No rejected direction recorded yet.";
+  const judgedOptions = uniqueById([...selectedOptions, ...rejectedOptions]);
+  const artifactEvidenceCount = createEvidenceLedgerRows(judgedOptions, "evidence").length;
+  const artifactTasteCount = createEvidenceLedgerRows(judgedOptions, "taste").length;
 
   function toggleValue(values: string[], value: string): string[] {
     return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
@@ -1853,6 +1873,10 @@ export function CreateArtifactPanel({
           <p>{selectedOptions.length ? selectedLensLabel : "No selected option history recorded yet."}</p>
         </article>
         <article>
+          <span>Rejected directions</span>
+          <p>{rejectedLensLabel}</p>
+        </article>
+        <article>
           <span>User comment</span>
           <p>{userComment.trim() ? clipDisplayText(userComment, 140) : "No user comment recorded yet."}</p>
         </article>
@@ -1863,7 +1887,7 @@ export function CreateArtifactPanel({
           </p>
         </article>
       </div>
-      <div className="yc-artifact-outline" aria-label="YC artifact outline" data-testid="yc-artifact-outline">
+      <div className="yc-artifact-outline" aria-label="Idea Spec outline" data-testid="yc-artifact-outline">
         {ycArtifactOutline(artifact).map((section) => {
           const expanded = expandedSectionIds.includes(section.title);
 
