@@ -83,7 +83,7 @@ Strict startup validation is active when `NODE_ENV=production` or `PENNY_DEPLOY_
 
 ## Database Readiness
 
-Brain memory persistence is backed by the Drizzle schema and migrations. The alpha-critical Brain memory migration is `drizzle/0029_add_brain_memory_persistence.sql`. Export feedback persistence is `drizzle/0030_add_create_export_feedback.sql`. API startup verifies the required Penny tables after migrations or separate prep and fails with a `pnpm db:migrate` instruction if the schema is incomplete.
+Brain memory persistence is backed by the Drizzle schema and migrations. The alpha-critical Brain memory migration is `drizzle/0029_add_brain_memory_persistence.sql`. Export feedback persistence is `drizzle/0030_add_create_export_feedback.sql`. Create workspace persistence for option sets, artifacts, and judgment events is `drizzle/0034_add_create_workspace_persistence.sql`. API startup verifies the required Penny tables after migrations or separate prep and fails with a `pnpm db:migrate` instruction if the schema is incomplete.
 
 Private alpha must use Postgres. The API startup path requires `DATABASE_URL`; route-level Brain memory also refuses production in-memory fallback. In-memory Brain memory is for direct local dev/test only and is not durable.
 
@@ -118,7 +118,7 @@ pnpm check:public-readiness -- \
 
 The Brain memory tables store scope columns on sources, chunks, nodes, edges, profile signals, ingestion jobs, and retrieval events. Brain Ranker persistence adds scoped `brain_ranker_runs`, `brain_ranked_candidates`, and `brain_development_events` for Create ranker output and learning events. Route tests cover cross-user access attempts for jobs, profiles, retrieval, memory review, source deletion, Create memory retrieval, Create artifacts, judgments, option sets, and deleted-source Create behavior.
 
-Create uses the backend Brain Ranker progress engine. The ranker accepts retrieved Brain memory and source refs, privately scores relevance/progress dimensions, and returns one next-best move plus five ranked Create candidates. Normal user surfaces show memory/source counts, top reasons, grounding labels, and uncertainty; raw ranker scores are not shown. Context-light runs are labeled `context-light/search-needed/inferred` instead of inventing memory. Brain profile now surfaces active projects, idea clusters, high-value memories, stale/superseded memories, and recent meaningful activity alongside recurring interests, taste, build style, frustrations, and rejected directions.
+Create uses the backend Brain Ranker progress engine. The ranker accepts retrieved Brain memory and source refs, privately scores relevance/progress dimensions, and returns one next-best move plus five ranked Create candidates. Normal user surfaces show memory/source counts, top reasons, grounding labels, and uncertainty; raw ranker scores are not shown. Context-light runs are labeled `context-light/search-needed/inferred` instead of inventing memory. In DB-backed environments, Create option sets, artifacts, and judgment events persist in scoped Postgres tables; the in-memory Create store is only for local dev/test fallback. Brain profile now surfaces active projects, idea clusters, high-value memories, stale/superseded memories, and recent meaningful activity alongside recurring interests, taste, build style, frustrations, and rejected directions.
 
 ## Privacy Checks
 
@@ -158,7 +158,7 @@ For PDFs, paste selectable text or run OCR outside Penny and import the extracte
 
 ## Known Limitations
 
-- Create persistence is still in-process for option sets, judgments, and artifacts; tests scope it by user/workspace, but durable Create tables are not yet implemented.
+- Browser-side Create draft restore still uses local storage for recording ergonomics; the backend now persists option sets, judgments, and artifacts in strict DB-backed environments.
 - The comparison panel is a dev/test judge tool, not a normal user feature.
 - Model-backed Create is opt-in and should remain off for first private-alpha runs unless actively evaluated.
 - Brain import uses local parsing heuristics and strict file-size limits; very large exports should be reduced before import.
