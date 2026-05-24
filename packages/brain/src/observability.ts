@@ -3,6 +3,7 @@ export type PennyLogLevel = "info" | "warn" | "error";
 export type PennyLogEventName =
   | "auth.failure"
   | "brain.import"
+  | "brain.object_memory_sync"
   | "brain.memory_review"
   | "brain.retrieve"
   | "brain.source_delete"

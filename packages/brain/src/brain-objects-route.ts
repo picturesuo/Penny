@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
+import { defaultBrainMemoryService, type BrainMemoryRouteService } from "./brain-memory-route.ts";
 import {
   artifacts,
   brainObjects,
@@ -16,6 +17,7 @@ import {
   sources,
 } from "./db/schema.ts";
 import { LearnSessionOutputSchema, learnRecentInputFromSessionOutput } from "./learn-session-output.ts";
+import { emitPennyLog } from "./observability.ts";
 import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
 import { loadScopedSourcesForSessionIds } from "./source-loading.ts";
 
@@ -89,6 +91,7 @@ type MemoryBrainObjectsStore = {
   recents: BrainRecentDto[];
   notes: BrainSessionNoteDto[];
 };
+type BrainObjectMemoryService = Pick<BrainMemoryRouteService, "importSource">;
 type ScopeColumn = AnyPgColumn;
 type ScopeTable = {
   userId: ScopeColumn;
@@ -211,8 +214,18 @@ export type BrainObjectsRouteService = {
 
 export type BrainObjectsRouteOptions = {
   service?: BrainObjectsRouteService;
+  memoryService?: BrainObjectMemoryService | null;
+  syncSavedObjectsToMemory?: boolean;
   db?: PennyDatabase;
   databaseUrl?: string;
+};
+
+export type SavedBrainObjectMemoryImport = {
+  status: "queued" | "running" | "completed" | "failed";
+  jobId: string;
+  sourceId: string | null;
+  sourceLabel: string | null;
+  memoryNodeCount: number;
 };
 
 const memoryBrainObjectsStores = new Map<string, MemoryBrainObjectsStore>();
@@ -248,7 +261,10 @@ export async function handleSaveBrainObjectRequest(
 
   try {
     const service = resolveService(options);
-    return jsonResponse({ data: { object: await service.saveObject({ scope: scopeFromRequest(request), ...parsed.data }) } }, 201);
+    const object = await service.saveObject({ scope: scopeFromRequest(request), ...parsed.data });
+    const memoryImport = await syncSavedBrainObjectToMemory(object, request, options);
+
+    return jsonResponse({ data: { object, ...(memoryImport ? { memoryImport } : {}) } }, 201);
   } catch (error) {
     return routeErrorResponse(error, "brain_object_save_failed");
   }
@@ -805,6 +821,93 @@ function resolveService(options: BrainObjectsRouteOptions): BrainObjectsRouteSer
     getSessionNote: (scope, sessionId) => getSessionNote(db, scope, sessionId),
     saveSessionNote: (input) => saveSessionNote(db, input),
   };
+}
+
+async function syncSavedBrainObjectToMemory(
+  object: BrainObjectDto,
+  request: Request,
+  options: BrainObjectsRouteOptions,
+): Promise<SavedBrainObjectMemoryImport | null> {
+  const memoryService = resolveMemoryService(options);
+  const content = textValue(object.preview ?? object.summary ?? object.title);
+
+  if (!memoryService || !content) {
+    return null;
+  }
+
+  const sourceLabel = savedBrainObjectMemoryLabel(object);
+
+  try {
+    const result = await memoryService.importSource(
+      {
+        kind: "text",
+        label: sourceLabel,
+        sourceUri: savedBrainObjectSourceUri(object),
+        content,
+        rawRetention: false,
+        privacy: {
+          visibility: "private_memory",
+          trainingUse: false,
+          rawRetention: false,
+          source: "manual_import",
+          allowedUses: ["private_memory", "create_retrieval"],
+        },
+      },
+      request,
+    );
+
+    return {
+      status: result.job.status,
+      jobId: result.job.id,
+      sourceId: result.job.sourceId,
+      sourceLabel: result.job.sourceImport?.label ?? sourceLabel,
+      memoryNodeCount: result.job.counts.memoryNodes,
+    };
+  } catch (error) {
+    emitPennyLog(
+      "brain.object_memory_sync",
+      {
+        status: "error",
+        objectId: object.id,
+        objectType: object.objectType,
+      },
+      { level: "error" },
+    );
+
+    return null;
+  }
+}
+
+function resolveMemoryService(options: BrainObjectsRouteOptions): BrainObjectMemoryService | null {
+  if (options.syncSavedObjectsToMemory === false) {
+    return null;
+  }
+
+  if ("memoryService" in options) {
+    return options.memoryService ?? null;
+  }
+
+  if (options.service) {
+    return null;
+  }
+
+  return defaultBrainMemoryService;
+}
+
+function savedBrainObjectMemoryLabel(object: BrainObjectDto): string {
+  if (object.objectType === "quick_note") {
+    return `Quick note: ${clipText(object.title, 140)}`;
+  }
+
+  return `Saved Brain object: ${clipText(object.title, 140)}`;
+}
+
+function savedBrainObjectSourceUri(object: BrainObjectDto): string {
+  if (object.backing) {
+    return `penny://brain-objects/${encodeURIComponent(object.backing.table)}/${encodeURIComponent(object.backing.id)}`;
+  }
+
+  return `penny://brain-objects/${encodeURIComponent(object.id)}`;
 }
 
 function memoryBrainObjectsService(): BrainObjectsRouteService {

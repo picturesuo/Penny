@@ -17,6 +17,7 @@ import {
   type SaveBrainObjectInput,
   type SaveSessionNoteInput,
 } from "./brain-objects-route.ts";
+import { handleBrainMemoryProfileRequest, type BrainMemoryProfile } from "./brain-memory-route.ts";
 import type { BrainScope } from "./scope.ts";
 
 type BrainObjectsState = Parameters<typeof buildBrainObjects>[0];
@@ -237,6 +238,8 @@ test("dev fallback keeps quick notes and saved Brain objects without DATABASE_UR
     );
     const objects = await handleBrainObjectsRequest(scopedRequestFor("http://localhost/api/brain/objects", fallbackScope));
     const objectsBody = (await objects.json()) as { data: BrainObjectsPayload };
+    const memoryProfile = await handleBrainMemoryProfileRequest(scopedRequestFor("http://localhost/api/brain/memory/profile", fallbackScope));
+    const memoryProfileBody = (await memoryProfile.json()) as { data: BrainMemoryProfile };
 
     assert.equal(created.status, 201);
     assert.equal(createdBody.data.recents[0]?.rawIdea, "Brain-first test quick note for Create memory.");
@@ -245,6 +248,9 @@ test("dev fallback keeps quick notes and saved Brain objects without DATABASE_UR
     assert.equal(saved.status, 201);
     assert.equal(objects.status, 200);
     assert.match(objectsBody.data.objects[0]?.preview ?? "", /Brain-first test quick note/);
+    assert.equal(memoryProfile.status, 200);
+    assert.equal(memoryProfileBody.data.sources[0]?.label, "Quick note: Brain-first test quick note for Create memory.");
+    assert.match(memoryProfileBody.data.recentMemoryNodes.map((node) => node.text).join("\n"), /Brain-first test quick note/);
   } finally {
     restoreEnv("DATABASE_URL", previousDatabaseUrl);
     restoreEnv("PENNY_SKIP_DATABASE_PREP", previousSkipDatabasePrep);
