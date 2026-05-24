@@ -1070,7 +1070,7 @@ export function App() {
   );
 }
 
-function createPromptFromBrainProfile(profile: BrainMemoryProfileData): string {
+export function createPromptFromBrainProfile(profile: BrainMemoryProfileData): string {
   const sourceLabels = profile.sources
     .slice(0, 3)
     .map((source) => source.label.trim())
