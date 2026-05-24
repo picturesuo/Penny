@@ -5,6 +5,7 @@ export type PennyLogEventName =
   | "brain.import"
   | "brain.object_memory_sync"
   | "brain.memory_review"
+  | "brain.profile_review"
   | "brain.retrieve"
   | "brain.source_delete"
   | "create.generate"

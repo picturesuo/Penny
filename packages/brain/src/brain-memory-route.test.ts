@@ -7,6 +7,7 @@ import {
   handleBrainImportJobRequest,
   handleBrainImportRequest,
   handleBrainMemoryProfileRequest,
+  handleBrainMemoryProfileReviewRequest,
   handleBrainMemoryReviewRequest,
   handleBrainRetrieveRequest,
   handleBrainSourceDeleteRequest,
@@ -172,6 +173,48 @@ test("Brain memory import and review actions record development events", async (
   assert.ok(events.some((event) => event.kind === "memory_wrong" && event.explicitness === "explicit" && event.memoryNodeIds?.includes(firstMemory.id)));
   assert.ok(events.some((event) => event.kind === "memory_forgotten" && event.explicitness === "explicit" && event.memoryNodeIds?.includes(secondMemory.id)));
   assert.ok(events.every((event) => !("rawScore" in (event.payload ?? {}))));
+});
+
+test("Brain profile review persists explicit profile judgment", async () => {
+  const events: RecordBrainDevelopmentEventInput[] = [];
+  const rankerRecorder: BrainRankerRecorder = {
+    async recordCreateRankerRun() {
+      throw new Error("Brain profile review should not record Create ranker runs.");
+    },
+    async recordDevelopmentEvent(input) {
+      events.push(input);
+    },
+  };
+  const backing = new Map() as Parameters<typeof createInMemoryBrainMemoryService>[0];
+  const service = createInMemoryBrainMemoryService(backing, rankerRecorder);
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "text",
+      label: "Profile review notes",
+      content:
+        "Project: Penny should remember explicit founder judgment. Preference: use source-backed profiles before Create. Rejected direction: Avoid generic productivity dashboards.",
+    }),
+    { service },
+  );
+  const importedProfile = (await responsePayload(importResponse)).data.profile as BrainMemoryProfile;
+  const fingerprint = `test-profile::${importedProfile.stats.sourceCount}:${importedProfile.stats.memoryNodeCount}:${importedProfile.stats.profileSignalCount}`;
+  const reviewResponse = await handleBrainMemoryProfileReviewRequest(
+    jsonRequest("http://localhost/api/brain/memory/profile/review", { fingerprint }),
+    { service },
+  );
+  const reviewPayload = await responsePayload(reviewResponse);
+  const reloadedService = createInMemoryBrainMemoryService(backing, rankerRecorder);
+  const profileResponse = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile"), {
+    service: reloadedService,
+  });
+  const reviewedProfile = (await responsePayload(profileResponse)).data as BrainMemoryProfile;
+
+  assert.equal(reviewResponse.status, 200);
+  assert.equal(reviewPayload.data.reviewed, true);
+  assert.equal(reviewPayload.data.profileReview.fingerprint, fingerprint);
+  assert.equal(reviewPayload.data.profile.profileReview?.fingerprint, fingerprint);
+  assert.equal(reviewedProfile.profileReview?.fingerprint, fingerprint);
+  assert.ok(events.some((event) => event.kind === "profile_reviewed" && event.explicitness === "explicit" && event.weight > 0.9));
 });
 
 test("Brain memory sync imports record source synced development events", async () => {

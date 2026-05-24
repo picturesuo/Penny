@@ -16,6 +16,7 @@ import {
   handleBrainImportJobRequest,
   handleBrainImportRequest,
   handleBrainMemoryProfileRequest,
+  handleBrainMemoryProfileReviewRequest,
   handleBrainMemoryReviewRequest,
   handleBrainRetrieveRequest,
   handleBrainSourceDeleteRequest,
@@ -469,6 +470,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/memory/profile") {
       await writeWebResponse(outgoing, await handleBrainMemoryProfileRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/memory/profile/review") {
+      await writeWebResponse(outgoing, await handleBrainMemoryProfileReviewRequest(request));
       return;
     }
 
