@@ -132,8 +132,15 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await page.getByTestId("create-learn-this-button").click();
   await expect(page.getByTestId("learn-back-to-create")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("heading", { name: "Explain simply" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Current learning step" })).toContainText(/selecting cards, writing comments, and rating exports/i);
   await expect(page.getByRole("button", { name: "2 Show worked example" })).toBeVisible();
   await expect(page.getByRole("button", { name: "3 Apply to my artifact" })).toBeVisible();
+  await page.getByRole("button", { name: "2 Show worked example" }).click();
+  await expect(page.getByRole("heading", { name: "Show worked example" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Current learning step" })).toContainText(/selected option events outrank unselected viewing events/i);
+  await page.getByRole("button", { name: "3 Apply to my artifact" }).click();
+  await expect(page.getByRole("heading", { name: "Apply to my artifact" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Current learning step" })).toContainText(/future Brain Ranker evidence/i);
   await captureProof(page, testInfo, "06-learn");
 
   await page.getByTestId("learn-back-to-create").click();
