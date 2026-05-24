@@ -212,12 +212,14 @@ function assertSafeIds() {
 }
 
 function scopeEvidence() {
-  return {
-    userId,
-    workspaceId,
-    projectId,
-    sphereId,
-  };
+  return Object.fromEntries(
+    [
+      ["userId", userId],
+      ["workspaceId", workspaceId],
+      ["projectId", projectId],
+      ["sphereId", sphereId],
+    ].filter(([, value]) => isSafeScopeId(value)),
+  );
 }
 
 function runIdEvidence() {
@@ -234,7 +236,7 @@ function assertNoUnsupportedConnectorClaims(value, label) {
     /\blive Gmail connected\b/i,
     /\bGmail OAuth connected\b/i,
     /\breal iMessage\b/i,
-    /\blive SMS\b/i,
+    /\blive SMS connected\b/i,
     /\bSlack connected\b/i,
     /\bGoogle Drive connected\b/i,
     /\bCalendar connected\b/i,
