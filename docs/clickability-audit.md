@@ -15,7 +15,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
 - Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
 - Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
-- `pnpm test`: passed, 667 tests.
+- `pnpm test`: passed, 668 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
 - Prior in-app browser smoke: imported a Brain note, rendered the Brain export panel, and exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails.
@@ -53,7 +53,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Learn | Source-to-concept tour | Turn arbitrary input into a compact understanding path. | Works; Learn now renders a five-part Source / Map / Teach / Use / Check path with source-specific source and lesson-specific use/check text instead of generic filler. | `meaningMapItemsForLesson` derives the compact tour from source spans, lesson title, explanation, and source label; e2e asserts all five labels. | Keep it compact; do not reintroduce long worksheet copy on the first screen. |
 | Learn | Explain simply / worked example / applies to artifact | Each choice changes visible lesson content. | Works in the Create Learn bridge path. | `LearnWorkspace` builds three focused steps for the Create bridge node. | Keep; assert content changes in the real e2e. |
 | Learn | Back to Create | Return with prompt/sources/selections/comment/artifact/evidence preserved. | Works without refresh because Create stays mounted and hidden. | `shouldRenderCreateWorkspace` keeps component mounted. | Persist the state; hidden mounted state is not enough for refresh. |
-| Create | Canvas | Show Brain sources -> Create options -> Learn explanation -> Artifact/export. | Works for the demo: Canvas updates with imported Brain context, selected options, Learn bridge, and exported `.md` prompt. | Create renders a deterministic visual outline of the current demo state. | Later: connect Create Canvas to backend session canvas for non-demo sessions. |
+| Create | Canvas | Show Brain sources -> Create options -> Learn explanation -> Artifact/export. | Works for the demo: Canvas updates with imported Brain context, selected options, Learn bridge, and exported `.md` prompt. | `/api/create/next` now returns a backend-derived Create canvas snapshot from the option set, artifact, and judgment event; the frontend renders that snapshot and keeps the older local outline only as a saved-draft fallback. | Later: merge this Create snapshot into a broader session canvas if the graph view needs cross-mode history. |
 | Create | Export | Produce copyable prompt/spec text. | Works after artifact generation; export shows `Copy prompt`, `Download .md`, and textarea fallback, and both Brain-first and YC recording e2e assert the actions. | `handleExportPrompt` calls `/api/create/export-coding-prompt`; prompt action controls call clipboard/download helpers with textarea fallback. | Keep. |
 
 ## Immediate Failure Chain
@@ -68,6 +68,6 @@ This is still not a production-readiness pass. Public/staging still needs real P
 
 1. Keep `brain-first.spec.cjs` and `yc-recording.spec.cjs` green before recording.
 2. Keep local fallback dev-only; production/staging must use real Postgres.
-3. Replace the deterministic Create Canvas with backend-derived session canvas when demo pressure is gone.
+3. Keep backend Create Canvas snapshot coverage green; later merge it with a broader session canvas if cross-mode history becomes necessary.
 4. Keep quick-note-to-memory promotion server-owned and covered by the Brain-first e2e.
 5. Do not demo live Gmail, SMS/iMessage, Slack, Drive, or Calendar until their proof bundles pass.
