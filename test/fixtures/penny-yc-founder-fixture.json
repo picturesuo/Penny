@@ -5,7 +5,7 @@
     "fixtureOnly": true,
     "trainingUse": false,
     "liveConnectorClaims": false,
-    "copy": "Safe demo fixture only. These are fake email, LinkedIn-style, WhatsApp-style, and founder-note records imported as private Brain memory. They do not claim live Gmail, LinkedIn, WhatsApp, iMessage, SMS, or OAuth access."
+    "copy": "Safe demo fixture only. These are fake email-style, LinkedIn-style, manual message transcript, and founder-note records imported as private Brain memory. trainingUse=false. They do not claim live Gmail, LinkedIn, WhatsApp, iMessage, SMS, Slack, social, or OAuth access."
   },
   "sources": [
     {
@@ -21,7 +21,7 @@
         "source": "manual_import",
         "allowedUses": ["private_memory", "create_retrieval"]
       },
-      "content": "Source type: Safe Gmail-style email fixture. Not live Gmail. No OAuth. trainingUse=false.\nSubject: Lovable hackathon recap and the missing thinking layer.\nFrom: founder@example.test\nTo: self@example.test\n\nSource fact: The founder won a Lovable hackathon while watching builders use coding agents before they had a clear spec.\nSource fact: The failure mode was not code quality; it was vague thinking entering the coding agent too early.\nGoal: Penny should help a founder turn vague ideas into buildable specs using private email-style context, manual message transcripts, founder notes, and explicit judgment.\nIdea: The best YC story is that Penny helps a user understand and recreate Penny using Penny itself.\nDecision: This fixture stores safe derived memory only; it must not imply live Gmail OAuth, account scanning, or real inbox access.\nPreference: Show source chips and evidence so a demo viewer can see why a suggestion exists.\n"
+      "content": "Source type: Safe Gmail-style email fixture. Not live Gmail. No OAuth. trainingUse=false.\nSubject: Lovable hackathon recap and the missing thinking layer.\nFrom: founder@example.test\nTo: self@example.test\n\nSource fact: The founder won a Lovable hackathon while watching builders use coding agents before they had a clear spec.\nSource fact: The ideation instrument has legs because the repeated failure mode happened before coding agents: deciding what should be built, why it matters, and what evidence supports it.\nSource fact: The failure mode was not code quality; it was vague thinking entering the coding agent too early.\nGoal: Penny should help a founder turn vague ideas into buildable specs using private email-style context, manual message transcripts, founder notes, and explicit judgment.\nIdea: The best YC story is that Penny helps a user understand and recreate Penny using Penny itself.\nDecision: This fixture stores safe derived memory only; it must not imply live Gmail OAuth, account scanning, or real inbox access.\nPreference: Show source chips and evidence so a demo viewer can see why a suggestion exists.\n"
     },
     {
       "id": "yc-linkedin-founder-context",
@@ -36,13 +36,13 @@
         "source": "manual_import",
         "allowedUses": ["private_memory", "create_retrieval"]
       },
-      "content": "Source type: Safe LinkedIn-style founder context fixture. Not live LinkedIn. No OAuth. trainingUse=false.\nProfile note: Founder/builder focused on AI builders, coding agents, memory-native creativity, YC, and software that turns raw thought into shippable structure.\nSource fact: AI builders increasingly need sharper upstream thinking because coding agents make implementation faster than deciding what should be built.\nGoal: Penny should feel like an AI workbench for founder creativity, not a generic assistant.\nPreference: The product should preserve human judgment; Penny can suggest options, but the founder chooses the mix.\nDecision: Avoid GPT-wrapper risk by grounding suggestions in private Brain memory, explicit source evidence, rejected directions, and user judgment events.\nIdea: Penny's moat is reusable precedent and memory over time: what the founder chose, rejected, defended, learned, and exported.\n"
+      "content": "Source type: Safe LinkedIn-style founder context fixture. Not live LinkedIn. No OAuth. trainingUse=false.\nProfile note: Founder/builder focused on AI builders, coding agents, memory-native creativity, YC, and software that turns raw thought into shippable structure.\nSource fact: AI builders increasingly need sharper upstream thinking because coding agents make implementation faster than deciding what should be built.\nSource fact: The founder uncertainty is whether a thinking instrument can become a company, not whether another generic assistant can generate more copy.\nGoal: Penny should feel like an AI workbench for founder creativity, not a generic assistant.\nPreference: The product should preserve human judgment; Penny can suggest options, but the founder chooses the mix.\nDecision: Avoid GPT-wrapper risk by grounding suggestions in private Brain memory, explicit source evidence, rejected directions, and user judgment events.\nIdea: Penny's moat is reusable precedent and memory over time: what the founder chose, rejected, defended, learned, and exported.\n"
     },
     {
       "id": "yc-whatsapp-transcript",
       "kind": "manual_messages_transcript",
-      "label": "Manual WhatsApp-style transcript fixture",
-      "fileName": "yc-whatsapp-style-transcript-fixture.txt",
+      "label": "Manual messages context for demo - WhatsApp-style transcript",
+      "fileName": "yc-manual-messages-context-fixture.txt",
       "sourceUri": "demo-fixture:manual-messages/whatsapp-style",
       "privacy": {
         "visibility": "private_memory",
@@ -51,7 +51,7 @@
         "source": "manual_import",
         "allowedUses": ["private_memory", "create_retrieval"]
       },
-      "content": "Source type: Manual pasted WhatsApp-style transcript fixture. Not live WhatsApp, SMS, or iMessage. No OAuth. trainingUse=false.\nBen: I keep circling Penny as a thinking instrument, not a chatbot. It should pull together the mess of emails, messages, and notes so ideas stop floating around.\nFriend: The interesting part is not that AI writes the answer. It is that it gives you five directions and makes your judgment visible.\nBen: Exactly. Personal, Practical, Valuable, Critical, Weird. Equal cards. I do not want Penny to pick for me.\nFriend: The demo should show Penny learning from what you select, not just generating copy.\nBen: If I get confused, I want Learn this to explain the concept and then send me back to Create without losing state.\nSource fact: The user wants a memory-native workbench that gathers scattered context into one creative workspace.\nPreference: Equal-option Create cards should inhibit premature convergence and grow creativity instead of narrowing it too early.\nGoal: Preserve selected options, comments, artifact state, Learn focus, and final export as one continuous flow.\n"
+      "content": "Source type: Manual pasted messages transcript fixture for demo. WhatsApp-style formatting only. Not live WhatsApp, SMS, iMessage, Slack, or social messages. No OAuth. trainingUse=false.\nBen: I keep circling Penny as a thinking instrument, not a chatbot. It should pull together the mess of email-style fixtures, manual message transcripts, and notes so ideas stop floating around.\nFriend: The interesting part is not that AI writes the answer. It is that it gives you five directions and makes your judgment visible.\nBen: Exactly. Personal, Practical, Valuable, Critical, Weird. Equal cards. I do not want Penny to pick for me.\nFriend: The demo should show Penny learning from what you select, not just generating copy.\nBen: If I get confused, I want Learn this to explain the concept and then send me back to Create without losing state.\nSource fact: The user wants a memory-native workbench that gathers scattered safe fixture/manual context into one creative workspace.\nPreference: Equal-option Create cards should inhibit premature convergence and grow creativity instead of narrowing it too early.\nGoal: Preserve selected options, comments, artifact state, Learn focus, and final export as one continuous flow.\n"
     },
     {
       "id": "yc-founder-notes",
@@ -81,7 +81,7 @@
         "source": "manual_import",
         "allowedUses": ["private_memory", "create_retrieval"]
       },
-      "content": "Source type: Safe founder-note fixture. trainingUse=false.\nRejected direction: Do not pitch Penny as a generic chatbot, because the value is a controllable thinking workbench with graph memory, challenge, Learn, and artifact output.\nRejected direction: Do not make Penny a generic notes app, because notes alone do not create assumptions, options, judgment events, challenges, or build prompts.\nRejected direction: Do not make Penny a generic productivity dashboard, because the YC story is creative direction and structured thinking, not metrics panels.\nRejected direction: Do not build broad Slack, social, iMessage, SMS, WhatsApp, LinkedIn, or Gmail OAuth surfaces for the 2-day demo.\nDecision: Use only safe fixture/manual/pasted context for the YC demo path and keep trainingUse=false visible.\nRisk: Fake live connector claims would weaken trust; the UI must say fixture, manual transcript, or demo context when those sources are used.\n"
+      "content": "Source type: Safe founder-note fixture. trainingUse=false.\nRejected direction: Do not pitch Penny as a generic chatbot, because the value is a controllable thinking workbench with graph memory, challenge, Learn, and artifact output.\nRejected direction: Do not make Penny a generic notes app, because notes alone do not create assumptions, options, judgment events, challenges, or build prompts.\nRejected direction: Do not make Penny a generic productivity dashboard, because the YC story is creative direction and structured thinking, not metrics panels.\nRejected direction: Do not pitch Penny as a generic assistant or GPT wrapper, because the durable layer is memory, source evidence, explicit judgment, and reusable precedent.\nRejected direction: Do not build broad Slack, social, iMessage, SMS, WhatsApp, LinkedIn, or Gmail OAuth surfaces for the 2-day demo.\nDecision: Use only safe fixture/manual/pasted context for the YC demo path and keep trainingUse=false visible.\nRisk: Fake live connector claims would weaken trust; the UI must say fixture, manual transcript, or demo context when those sources are used.\n"
     }
   ]
 }
