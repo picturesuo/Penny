@@ -17,16 +17,22 @@ test("Learn turns arbitrary source material into a quiet source-to-concept tour"
   });
 
   await page.locator(".landing-shortcuts button").filter({ hasText: "Learn" }).click();
-  await page
-    .getByRole("textbox", { name: /Enter a rough thought for Penny|Ask Penny anything/ })
-    .fill(
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "messy-pricing-memo.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
       "Penny should help founders learn whether a messy pricing memo's customer urgency and product scope are worth saving without turning it into generic advice.",
-    );
+    ),
+  });
+  await expect(page.locator(".landing-file-chip strong")).toHaveText("messy-pricing-memo.md");
+  await expect(page.getByRole("textbox", { name: /Enter a rough thought for Penny|Ask Penny anything/ })).toHaveValue(
+    "Teach me messy-pricing-memo.md in concise clustered lesson steps.",
+  );
   await page.getByRole("button", { name: "Send thought" }).click();
 
   const tour = page.getByTestId("learn-understanding-tour");
   await expect(tour).toBeVisible({ timeout: 30_000 });
-  await expect(tour).toContainText(/Penny should help founders/i);
+  await expect(tour).toContainText(/Penny should help founders|messy pricing memo/i);
   await expect(page.getByTestId("learn-meaning-map")).toContainText(/Source/);
   await expect(page.getByTestId("learn-meaning-map")).toContainText(/Map/);
   await expect(page.getByTestId("learn-meaning-map")).toContainText(/Teach/);
