@@ -68,11 +68,11 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
     timeout: 15_000,
   });
   await expect(page.getByRole("textbox", { name: "Rough idea" })).toHaveValue(/emails, messages, and notes/i);
-  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Email fixture");
-  await expect(page.getByTestId("yc-fixture-labels")).toContainText("LinkedIn-style context");
-  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Manual messages transcript");
-  await expect(page.getByTestId("yc-fixture-labels")).toContainText("WhatsApp-style demo");
-  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Founder notes");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Email fixture, not live Gmail");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("LinkedIn-style context, not live LinkedIn");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Manual messages context for demo");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("No live WhatsApp, iMessage, SMS, Slack, or social connectors");
+  await expect(page.getByTestId("yc-fixture-labels")).toContainText("Founder notes, manual/private");
   await expect(page.getByTestId("yc-fixture-labels")).toContainText("trainingUse=false");
   await expect(page.getByTestId("create-option-card")).toHaveCount(5, { timeout: 30_000 });
   await expect(page.getByTestId("create-option-card")).toContainText([
@@ -96,7 +96,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await page.locator('[data-create-lens="Personal"] [data-testid="create-option-details-button"]').click();
   await expect(page.getByTestId("create-evidence-drawer")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Memories used|Sources used|Evidence used/);
-  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Email fixture|Founder notes|Manual WhatsApp-style transcript|LinkedIn-style/i);
+  await expect(page.getByTestId("create-evidence-drawer")).toContainText(/Email fixture|Founder notes|Manual messages context for demo|LinkedIn-style/i);
   await captureProof(page, testInfo, "03-evidence");
 
   for (const lens of ["Personal", "Valuable", "Critical"]) {
