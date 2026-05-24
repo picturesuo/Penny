@@ -19,6 +19,10 @@ test("landing shortcuts either open Brain or select a composer destination", () 
     action: "select-destination",
     destination: "Create",
   });
+  assert.deepEqual(landingShortcutIntent("KeyC"), {
+    action: "select-destination",
+    destination: "Create",
+  });
   assert.deepEqual(landingShortcutIntent("B"), {
     action: "open-mode",
     mode: "Brain",
@@ -61,8 +65,8 @@ test("landing shortcuts render in Brain, Create, Learn, Quick note order", () =>
 });
 
 test("landing shortcut modifier label follows the browser platform", () => {
-  assert.equal(landingShortcutModifierLabel("MacIntel"), "Option");
-  assert.equal(landingShortcutModifierLabel("iPhone"), "Option");
+  assert.equal(landingShortcutModifierLabel("MacIntel"), "⌥");
+  assert.equal(landingShortcutModifierLabel("iPhone"), "⌥");
   assert.equal(landingShortcutModifierLabel("Win32"), "Alt");
   assert.equal(landingShortcutModifierLabel("Linux x86_64"), "Alt");
 });
@@ -81,7 +85,7 @@ test("landing page exposes direct Create and Brain first-run CTAs", () => {
   assert.match(markup, /Start with Create/);
   assert.match(markup, /data-testid="landing-create-start"/);
   assert.match(markup, /Start with your Brain/);
-  assert.match(markup, /Alt|Option/);
+  assert.match(markup, /Alt|⌥/);
 });
 
 test("landing page exposes a small YC fixture fallback when fixture loader is wired", () => {

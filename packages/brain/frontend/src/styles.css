@@ -361,10 +361,10 @@
   .landing-shortcuts button {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 2px 4px;
+    border-radius: 5px;
+    padding: 2px 3px;
     color: inherit;
     background: transparent;
     font-size: 11px;
@@ -383,8 +383,8 @@
   .landing-shortcuts kbd {
     display: inline-grid;
     place-items: center;
-    min-width: 20px;
-    height: 20px;
+    min-width: 18px;
+    height: 18px;
     border: 1px solid rgb(46 46 46 / 0.19);
     border-radius: 4px;
     background: var(--penny-paper);
@@ -395,9 +395,10 @@
     font-weight: 700;
   }
 
-  .landing-shortcuts kbd[aria-label="Control"] {
-    min-width: 31px;
-    padding-inline: 5px;
+  .landing-shortcuts kbd[aria-label="Option"],
+  .landing-shortcuts kbd[aria-label="Alt"] {
+    min-width: 20px;
+    padding-inline: 4px;
   }
 
   .landing-shortcuts kbd.is-pressed {
@@ -8096,24 +8097,24 @@
 
   .landing-shortcuts {
     justify-content: flex-start;
-    gap: 8px;
+    gap: 6px;
     width: auto;
   }
 
   .landing-shortcut-group {
-    gap: 8px;
+    gap: 6px;
   }
 
   .landing-shortcuts button {
     justify-content: center;
-    padding: 4px 2px;
-    font-size: 12px;
+    padding: 3px 2px;
+    font-size: 11px;
   }
 
   .landing-shortcuts kbd {
-    min-width: 22px;
-    height: 22px;
-    font-size: 12px;
+    min-width: 20px;
+    height: 20px;
+    font-size: 11px;
   }
 
   .newspaper-header {

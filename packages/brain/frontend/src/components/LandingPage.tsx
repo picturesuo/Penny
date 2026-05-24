@@ -35,8 +35,8 @@ export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "N", label: "Note" },
 ];
 
-export function landingShortcutModifierLabel(platform: string = browserPlatform()): "Option" | "Alt" {
-  return /Mac|iPhone|iPad|iPod/i.test(platform) ? "Option" : "Alt";
+export function landingShortcutModifierLabel(platform: string = browserPlatform()): "⌥" | "Alt" {
+  return /Mac|iPhone|iPad|iPod/i.test(platform) ? "⌥" : "Alt";
 }
 
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
@@ -118,6 +118,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
   const activeShortcutTimeoutRef = useRef<number | null>(null);
   const submitIntent = landingSubmitIntent(destinationForShortcutKey(selectedShortcutKey), rawIdea);
   const shortcutModifierLabel = landingShortcutModifierLabel();
+  const shortcutModifierAriaLabel = shortcutModifierLabel === "⌥" ? "Option" : "Alt";
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -177,12 +178,12 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
       setIsShortcutModifierDown(false);
     }
 
-    window.addEventListener("keydown", handleShortcut);
-    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("keydown", handleShortcut, true);
+    window.addEventListener("keyup", handleKeyUp, true);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
-      window.removeEventListener("keydown", handleShortcut);
-      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("keydown", handleShortcut, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleWindowBlur);
     };
   }, [disabled, onModeSelect, selectedShortcutKey]);
@@ -244,14 +245,20 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
   }
 
   async function runShortcut(key: string) {
-    const intent = landingShortcutIntent(key);
+    const shortcutKey = displayShortcutKey(key);
+
+    if (!shortcutKey) {
+      return;
+    }
+
+    const intent = landingShortcutIntent(shortcutKey);
 
     if (!intent) {
       return;
     }
 
     if (intent.action === "open-mode") {
-      pulseShortcut(key);
+      pulseShortcut(shortcutKey);
       onModeSelect(intent.mode);
       return;
     }
@@ -260,7 +267,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
       return;
     }
 
-    setSelectedShortcutKey(key.toUpperCase());
+    setSelectedShortcutKey(shortcutKey);
     inputRef.current?.focus();
   }
 
@@ -399,7 +406,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                     >
                       <kbd
                         className={isShortcutModifierDown || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined}
-                        aria-label={shortcutModifierLabel}
+                        aria-label={shortcutModifierAriaLabel}
                       >
                         {shortcutModifierLabel}
                       </kbd>
@@ -440,6 +447,12 @@ function normalizeShortcutKey(key: string): string {
   }
 
   return trimmedKey.toLowerCase();
+}
+
+function displayShortcutKey(key: string): string | null {
+  const normalizedKey = normalizeShortcutKey(key).toUpperCase();
+
+  return landingShortcuts.some((shortcut) => shortcut.key === normalizedKey) ? normalizedKey : null;
 }
 
 function shortcutKeyFromKeyboardEvent(event: KeyboardEvent): string {
