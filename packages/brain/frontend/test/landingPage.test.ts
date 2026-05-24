@@ -26,8 +26,12 @@ test("landing shortcuts either open Brain or select a composer destination", () 
   assert.equal(landingShortcutIntent("X"), null);
 });
 
-test("landing submit requires a selected destination and prompt", () => {
-  assert.equal(landingSubmitIntent(null, "Founder pricing risk"), null);
+test("landing submit defaults rough ideas to Create and honors selected destinations", () => {
+  assert.deepEqual(landingSubmitIntent(null, "Founder pricing risk"), {
+    action: "submit-prompt",
+    mode: "Create",
+    rawIdea: "Founder pricing risk",
+  });
   assert.equal(landingSubmitIntent("Learn", "   "), null);
   assert.deepEqual(landingSubmitIntent("Learn", "Founder pricing risk"), {
     action: "submit-prompt",
@@ -52,7 +56,7 @@ test("landing shortcuts render in Brain, Create, Learn, Quick note order", () =>
   );
 });
 
-test("landing page exposes Start with your Brain first-run CTA", () => {
+test("landing page exposes direct Create and Brain first-run CTAs", () => {
   const markup = renderToStaticMarkup(
     createElement(LandingPage, {
       disabled: false,
@@ -63,6 +67,8 @@ test("landing page exposes Start with your Brain first-run CTA", () => {
     }),
   );
 
+  assert.match(markup, /Start with Create/);
+  assert.match(markup, /data-testid="landing-create-start"/);
   assert.match(markup, /Start with your Brain/);
 });
 
