@@ -245,9 +245,9 @@ The snapshot is a new one-commit Git repository generated from the current track
 Current public mirror:
 
 - URL: `https://github.com/picturesuo/penny-public`
-- Public snapshot commit: `24d4456e6932035a69769564bb0fcf21ee12667e`
-- Source private snapshot commit recorded by the mirror: `0816aee025cf85ea9cdb4ec048ab466526172a9e`
-- Verification: a fresh clone of the public mirror passed `node scripts/check-public-repo-safety.mjs --strict` with zero warnings.
+- Public snapshot commit: `e6e957cace00722d070f4bee62989ebac8c04feb`
+- Source private snapshot commit recorded by the mirror: `350a2870b7baa3aecffc4c569196cf113e16afc5`
+- Verification: a fresh clone of the public mirror passed `node scripts/check-public-repo-safety.mjs --strict` with zero warnings. The mirror has one commit, no `docs/proof/**` files, and only `docs/assets/yc-demo-recording-path.png` from the public media allowlist.
 
 ## Cost Guardrails
 
