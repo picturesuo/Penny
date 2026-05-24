@@ -8,6 +8,8 @@ const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encodin
 const outDir = resolve(repoRoot, readArg("--out", "tmp/penny-public-snapshot"));
 const force = args.includes("--force");
 const initGit = !args.includes("--no-git");
+const mediaExtensions = new Set([".gif", ".har", ".jpg", ".jpeg", ".mov", ".mp4", ".pdf", ".png", ".trace", ".webm", ".webp", ".zip"]);
+const publicMediaAllowlist = new Set(["docs/assets/yc-demo-recording-path.png"]);
 
 if (existsSync(outDir)) {
   if (!force) {
@@ -57,6 +59,7 @@ writeFileSync(
     "",
     "- `docs/proof/**` screenshots, videos, traces, and local proof outputs.",
     "- Tracked local env files other than `.env.example`.",
+    "- Binary/media files unless they are explicitly allowlisted by `scripts/prepare-public-snapshot.mjs`.",
     "",
     "Before pushing this snapshot to a public repository, run the normal tests from inside this directory and review the generated tree.",
     "",
@@ -122,5 +125,15 @@ function exclusionReason(file) {
     return "local env files stay private";
   }
 
+  if (mediaExtensions.has(fileExtension(file)) && !publicMediaAllowlist.has(file)) {
+    return "media file is not public allowlisted";
+  }
+
   return null;
+}
+
+function fileExtension(file) {
+  const index = file.lastIndexOf(".");
+
+  return index === -1 ? "" : file.slice(index).toLowerCase();
 }
