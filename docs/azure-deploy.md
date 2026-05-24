@@ -208,8 +208,11 @@ pnpm check:github-deploy-secrets
 Do not trigger `deploy-azure.yml` until that command passes. As of May 24, 2026, the safe deterministic secrets have been set in GitHub, but `DATABASE_URL` is still missing and must point at the real Azure Postgres database:
 
 ```sh
-gh secret set DATABASE_URL --repo picturesuo/Penny --body 'postgresql://pennyadmin:<password>@penny-prod-postgres.postgres.database.azure.com:5432/penny?sslmode=require'
+DATABASE_URL='postgresql://pennyadmin:<password>@penny-prod-postgres.postgres.database.azure.com:5432/penny?sslmode=require' \
+  pnpm check:database-url-candidate -- --set-github-secret
 ```
+
+That command verifies the candidate under strict private-alpha readiness before writing the GitHub secret. Do not use the current `.env.local` database candidate for deploy; as of May 24, 2026, it fails schema connectivity with `tenant/user ... not found`.
 
 The current machine also needs `az login` before `scripts/azure-bootstrap.sh` or direct Azure resource checks can run.
 
