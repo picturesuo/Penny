@@ -965,7 +965,19 @@ function createCanvasNodes(input: {
   promptExport: PromptExport | null;
 }): CreateCanvasNode[] {
   if (input.createCanvas?.nodes.length) {
+    const selectedLenses = input.selectedOptions.map((option) => option.lens);
+
     return input.createCanvas.nodes.map((node): CreateCanvasNode => {
+      if (node.label === "Create" && selectedLenses.length) {
+        return {
+          id: node.id,
+          label: node.label,
+          detail: `Selected ${selectedLenses.join(" + ")}`,
+          note: "Local judgment is visible before artifact update.",
+          edgeToNext: node.edgeToNext,
+        };
+      }
+
       if (node.label === "Export" && input.promptExport) {
         return {
           id: node.id,
