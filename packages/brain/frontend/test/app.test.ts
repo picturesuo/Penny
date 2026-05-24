@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPromptFromBrainProfile, formatErrorMessage } from "../src/App";
-import type { BrainMemoryProfileData } from "../src/types/brain";
+import { createPromptFromBrainDocument, createPromptFromBrainProfile, formatErrorMessage } from "../src/App";
+import type { BrainDocumentSummary, BrainMemoryProfileData } from "../src/types/brain";
 
 test("formatErrorMessage hides raw local database setup errors", () => {
   assert.equal(
@@ -31,6 +31,18 @@ test("createPromptFromBrainProfile can seed Create from a specific Brain memory"
   assert.match(prompt, /source-backed context/);
   assert.match(prompt, /Ground the directions in this context/);
   assert.doesNotMatch(prompt, /live Gmail|live WhatsApp|SMS/i);
+});
+
+test("createPromptFromBrainDocument turns a saved Brain doc into a Create seed", () => {
+  const prompt = createPromptFromBrainDocument(brainDocument());
+
+  assert.match(prompt, /Rework the Brain document "Penny YC workbench"/);
+  assert.match(prompt, /Original idea: Build Penny as a memory-native creativity workbench/);
+  assert.match(prompt, /Main claim: Penny should help builders turn vague ideas into buildable structure/);
+  assert.match(prompt, /Recommendations: Keep five equal directions/);
+  assert.match(prompt, /Next actions: Record the YC fixture demo/);
+  assert.match(prompt, /Do not claim live Gmail/);
+  assert.match(prompt, /five concrete directions/);
 });
 
 function brainProfile(): BrainMemoryProfileData {
@@ -96,5 +108,46 @@ function brainProfile(): BrainMemoryProfileData {
       profileSignalCount: 0,
     },
     profileReview: null,
+  };
+}
+
+function brainDocument(): BrainDocumentSummary {
+  return {
+    id: "session-1",
+    sessionId: "session-1",
+    scope: {
+      userId: null,
+      workspaceId: null,
+      projectId: null,
+      sphereId: null,
+    },
+    title: "Penny YC workbench",
+    description: "A saved Brain document about the YC demo path.",
+    status: "open",
+    originalIdea: "Build Penny as a memory-native creativity workbench.",
+    mainClaim: {
+      id: "claim-1",
+      kind: "belief",
+      status: "active",
+      text: "Penny should help builders turn vague ideas into buildable structure.",
+      versionId: "version-1",
+      createdAt: "2026-05-24T00:00:00.000Z",
+    },
+    strongestOptions: [],
+    rejectedOptions: [],
+    todoLaterIdeas: ["Do not claim live Gmail in the demo."],
+    finalRecommendations: ["Keep five equal directions", "Show human judgment before export"],
+    nextActions: ["Record the YC fixture demo", "Export the build prompt"],
+    counts: {
+      claims: 1,
+      edges: 0,
+      moves: 0,
+      artifacts: 0,
+      versions: 1,
+    },
+    latestArtifact: null,
+    lastMove: null,
+    createdAt: "2026-05-24T00:00:00.000Z",
+    updatedAt: "2026-05-24T00:00:00.000Z",
   };
 }

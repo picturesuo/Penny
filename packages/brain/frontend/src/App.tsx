@@ -31,6 +31,7 @@ import { formatLabel, shortId } from "./lib/format";
 import type {
   AutopilotTickData,
   BrainData,
+  BrainDocumentSummary,
   BrainDocumentsData,
   BrainHybridSearchResponse,
   BrainMemoryProfileData,
@@ -457,6 +458,8 @@ export function App() {
       return;
     }
 
+    const documentSeedText = selectedDocument ? createPromptFromBrainDocument(selectedDocument) : data.source?.rawText?.trim() ?? "";
+
     setIsThinking(true);
     setStatus("Preparing Create");
 
@@ -465,9 +468,14 @@ export function App() {
       const cockpit = await refreshCockpit(data.session.id);
       setFocusedClaimId(cockpit.autopilot.suggestion?.targetClaimId ?? cockpit.ideaMap.claims[0]?.id ?? null);
       await refreshDocuments(data.session.id);
+      if (documentSeedText) {
+        rememberCreateWorkspaceBoot({ seedText: documentSeedText, brainProfile: null });
+        setCreateInitialSeedText(documentSeedText);
+      }
       setActiveMode("Create");
       setCreateBrainProfile(null);
       setCreateWorkspaceMounted(true);
+      setCreateWorkspaceRunId((current) => current + 1);
       setStatus("Create ready");
     } catch (error) {
       setStatus(formatErrorMessage(error));
@@ -1096,6 +1104,25 @@ export function createPromptFromBrainProfile(profile: BrainMemoryProfileData, fo
       : "Use my Brain context to create five concrete directions for Penny's next buildable artifact.",
     contextLine ? `Ground the directions in this context: ${contextLine}` : "Ground the directions in the imported Brain memories.",
   ].join(" ");
+}
+
+export function createPromptFromBrainDocument(document: BrainDocumentSummary): string {
+  const sections = [
+    document.originalIdea ? `Original idea: ${document.originalIdea}` : null,
+    document.mainClaim ? `Main claim: ${document.mainClaim.text}` : null,
+    document.finalRecommendations.length ? `Recommendations: ${document.finalRecommendations.slice(0, 3).join("; ")}` : null,
+    document.nextActions.length ? `Next actions: ${document.nextActions.slice(0, 3).join("; ")}` : null,
+    document.todoLaterIdeas.length ? `Keep in mind: ${document.todoLaterIdeas.slice(0, 2).join("; ")}` : null,
+  ].filter(Boolean);
+
+  return [
+    `Rework the Brain document "${document.title}" in Create.`,
+    document.description ? `Document context: ${document.description}` : null,
+    ...sections,
+    "Give me five concrete directions, keep the document's strongest claims visible, and turn the next choice into a buildable artifact.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function isYcDemoCreatePrompt(rawIdea: string): boolean {
