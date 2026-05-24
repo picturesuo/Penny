@@ -1644,6 +1644,37 @@ export interface PromptExport {
   createdAt: string;
 }
 
+export interface CreateCanvasNode {
+  id: string;
+  label: "Penny" | "Brain" | "Create" | "Learn" | "Export" | string;
+  detail: string;
+  note?: string;
+  edgeToNext: "grounds" | "suggests" | "explains" | "returns" | "ships" | string;
+  refs?: {
+    projectId: string;
+    sessionId: string;
+    optionSetId?: string | null;
+    artifactId?: string | null;
+    judgmentEventId?: string | null;
+    memoryIds: string[];
+    sourceIds: string[];
+  };
+}
+
+export interface CreateCanvasSnapshot {
+  sourceOfTruth: "create_option_set_artifact_judgment_canvas" | string;
+  generatedFrom: {
+    projectId: string;
+    sessionId: string;
+    optionSetId: string;
+    artifactId: string;
+    judgmentEventId: string | null;
+    selectedOptionIds: string[];
+    sourceOptionSetIds: string[];
+  };
+  nodes: CreateCanvasNode[];
+}
+
 export type CreateExportFeedbackRating = "useful" | "not_useful";
 
 export type CreateExportFeedbackReason =
@@ -1694,6 +1725,7 @@ export interface CreateNextResponse {
     artifact: CodingPromptArtifact;
     verification: VerificationSummary;
     judgmentEvent: JudgmentEvent | null;
+    canvas?: CreateCanvasSnapshot;
     observability: CreateObservability;
     exportReady: boolean;
   };
