@@ -592,7 +592,7 @@ test("YC founder fixture feeds Create options, judgment, artifact, and export wi
   assert.ok(first.optionSet.options.every((option) => option.memoryCount >= 1 && option.sourceCount >= 1));
   assert.ok(first.optionSet.sourcesUsed.some((source) => /Email fixture - Lovable hackathon recap/i.test(source.label)));
   assert.ok(first.optionSet.sourcesUsed.some((source) => /LinkedIn-style founder context fixture/i.test(source.label)));
-  assert.ok(first.optionSet.sourcesUsed.some((source) => /Manual WhatsApp-style transcript fixture/i.test(source.label)));
+  assert.ok(first.optionSet.sourcesUsed.some((source) => /Manual messages context for demo/i.test(source.label)));
   assert.match(optionText(first, "Personal"), /thinking instrument|human judgment|workbench/i);
   assert.match(optionText(first, "Critical"), /generic chatbot|GPT-wrapper|fake|rejected/i);
   assert.ok(refined.judgmentEvent);
@@ -605,7 +605,7 @@ test("YC founder fixture feeds Create options, judgment, artifact, and export wi
   assert.match(exported.text, /Valuable:/);
   assert.match(exported.text, /Critical:/);
   assert.match(exported.text, /## Source \/ Memory Evidence/);
-  assert.match(exported.text, /Lovable hackathon|LinkedIn-style founder context|Manual WhatsApp-style transcript/i);
+  assert.match(exported.text, /Lovable hackathon|LinkedIn-style founder context|Manual messages context for demo/i);
   assert.match(exported.text, /generic chatbot|notes app|productivity dashboard/i);
   assert.match(exported.text, /trainingUse=false|not live Gmail|not live SMS, iMessage, or WhatsApp/i);
   assert.equal(exported.qualitySignals.hasRelevantPersonalContext, true);
