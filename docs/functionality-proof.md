@@ -8,6 +8,8 @@ PASS for the local MVP loop on `http://localhost:3007`.
 
 A fresh browser can complete the Brain-first loop: quick note -> Save to Brain-backed private memory -> New Document -> import Brain context -> Start Create with this Brain -> five directions -> select/comment -> artifact update -> Learn this -> Back to Create -> export -> refresh restores Create state.
 
+The standalone Learn route also proves the source-to-concept path: arbitrary source-like input opens a compact Source -> Map -> Teach -> Use -> Check tour instead of a generic lesson worksheet.
+
 ## Local Server
 
 The verified server was running with local Postgres:

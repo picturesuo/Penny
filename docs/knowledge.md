@@ -187,6 +187,7 @@
 - Learning should track mastery, recurring gaps, and what concepts need re-scaffolding.
 - External product research from Understand Anything and NotebookLM reinforces this direction: users learn faster when sources become a navigable concept graph, the product offers a guided tour in the right order, search/ask stays grounded in the source material, and outputs can become study guides or briefings.
 - Penny should adapt that pattern beyond code: any information the user brings in should become Source -> concept map -> guided tour -> worked example -> check/teach-back -> durable Brain concept, without turning Learn into a generic chat pane.
+- May 24, 2026 research refresh: Understand Anything's public repo (`https://github.com/Lum1104/Understand-Anything`) frames the useful loop as "Scan -> Map -> Teach" for code/knowledge graphs, and Google's NotebookLM help (`https://support.google.com/notebooklm/answer/16164461`) emphasizes answers grounded in uploaded sources. Penny's Learn should keep adapting that into Source -> Map -> Teach -> Use -> Check for any user-provided information, with source honesty and compact first-screen text.
 - The graph should teach, not merely impress. Prefer a small visible source-to-concept tour, source spans, active concept, and next check over dense graph decoration or long generated prose.
 - Keep Learn source-honest: distinguish Brain/source-grounded explanation from web-backed explanation, and do not imply live connectors when the material came from a fixture, paste, or manual import.
 

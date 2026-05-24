@@ -13,14 +13,14 @@ Visual evidence is captured under `docs/proof/yc-recording/`, including named sc
 - Branch: `main`
 - Local URL: `http://localhost:3039`
 - Server command: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`
-- Browser verification: in-app Browser smoke plus Playwright e2e.
+- Browser verification: Playwright e2e. The in-app Browser tool hit its virtual clipboard/DOM bridge limit during fresh prompt entry on this pass, so the Learn refresh uses Playwright as the authoritative browser proof.
 
 ## Verification
 - `pnpm test`: passed, 667 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- In-app Browser smoke on `http://localhost:3039`: imported a Brain note, rendered the Brain export panel, exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails, then verified the Create path step buttons and Create export actions.
-- `PENNY_BASE_URL=http://localhost:3039 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs test/e2e/yc-recording.spec.cjs test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-e2e-latest`: passed, 3 tests in 5.1s.
+- Prior in-app Browser smoke on `http://localhost:3039`: imported a Brain note, rendered the Brain export panel, exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails, then verified the Create path step buttons and Create export actions.
+- `PENNY_BASE_URL=http://localhost:3039 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs test/e2e/yc-recording.spec.cjs test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-e2e-latest`: passed, 3 tests in 8.1s.
 - `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-playwright-results`: passed, 1 test in 2.6s.
 - `PENNY_BASE_URL=http://localhost:3007 PENNY_PLAYWRIGHT_SLOWMO_MS=150 PENNY_PLAYWRIGHT_VIDEO=on PENNY_PLAYWRIGHT_TRACE=on PENNY_PLAYWRIGHT_SCREENSHOT=on PENNY_PROOF_DIR=docs/proof/yc-recording/screenshots pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --headed --reporter=line --output=docs/proof/yc-recording/playwright-headed`: passed, 1 headed test in 6.4s.
 - `PENNY_BASE_URL=http://localhost:3007 PENNY_PLAYWRIGHT_SLOWMO_MS=75 PENNY_PLAYWRIGHT_VIDEO=on PENNY_PLAYWRIGHT_TRACE=on PENNY_PLAYWRIGHT_SCREENSHOT=on pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --repeat-each=10 --headed --workers=1 --reporter=line --output=docs/proof/yc-recording/playwright-headed-10`: passed, 10 headed tests in 32.7s.
@@ -50,3 +50,7 @@ This keeps the stress test aligned with Penny's scoped backend model without dis
 ## Brain-First Refresh
 
 The local dogfood path now has its own browser proof. `brain-first.spec.cjs` starts from landing, creates a quick note, saves it to Brain-backed private memory, creates a document, imports Brain context, exports a Brain coding-agent prompt with copy/download actions, starts Create from that Brain, opens Learn, exports a Create prompt with copy/download actions, and reloads to prove Create state restores. Local demo mode uses scoped in-memory fallbacks when database prep is skipped; staging/production must still use a migrated Postgres database.
+
+## Learn Refresh
+
+`learn-understanding-tour.spec.cjs` now proves the arbitrary-information Learn path renders a compact Source / Map / Teach / Use / Check tour. This keeps the Learn first screen closer to a guided understanding path than a worksheet or generic chat pane.
