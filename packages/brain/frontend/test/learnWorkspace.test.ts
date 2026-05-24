@@ -56,6 +56,11 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /Teach/);
   assert.match(markup, /Use/);
   assert.match(markup, /Check/);
+  assert.match(markup, /aria-label="Ask about Source:/);
+  assert.match(markup, /aria-label="Ask about Map:/);
+  assert.match(markup, /aria-label="Ask about Teach:/);
+  assert.match(markup, /aria-label="Ask about Use:/);
+  assert.match(markup, /aria-label="Ask about Check:/);
   assert.doesNotMatch(markup, /Grounding/);
   assert.doesNotMatch(markup, /What changes/);
   assert.doesNotMatch(markup, /Can you use it/);
