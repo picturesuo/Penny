@@ -103,6 +103,13 @@ strict deploy validation is active, the Postgres schema exposes every required P
 auth is configured, API and auth-failure rate limits are explicit, structured logs are enabled, and
 live Gmail is either disabled or backed by a verified final staging evidence bundle.
 
+For offline schema evidence, print the exact required table list first:
+
+```sh
+pnpm check:public-readiness -- --print-required-schema-tables > tmp/schema-tables.json
+pnpm check:public-readiness -- --schema-tables-file=tmp/schema-tables.json
+```
+
 If live Gmail is intentionally enabled, run the public readiness gate with the same final evidence
 used for the Gmail staging bundle:
 
