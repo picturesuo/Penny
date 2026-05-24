@@ -10,6 +10,7 @@ import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
 import { handleBrainDocumentsRequest } from "./brain-documents-route.ts";
+import { handleBrainExportCodingPromptRequest } from "./brain-export-route.ts";
 import {
   handleBrainDemoFixtureRequest,
   handleBrainImportJobRequest,
@@ -468,6 +469,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/memory/profile") {
       await writeWebResponse(outgoing, await handleBrainMemoryProfileRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/export-coding-prompt") {
+      await writeWebResponse(outgoing, await handleBrainExportCodingPromptRequest(request));
       return;
     }
 
