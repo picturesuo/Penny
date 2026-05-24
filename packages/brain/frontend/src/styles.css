@@ -1912,6 +1912,19 @@
     gap: 10px;
   }
 
+  .create-export-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .create-export-actions > span {
+    color: rgb(17 17 17 / 0.62);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
   .create-action-row > span {
     color: rgb(17 17 17 / 0.58);
     font-size: 12px;
@@ -3902,10 +3915,26 @@
     gap: 8px;
   }
 
-  .brain-memory-export-meta {
+  .brain-memory-export-meta,
+  .brain-memory-export-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+  }
+
+  .brain-memory-export-actions {
+    align-items: center;
+  }
+
+  .brain-memory-export-actions .secondary-command {
+    min-height: 32px;
+    width: fit-content;
+  }
+
+  .brain-memory-export-actions > span {
+    color: rgb(17 17 17 / 0.62);
+    font-size: 12px;
+    font-weight: 700;
   }
 
   .brain-memory-export-meta span {

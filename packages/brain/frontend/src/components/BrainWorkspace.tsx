@@ -4,7 +4,9 @@ import {
   BookOpen,
   CheckCircle2,
   CircleHelp,
+  Copy,
   Database,
+  Download,
   FilePlus,
   FileText,
   Folder,
@@ -2465,6 +2467,7 @@ export function BrainMemoryPanel({
   const [brainExport, setBrainExport] = useState<BrainCodingPromptExport | null>(null);
   const [brainExportStatus, setBrainExportStatus] = useState<BrainExportStatus>("idle");
   const [brainExportError, setBrainExportError] = useState<string | null>(null);
+  const [brainExportNotice, setBrainExportNotice] = useState<string | null>(null);
   const importing = status === "importing";
   const sources = profile?.sources ?? [];
   const recentNodes = profile?.recentMemoryNodes ?? [];
@@ -2705,6 +2708,7 @@ export function BrainMemoryPanel({
 
     setBrainExportStatus("exporting");
     setBrainExportError(null);
+    setBrainExportNotice(null);
 
     try {
       const response = await exportBrainCodingPrompt({ goal: createBrainExportGoal(profile) });
@@ -2715,6 +2719,26 @@ export function BrainMemoryPanel({
       setBrainExportStatus("error");
       setBrainExportError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  async function handleBrainExportCopy() {
+    if (!brainExport) {
+      return;
+    }
+
+    const copied = await copyPromptTextToClipboard(brainExport.export.text);
+
+    setBrainExportNotice(copied ? "Prompt copied" : "Copy unavailable. Use the textarea.");
+  }
+
+  function handleBrainExportDownload() {
+    if (!brainExport) {
+      return;
+    }
+
+    const downloaded = downloadPromptTextFile(brainExport.export.fileName, brainExport.export.text);
+
+    setBrainExportNotice(downloaded ? "Download started" : "Download unavailable. Use the textarea.");
   }
 
   return (
@@ -2904,12 +2928,41 @@ export function BrainMemoryPanel({
                 <span>{brainExport.export.targets.join(" / ")}</span>
                 <span>{brainExport.export.qualitySignals.promptCompletenessScore}% complete</span>
               </div>
+              <BrainPromptExportActions
+                notice={brainExportNotice}
+                onCopy={() => void handleBrainExportCopy()}
+                onDownload={handleBrainExportDownload}
+              />
               <textarea readOnly aria-label="Brain coding prompt export text" rows={8} value={brainExport.export.text} />
             </div>
           ) : null}
         </section>
       ) : null}
     </section>
+  );
+}
+
+export function BrainPromptExportActions({
+  notice,
+  onCopy,
+  onDownload,
+}: {
+  notice: string | null;
+  onCopy: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="brain-memory-export-actions" aria-label="Brain prompt export actions">
+      <button type="button" className="secondary-command" onClick={onCopy}>
+        <Copy size={14} aria-hidden="true" />
+        <span>Copy prompt</span>
+      </button>
+      <button type="button" className="secondary-command" onClick={onDownload}>
+        <Download size={14} aria-hidden="true" />
+        <span>Download .md</span>
+      </button>
+      {notice ? <span role="status">{notice}</span> : null}
+    </div>
   );
 }
 
@@ -3917,6 +3970,46 @@ function createBrainExportGoal(profile: BrainMemoryProfileData): string {
     "small, reversible implementation steps with visible provenance";
 
   return `Use this private Brain profile to plan the next buildable step for ${activeProject}. Preserve the user's judgment and prefer ${buildStyle}.`;
+}
+
+async function copyPromptTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function downloadPromptTextFile(fileName: string, text: string): boolean {
+  if (typeof document === "undefined" || typeof URL === "undefined" || typeof Blob === "undefined") {
+    return false;
+  }
+
+  const href = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
+  const link = document.createElement("a");
+
+  link.href = href;
+  link.download = safePromptFileName(fileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(href);
+
+  return true;
+}
+
+function safePromptFileName(fileName: string): string {
+  const safe = fileName
+    .trim()
+    .replace(/[/\\?%*:|"<>]/g, "-")
+    .replace(/\s+/g, "-");
+
+  return safe || "penny-coding-prompt.md";
 }
 
 function profileReviewFingerprint(profile: BrainMemoryProfileData | null): string | null {

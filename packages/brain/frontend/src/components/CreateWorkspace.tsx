@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
 import { compareCreateProviders, createNext, exportCodingPrompt, submitCreateExportFeedback } from "../api/brainClient";
 import type {
   BrainData,
@@ -123,6 +123,7 @@ export function CreateWorkspace({
   const [observability, setObservability] = useState<CreateObservability | null>(restoredDraft?.observability ?? null);
   const [providerComparison, setProviderComparison] = useState<CreateProviderComparisonResponse["data"] | null>(null);
   const [promptExport, setPromptExport] = useState<PromptExport | null>(restoredDraft?.promptExport ?? null);
+  const [promptExportNotice, setPromptExportNotice] = useState<string | null>(null);
   const [exportFeedbackRating, setExportFeedbackRating] = useState<CreateExportFeedbackRating | null>(null);
   const [exportFeedbackReasons, setExportFeedbackReasons] = useState<CreateExportFeedbackReason[]>([]);
   const [exportFeedbackComment, setExportFeedbackComment] = useState("");
@@ -330,9 +331,34 @@ export function CreateWorkspace({
 
       const payload = await exportCodingPrompt(exportInput);
       setPromptExport(payload.data.export);
+      setPromptExportNotice(null);
       resetExportFeedback();
       setStatus("Coding-agent prompt exported");
     });
+  }
+
+  async function handleCopyPromptExport() {
+    if (!promptExport) {
+      return;
+    }
+
+    const copied = await copyPromptTextToClipboard(promptExport.text);
+    const nextStatus = copied ? "Prompt copied" : "Copy unavailable. Use the textarea.";
+
+    setPromptExportNotice(nextStatus);
+    setStatus(nextStatus);
+  }
+
+  function handleDownloadPromptExport() {
+    if (!promptExport) {
+      return;
+    }
+
+    const downloaded = downloadPromptTextFile(promptExport.fileName, promptExport.text);
+    const nextStatus = downloaded ? "Download started" : "Download unavailable. Use the textarea.";
+
+    setPromptExportNotice(nextStatus);
+    setStatus(nextStatus);
   }
 
   async function handleSubmitExportFeedback() {
@@ -535,7 +561,14 @@ export function CreateWorkspace({
               Export prompt
             </button>
             {promptExport ? (
-              <textarea readOnly value={promptExport.text} aria-label="Exported coding-agent prompt" data-testid="create-export-prompt" />
+              <>
+                <CreatePromptExportActions
+                  notice={promptExportNotice}
+                  onCopy={() => void handleCopyPromptExport()}
+                  onDownload={handleDownloadPromptExport}
+                />
+                <textarea readOnly value={promptExport.text} aria-label="Exported coding-agent prompt" data-testid="create-export-prompt" />
+              </>
             ) : null}
             <CreateExportFeedbackPanel
               artifact={artifact}
@@ -554,6 +587,30 @@ export function CreateWorkspace({
         </article>
       </section>
     </main>
+  );
+}
+
+export function CreatePromptExportActions({
+  notice,
+  onCopy,
+  onDownload,
+}: {
+  notice: string | null;
+  onCopy: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="create-export-actions" aria-label="Prompt export actions">
+      <button type="button" className="check-secondary-button" onClick={onCopy}>
+        <Copy size={14} aria-hidden="true" />
+        Copy prompt
+      </button>
+      <button type="button" className="check-secondary-button" onClick={onDownload}>
+        <Download size={14} aria-hidden="true" />
+        Download .md
+      </button>
+      {notice ? <span role="status">{notice}</span> : null}
+    </div>
   );
 }
 
@@ -2290,4 +2347,44 @@ function createActiveStepIndex(input: {
   }
 
   return 0;
+}
+
+async function copyPromptTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function downloadPromptTextFile(fileName: string, text: string): boolean {
+  if (typeof document === "undefined" || typeof URL === "undefined" || typeof Blob === "undefined") {
+    return false;
+  }
+
+  const href = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
+  const link = document.createElement("a");
+
+  link.href = href;
+  link.download = safePromptFileName(fileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(href);
+
+  return true;
+}
+
+function safePromptFileName(fileName: string): string {
+  const safe = fileName
+    .trim()
+    .replace(/[/\\?%*:|"<>]/g, "-")
+    .replace(/\s+/g, "-");
+
+  return safe || "penny-coding-prompt.md";
 }

@@ -17,6 +17,7 @@ import {
   CreateOptionBoard,
   CreateOptionDetailsDrawer,
   CreatePathSidebar,
+  CreatePromptExportActions,
   CreateProviderStatusPanel,
   CreateVerificationPanel,
   artifactOutlinePreview,
@@ -75,6 +76,21 @@ test("CreatePathSidebar renders step navigation buttons", () => {
   assert.match(markup, /aria-label="Go to Export"/);
   assert.match(markup, /aria-current="step"/);
   assert.match(markup, /Open Brain from Create/);
+});
+
+test("CreatePromptExportActions renders copy and download commands", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CreatePromptExportActions, {
+      notice: "Download started",
+      onCopy: () => undefined,
+      onDownload: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /aria-label="Prompt export actions"/);
+  assert.match(markup, /Copy prompt/);
+  assert.match(markup, /Download \.md/);
+  assert.match(markup, /Download started/);
 });
 
 test("CreateEvidenceLedgerPanel separates past evidence from interpreted taste", () => {

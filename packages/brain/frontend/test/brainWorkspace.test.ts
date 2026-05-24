@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   BrainMemoryPanel,
+  BrainPromptExportActions,
   BrainWorkspace,
   GmailKeywordResults,
   GmailSemanticResults,
@@ -125,6 +126,23 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Use this Brain to create something/);
   assert.match(markup, /Coding-agent prompt/);
   assert.match(markup, /Private Brain context, formatted for Codex and Claude Code/);
+  assert.doesNotMatch(markup, /Copy prompt/);
+  assert.doesNotMatch(markup, /Download \.md/);
+});
+
+test("BrainPromptExportActions renders copy and download affordances", () => {
+  const markup = renderToStaticMarkup(
+    createElement(BrainPromptExportActions, {
+      notice: "Prompt copied",
+      onCopy: () => undefined,
+      onDownload: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /aria-label="Brain prompt export actions"/);
+  assert.match(markup, /Copy prompt/);
+  assert.match(markup, /Download \.md/);
+  assert.match(markup, /Prompt copied/);
 });
 
 test("Brain first-run flow requires an explicit profile review action", () => {
