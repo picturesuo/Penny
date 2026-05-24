@@ -534,7 +534,8 @@ export function MicroLessonSlide({
   activeLessonIndex: number;
   lessonCount: number;
 }) {
-  const focusFit = microLessonFocusFit(lesson.shortExplanation);
+  const displayExplanation = truncateWords(lesson.shortExplanation, 34);
+  const focusFit = microLessonFocusFit(displayExplanation);
 
   return (
     <section className="micro-lesson-slide" aria-label={`Lesson ${activeLessonIndex + 1} of ${lessonCount}`}>
@@ -554,7 +555,7 @@ export function MicroLessonSlide({
             "--micro-lesson-focus-max-chars": `${focusFit.maxLineCharacters}ch`,
           } as React.CSSProperties}
         >
-          {lesson.shortExplanation}
+          {displayExplanation}
         </p>
       </section>
 
@@ -605,11 +606,11 @@ export function microLessonFocusFit(text: string) {
     characterCount > 90 ? 40 :
     32;
   const fontSizePx =
-    maxLineCharacters >= 68 ? 24 :
-    maxLineCharacters >= 58 ? 28 :
-    maxLineCharacters >= 48 ? 34 :
-    maxLineCharacters >= 40 ? 42 :
-    52;
+    maxLineCharacters >= 68 ? 20 :
+    maxLineCharacters >= 58 ? 23 :
+    maxLineCharacters >= 48 ? 28 :
+    maxLineCharacters >= 40 ? 34 :
+    44;
 
   return {
     characterCount,

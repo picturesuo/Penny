@@ -5902,7 +5902,7 @@
     margin: 0;
     overflow: hidden;
     color: #111111;
-    font-size: clamp(56px, 7vw, 112px);
+    font-size: clamp(44px, 6vw, 88px);
     font-weight: 500;
     letter-spacing: 0;
     line-height: 0.95;
@@ -5912,15 +5912,15 @@
 
   .micro-lesson-focus {
     display: grid;
-    align-items: center;
-    align-content: center;
+    align-items: start;
+    align-content: start;
     justify-items: start;
     min-width: 0;
     min-height: 0;
     border: 1px solid #111111;
     background: #ffffff;
-    padding: clamp(24px, 4vw, 56px);
-    overflow: hidden;
+    padding: clamp(18px, 3vw, 38px);
+    overflow: auto;
   }
 
   .micro-lesson-focus p {
@@ -5928,7 +5928,7 @@
     max-width: none;
     margin: 0;
     color: #111111;
-    font-size: clamp(24px, min(var(--micro-lesson-focus-font-size, 40px), 5vw), 52px);
+    font-size: clamp(20px, min(var(--micro-lesson-focus-font-size, 34px), 3.7vw), 42px);
     font-weight: 650;
     letter-spacing: 0;
     line-height: 1.08;
