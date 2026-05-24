@@ -175,7 +175,7 @@ function printUsage(): void {
   console.error(`Usage:
   pnpm check:public-readiness
   pnpm check:public-readiness -- --schema-tables-file=tmp/schema-tables.json
-  pnpm check:public-readiness -- --print-required-schema-tables
+  pnpm --silent check:public-readiness -- --print-required-schema-tables
 
 Options:
   --print-required-schema-tables   Print the required public schema table names as JSON, then exit.
