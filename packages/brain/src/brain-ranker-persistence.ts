@@ -42,7 +42,7 @@ let defaultBrainRankerRecorderCacheKey: string | null = null;
 export function resolveDefaultBrainRankerRecorder(env: Record<string, string | undefined> = process.env): BrainRankerRecorder | null {
   const databaseUrl = env.DATABASE_URL?.trim();
 
-  if (!databaseUrl) {
+  if (!databaseUrl || shouldUseLocalNoopBrainRankerRecorder(env, databaseUrl)) {
     return null;
   }
 
@@ -55,6 +55,38 @@ export function resolveDefaultBrainRankerRecorder(env: Record<string, string | u
   defaultBrainRankerRecorderCacheKey = cacheKey;
 
   return defaultBrainRankerRecorderCache;
+}
+
+function shouldUseLocalNoopBrainRankerRecorder(env: Record<string, string | undefined>, databaseUrl: string): boolean {
+  if (!databaseUrl || brainRankerRuntimeKind(env) !== "dev-test") {
+    return false;
+  }
+
+  const authMode = env.PENNY_AUTH_MODE?.trim().toLowerCase();
+
+  return readEnvFlag(env, "PENNY_SKIP_DATABASE_PREP", false) && (!authMode || authMode === "dev");
+}
+
+function brainRankerRuntimeKind(env: Record<string, string | undefined>): "dev-test" | "production" {
+  return env.NODE_ENV === "production" ? "production" : "dev-test";
+}
+
+function readEnvFlag(env: Record<string, string | undefined>, name: string, fallback: boolean): boolean {
+  const value = env[name]?.trim().toLowerCase();
+
+  if (!value) {
+    return fallback;
+  }
+
+  if (["1", "true", "yes", "on"].includes(value)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(value)) {
+    return false;
+  }
+
+  return fallback;
 }
 
 export function createDbBrainRankerRecorder(db: PennyDatabase): BrainRankerRecorder {
