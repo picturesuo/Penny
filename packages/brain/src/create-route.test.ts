@@ -111,6 +111,29 @@ test("POST /api/create/next generates the five required Create directions", asyn
   }
 });
 
+test("POST /api/create/next gives the YC ideation demo a clean subject", async () => {
+  const service = createInMemoryCreateRouteService();
+  const response = await handleCreateNextRequest(
+    jsonRequest("http://localhost/api/create/next", {
+      rawIdea:
+        "I want to create a YC startup around ideation and thinking - maybe a thinking instrument. It should use my past emails, messages, and notes to help me turn vague ideas into buildable structure.",
+    }),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const data = payload.data as CreateNextResult;
+  const topicText = [
+    data.artifact.title,
+    sectionBody(data.artifact, "Product goal"),
+    ...data.optionSet.options.flatMap((option) => [option.title, option.oneLine, option.nextMove]),
+  ].join("\n");
+
+  assert.equal(response.status, 200);
+  assert.match(data.artifact.title, /YC ideation workbench/i);
+  assert.ok(data.optionSet.options.some((option) => /YC ideation workbench/i.test(option.title)));
+  assert.doesNotMatch(topicText, /i want to create a yc startup around ideation and/i);
+});
+
 test("POST /api/create/next uses retrieved Brain memory and source refs when imports exist", async () => {
   const headers = requestHeaders({
     "x-user-id": "create-memory-user",

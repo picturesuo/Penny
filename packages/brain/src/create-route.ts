@@ -1207,6 +1207,7 @@ function buildOptionSet(input: {
   const memoryRefs = input.memoryUsed;
   const optionSeed = [input.projectId, input.sessionId, input.rawIdea].join("|");
   const profile = createProfileInsights(input.rawIdea, memoryRefs, sourceRefs, input.contextLight);
+  const optionSubject = subjectForTitle(subject);
   const rankByLens = new Map(input.brainRank.rankedCandidates.map((candidate) => [candidate.lens, candidate]));
   const rankedMemory = (lens: CreateLens, fallback: MemoryRef[]) => {
     const candidateMemory = rankByLens.get(lens)?.memoryRefs ?? [];
@@ -1219,9 +1220,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-personal", optionSeed),
       lens: "Personal",
-      title: profile.hasMemory
-        ? `Make ${subject.toLowerCase()} honor ${profile.personalAnchor}`
-        : `Make ${subject.toLowerCase()} feel personally steered`,
+      title: `Make ${optionSubject} personal`,
       oneLine: profile.hasMemory
         ? `Center the first loop on this remembered signal: ${profile.personalEvidence}.`
         : "Center the workflow on the rough idea and visibly mark that no durable Brain memory was used.",
@@ -1240,7 +1239,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-practical", optionSeed),
       lens: "Practical",
-      title: `Ship the smallest usable ${subject.toLowerCase()} loop`,
+      title: `Ship the smallest ${subject} loop`,
       oneLine: `Prioritize the first buildable path in the user's preferred style: ${profile.buildStyleEvidence}.`,
       rationale: `${contextPhrase} This is the safest wedge because it makes the core loop testable without waiting for broad memory ingestion or advanced models. Practical constraint: ${profile.buildStyleEvidence}.`,
       nextMove: `Implement the narrow route and UI state machine, then verify the ${profile.buildStyleAnchor} path manually and with tests.`,
@@ -1253,7 +1252,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-valuable", optionSeed),
       lens: "Valuable",
-      title: profile.hasMemory ? `Make value obvious for ${profile.valueAnchor}` : `Make ${audience.toLowerCase()} value obvious`,
+      title: `Make ${optionSubject} valuable`,
       oneLine: `Shape the artifact around the decision that gets easier: ${profile.valueEvidence}.`,
       rationale: profile.hasMemory
         ? `${profile.groundedLine} Inferred move: translate that memory into a target user, external payoff, and acceptance tests that prove usefulness.`
@@ -1268,7 +1267,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-critical", optionSeed),
       lens: "Critical",
-      title: `De-bullshit the ${subject.toLowerCase()} promise`,
+      title: `Stress-test ${optionSubject}`,
       oneLine: profile.hasMemory
         ? `Pressure-test generic GPT-wrapper risk against the user's remembered rejection: ${profile.criticalEvidence}.`
         : "Pressure-test whether the idea is truly memory-native or just a GPT wrapper with nicer furniture.",
@@ -1283,9 +1282,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-weird", optionSeed),
       lens: "Weird",
-      title: profile.hasMemory
-        ? `Make ${subject.toLowerCase()} weird in the user's own direction`
-        : `Turn ${subject.toLowerCase()} into a creative instrument`,
+      title: `Make ${optionSubject} strange but buildable`,
       oneLine: `Use the unusual but still useful edge in the context: ${profile.weirdEvidence}.`,
       rationale: profile.hasMemory
         ? `${profile.groundedLine} Inferred move: bend the artifact through that taste signal while still producing implementation requirements and tests.`
@@ -2434,6 +2431,12 @@ function importantWords(text: string): string[] {
 }
 
 function subjectFromText(text: string): string {
+  const lower = text.toLowerCase();
+
+  if (/\byc\b/.test(lower) && /\b(ideation|thinking|thinking instrument|workbench)\b/.test(lower)) {
+    return /\bpenny\b/.test(lower) ? "Penny's YC ideation workbench" : "YC ideation workbench";
+  }
+
   const clean = titleFromText(text).replace(/[^\w\s-]/g, "").trim();
   return clean.split(/\s+/).filter(Boolean).slice(0, 10).join(" ") || "this product";
 }
