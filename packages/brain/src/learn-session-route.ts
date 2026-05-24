@@ -226,8 +226,8 @@ export function buildLearnSessionPayload(
 }
 
 function createDefaultLearnSessionService(options: LearnSessionRouteOptions): LearnSessionRouteService {
-  const db = resolveRouteDb(options);
-  const localFallback = shouldUseLocalLearnSessionFallback(db);
+  const localFallback = shouldUseLocalLearnSessionFallback(options);
+  const db = localFallback ? undefined : resolveRouteDb(options);
 
   return {
     async create(input, request) {
@@ -328,10 +328,18 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
   };
 }
 
-function shouldUseLocalLearnSessionFallback(db: PennyDatabase | undefined): boolean {
-  const authMode = process.env.PENNY_AUTH_MODE?.trim();
+function shouldUseLocalLearnSessionFallback(options: LearnSessionRouteOptions): boolean {
+  if (options.db || options.databaseUrl || learnSessionRuntimeKind() !== "dev-test") {
+    return false;
+  }
 
-  return !db && readEnvFlag("PENNY_SKIP_DATABASE_PREP", false) && (!authMode || authMode === "dev");
+  const authMode = process.env.PENNY_AUTH_MODE?.trim().toLowerCase();
+
+  return readEnvFlag("PENNY_SKIP_DATABASE_PREP", false) && (!authMode || authMode === "dev");
+}
+
+function learnSessionRuntimeKind(): "dev-test" | "production" {
+  return process.env.NODE_ENV === "production" ? "production" : "dev-test";
 }
 
 function createLocalBrainSeedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): BrainSeedPrelude {

@@ -40,7 +40,7 @@ test("POST /api/learn/session uses a local fallback when database prep is skippe
 
   process.env.PENNY_SKIP_DATABASE_PREP = "true";
   process.env.PENNY_AUTH_MODE = "dev";
-  delete process.env.DATABASE_URL;
+  process.env.DATABASE_URL = "postgresql://stale-user:stale-pass@invalid.invalid:5432/penny";
 
   try {
     const rawIdea = "Penny should help founders learn whether a pricing memo's customer urgency and product scope are worth saving.";
