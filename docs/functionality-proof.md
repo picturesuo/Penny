@@ -6,7 +6,7 @@ Date: May 23, 2026
 
 PASS for the local MVP loop on `http://localhost:3007`.
 
-A fresh browser can complete the Brain-first loop: quick note -> Save to Brain -> New Document -> import Brain context -> Start Create with this Brain -> five directions -> select/comment -> artifact update -> Learn this -> Back to Create -> export -> refresh restores Create state.
+A fresh browser can complete the Brain-first loop: quick note -> Save to Brain-backed private memory -> New Document -> import Brain context -> Start Create with this Brain -> five directions -> select/comment -> artifact update -> Learn this -> Back to Create -> export -> refresh restores Create state.
 
 ## Local Server
 

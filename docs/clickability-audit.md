@@ -20,7 +20,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - `pnpm build`: passed.
 - In-app browser smoke: imported a Brain note, rendered the Brain export panel, and exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails.
 - In-app browser smoke: Create path renders six step buttons and the Judgment step button scrolls to the judgment section.
-- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 5.6s; Brain and Create export paths assert visible `Copy prompt` and `Download .md` actions.
+- Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 5.1s; Brain-first now asserts quick-note save creates private Brain memory, and Brain/Create export paths assert visible `Copy prompt` and `Download .md` actions.
 
 ## Control Findings
 
@@ -29,7 +29,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Landing | Start with your Brain | Open Brain from a fresh public landing page. | Works; Brain workspace becomes visible. | `LandingPage` calls `onModeSelect("Brain")`. | Keep. Add e2e coverage that does not jump to internal routes. |
 | Landing | Start Create | Load fixture and open Create. | Works; existing YC e2e passes. | Fixture import uses Brain memory route, which has in-memory fallback. | Keep as demo shortcut, but do not treat as proof of the Brain-first product loop. |
 | Brain | Quick Note send | Save a visible, persisted quick note row. | Works in local demo mode and browser e2e. | `brain-objects-route.ts` now uses a scoped in-memory service when database prep is skipped in dev. | Keep DB-backed production behavior; keep local fallback covered. |
-| Brain | Quick Note Save to Brain | Promote a quick note into Brain state. | Works in Brain-first e2e through the save-to-Brain action. | Local fallback stores saved Brain objects in the same scoped in-memory service. | Later: decide whether quick notes should also create profile memory nodes. |
+| Brain | Quick Note Save to Brain | Promote a quick note into Brain state. | Works in Brain-first e2e through the save-to-Brain action and visible status. | Saved Brain objects are now synced into source-backed private Brain memory; local fallback stores the saved object and imports the same content into the scoped memory profile. | Keep this server-owned so the frontend refreshes real memory instead of inventing graph state. |
 | Brain | New Document | Open editor/creation surface inside Brain. | Works; sidebar New Document focuses the Brain document seed input. | Brain-first e2e asserts the focused seed form. | Keep. |
 | Brain | Start a document form | Create a Brain document from typed thought. | Works in local demo mode through `/brain/seed` fallback and document listing fallback. | `brain-seed-route.ts` stores a scoped in-memory persisted seed; `brain-documents-route.ts` lists it. | Keep local fallback dev-only. |
 | Brain | Add Folder | Create a folder or clearly disable it. | Disabled and labeled unavailable in the demo. | The visible command is intentionally not in scope. | Keep disabled until folder persistence is real. |
@@ -68,5 +68,5 @@ This is still not a production-readiness pass. Public/staging still needs real P
 1. Keep `brain-first.spec.cjs` and `yc-recording.spec.cjs` green before recording.
 2. Keep local fallback dev-only; production/staging must use real Postgres.
 3. Replace the deterministic Create Canvas with backend-derived session canvas when demo pressure is gone.
-4. Decide whether quick notes should become Brain profile memories, not only saved Brain objects.
+4. Keep quick-note-to-memory promotion server-owned and covered by the Brain-first e2e.
 5. Do not demo live Gmail, SMS/iMessage, Slack, Drive, or Calendar until their proof bundles pass.
