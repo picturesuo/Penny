@@ -49,15 +49,15 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.doesNotMatch(markup, /EXAMPLE/);
   assert.match(markup, /Thinking graph/);
   assert.match(markup, /data-testid="learn-understanding-tour"/);
-  assert.match(markup, /Grounding/);
-  assert.match(markup, /What changes/);
-  assert.match(markup, /Can you use it/);
   assert.match(markup, /data-testid="learn-meaning-map"/);
   assert.match(markup, /Meaning map/);
   assert.match(markup, /Source/);
   assert.match(markup, /Concept/);
   assert.match(markup, /Use/);
   assert.match(markup, /Check/);
+  assert.doesNotMatch(markup, /Grounding/);
+  assert.doesNotMatch(markup, /What changes/);
+  assert.doesNotMatch(markup, /Can you use it/);
   assert.doesNotMatch(markup, /Use &quot;Name the program&quot; to answer what YC would actually evaluate/);
   assert.doesNotMatch(markup, /Do not treat investor interest as stronger than founder proof/);
   assert.doesNotMatch(markup, /What shall we think through/);
@@ -102,8 +102,8 @@ test("LearnWorkspace renders the Create Learn bridge with a Back to Create contr
   assert.match(markup, /explicit judgment events are the things you deliberately do/i);
   assert.match(markup, /selecting cards, writing comments, and rating exports/i);
   assert.match(markup, /data-testid="learn-understanding-tour"/);
-  assert.match(markup, /What changes/);
   assert.match(markup, /Thinking graph/);
+  assert.match(markup, /data-testid="learn-meaning-map"/);
 });
 
 test("LearnWorkspace renders a Create option Learn bridge with option-specific choices", () => {
@@ -146,8 +146,8 @@ test("meaningMapItemsForLesson turns arbitrary source material into a compact so
   assert.deepEqual(items.map((item) => item.label), ["Source", "Concept", "Use", "Check"]);
   assert.match(items[0]?.text ?? "", /memo says customers like/i);
   assert.match(items[1]?.text ?? "", /Find customer urgency/);
-  assert.equal(items[2]?.text, "Use it on one concrete case");
-  assert.equal(items[3]?.text, "Apply it to the current source");
+  assert.equal(items[2]?.text, "Use on one case");
+  assert.equal(items[3]?.text, "Apply to source");
 });
 
 test("LearnWorkspace renders backend expert learning plan subgroups", () => {

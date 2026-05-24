@@ -565,35 +565,10 @@ export function MicroLessonSlide({
 }
 
 export function LearnUnderstandingTour({ lesson }: { lesson: LearnLesson }) {
-  const sourceSpan = lesson.sourceSpans[0] ?? null;
   const meaningMap = meaningMapItemsForLesson(lesson);
-  const tourItems = [
-    {
-      label: sourceSpan?.label ?? "Source",
-      title: "Grounding",
-      body: sourceSpan?.text ?? lesson.learningGoal,
-    },
-    {
-      label: "Move",
-      title: "What changes",
-      body: `Use ${lesson.title.toLowerCase()} as the active concept.`,
-    },
-    {
-      label: "Check",
-      title: "Can you use it?",
-      body: "Try the concept against the current source.",
-    },
-  ];
 
   return (
     <section className="learn-understanding-tour" aria-label="Source to concept tour" data-testid="learn-understanding-tour">
-      {tourItems.map((item) => (
-        <article key={`${item.label}-${item.title}`}>
-          <span>{item.label}</span>
-          <strong>{item.title}</strong>
-          <p>{truncateWords(item.body, 18)}</p>
-        </article>
-      ))}
       <ol className="learn-meaning-map" aria-label="Meaning map" data-testid="learn-meaning-map">
         {meaningMap.map((item) => (
           <li key={`${item.label}-${item.text}`}>
@@ -612,8 +587,8 @@ export function meaningMapItemsForLesson(lesson: LearnLesson) {
   return [
     { label: "Source", text: truncateWords(sourceText, 8) },
     { label: "Concept", text: truncateWords(lesson.title, 5) },
-    { label: "Use", text: "Use it on one concrete case" },
-    { label: "Check", text: "Apply it to the current source" },
+    { label: "Use", text: "Use on one case" },
+    { label: "Check", text: "Apply to source" },
   ];
 }
 

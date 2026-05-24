@@ -6029,7 +6029,7 @@
 
   .learn-understanding-tour {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 10px;
     min-width: 0;
   }
@@ -6069,7 +6069,6 @@
 
   .learn-meaning-map {
     display: grid;
-    grid-column: 1 / -1;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0;
     margin: 2px 0 0;
