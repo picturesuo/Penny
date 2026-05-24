@@ -1,188 +1,123 @@
-# 90-Second Demo Script
+# YC Demo Script
 
-Status: Wave 8 THINKER final demo script
-Date: 2026-04-29
+Status: Current Create-first recording script
+Canonical runbook: `docs/yc-demo-runbook.md`
 
-## Positioning
+## One-Sentence Positioning
 
-One-sentence company description:
+Penny is a memory-native creativity workbench that turns scattered founder context into directions, judgment, a buildable artifact, and a coding-agent prompt.
 
-> Penny is a controllable AI thinking instrument that turns a messy idea into claims, assumptions, challenges, revisions, and a short Challenge Brief.
+## Demo Spine
 
-Why now:
+1. Landing: click `Start Create`.
+2. Context: show safe fixture labels, not live connectors.
+3. Create: show five equal directions.
+4. Judgment: select `Personal`, `Valuable`, and `Critical`.
+5. Comment: add the founder/builder Codex comment.
+6. Artifact: show the compact Idea Spec outline.
+7. Learn: click `Learn this`, show the source-to-concept meaning map.
+8. Return: go back to Create with selections and artifact preserved.
+9. Canvas: point to `Penny -> Brain -> Create -> Learn -> Export`.
+10. Export: show the copyable coding-agent prompt.
 
-> AI made generation cheap, but serious builders now need control over reasoning, assumptions, and decision history. Chat is good at producing text; Penny is built for inspecting and improving the structure underneath the text.
+## Exact Narration
 
-Target wedge:
+### 0:00-0:25 - Landing
 
-> Early founders making high-stakes strategy, product, fundraising, or market bets before they have enough traction to know which assumptions are true.
-
-What compounds over time:
-
-> Penny compounds through Moves: extracted assumptions, challenge outcomes, claim revisions, absorbed risks, confidence changes, artifacts, and recurring thinking patterns that make future critique sharper.
-
-## Demo Setup
-
-Use a clean session. The founder enters a messy idea, not a polished prompt:
-
-> I think pre-seed founders will pay for a structured thinking autopilot before traction because founder decisions are messy and ChatGPT loses the thread. Penny should map the idea, find weak assumptions, challenge them, and leave me with something I can actually use.
-
-## 90-Second Script
-
-### 0:00-0:10 - Founder enters messy idea
-
-Narration:
-
-> A founder starts with an unpolished idea. Penny does not answer with a wall of advice. It turns the idea into thinking state.
+> I am using Penny to understand and rebuild Penny. I start from Create, not a blank chatbot.
 
 On screen:
+- landing page
+- `Start Create`
+- no setup tour
 
-- messy seed idea submitted
-- new session opens
-- source and seed claim appear
+### 0:25-0:50 - Safe Context
 
-Backend receipt:
-
-- `source_recorded`
-- `seed_claim_created`
-
-### 0:10-0:22 - Penny extracts assumptions
-
-Narration:
-
-> Penny extracts the claims and assumptions inside the idea. These are not notes. They are graph nodes with confidence and dependency edges.
+> This demo uses a safe founder Brain fixture: email-style context, manual messages, founder notes, and rejected directions. It does not claim live Gmail, iMessage, WhatsApp, Slack, or OAuth access.
 
 On screen:
+- `Using your Brain`
+- `Email fixture`
+- `Manual messages transcript`
+- `Founder notes`
+- `trainingUse=false`
 
-- primary claim
-- key assumptions
-- dependency edges
-- confidence values
+### 0:50-1:25 - Create
 
-Expected assumptions:
-
-- pre-seed founders feel enough pain to pay before traction
-- structured thinking is more useful than generic AI chat for this job
-- the product can produce a concrete founder artifact fast enough to matter
-
-Backend receipt:
-
-- `assumptions_extracted`
-
-### 0:22-0:35 - Autopilot highlights load-bearing weakness
-
-Narration:
-
-> Autopilot picks the next highest-leverage thinking move. It highlights the willingness-to-pay assumption because the rest of the idea depends on it.
+> Penny gives five directions, not one answer. The point is not for the model to decide. The point is to give the founder better options and make judgment visible.
 
 On screen:
+- `Personal`
+- `Practical`
+- `Valuable`
+- `Critical`
+- `Weird`
+- source/evidence chips
 
-- selected pressure point: `Pre-seed founders will pay for structured thinking before traction.`
-- graph highlight on the dependency path
-- suggested next move
+### 1:25-1:55 - Judgment
 
-Backend receipt:
+> I choose Personal, Valuable, and Critical, then tell Penny to keep this founder/builder focused and concrete enough to build with Codex.
 
-- `next_move_recomputed`
-- persisted `next_move_candidates`
-- `FocusState.source = "autopilot_suggestion"`
+Paste this comment:
 
-### 0:35-0:45 - Penny explains why
-
-Narration:
-
-> Penny explains the choice before doing anything. The issue is not whether founders have messy thinking. The issue is whether they will pay for structured thinking before traction.
-
-On screen:
-
-- why chosen
-- reason codes: `shaky_assumption`, `load_bearing`, `market_risk`
-- target claim and edge refs available for audit
-- founder clicks "Go there" to start the suggested challenge focus
-
-Backend receipt:
-
-- `autopilot_focus_started`
-
-### 0:45-1:00 - Penny challenges it
-
-Narration:
-
-> Now Penny issues the challenge. It is specific, pressure-tested, and answerable.
-
-Challenge copy:
-
-> The risky assumption is not that founders have messy thinking. They do. The risk is that pre-seed founders will pay for structured thinking before traction, when their budget and attention usually go to building, selling, fundraising, or finding customers. If Penny does not create an immediate artifact that helps with one of those urgent jobs, "better thinking" may be admired but deferred.
+```text
+Make this founder/builder focused. Keep the memory-native creativity angle, but make the output concrete enough that I could build it with Codex.
+```
 
 On screen:
+- selected option cards
+- comment box
+- `Update Idea Spec`
 
-- failure type: `shaky_assumption`
-- strength: `strong`
-- response options: Defend, Revise, Absorb
+### 1:55-2:25 - Artifact
 
-Backend receipt:
-
-- `challenge_issued`
-
-### 1:00-1:15 - Founder revises
-
-Narration:
-
-> The founder chooses Revise. Penny does not overwrite history. It preserves the old version and makes the narrower claim current.
-
-Founder revision:
-
-> Pre-seed founders will pay for structured thinking when it produces an immediate fundraising, positioning, or product-decision artifact they can use that week.
+> Penny turns my choices into a structured artifact. I keep the outline compact so the viewer sees the shape before the prose.
 
 On screen:
+- Product thesis
+- Target user
+- Problem
+- Core loop
+- Memory layer
+- Create mode
+- Learn bridge
+- MVP scope
+- Build prompt/export
 
-- old claim version
-- new claim version
-- revision reason
+### 2:25-2:45 - Learn
 
-Backend receipt:
-
-- `claim_revised`
-- previous ClaimVersion preserved
-- new current ClaimVersion created
-
-### 1:15-1:28 - Penny produces Challenge Brief
-
-Narration:
-
-> Penny turns the loop into a short thinking receipt: original idea, current claim, assumptions, pressure point, challenge, response, what changed, open risks, and the move timeline.
+> If a technical idea is confusing, Learn opens without leaving the flow. It shows the source-to-concept path, then explains and applies it back to the artifact.
 
 On screen:
+- `Learn this`
+- meaning map: `Source -> Concept -> Use -> Check`
+- `Explain simply`
+- `Show worked example`
+- `Apply to my artifact`
 
-- compact Challenge Brief
-- before/after claim change
-- open risk: prove the urgent paid founder moment
+### 2:45-3:00 - Export
 
-Backend receipt:
-
-- `artifact_created`
-
-### 1:28-1:30 - Penny suggests next move
-
-Narration:
-
-> Penny does not end with generic advice. It gives the next thinking move: test the revised paid-use case against one real founder workflow.
+> Now the output is ready for Codex or Claude Code. Penny is not a chatbot or connector hub. It is a context-aware workbench for turning vague ideas into buildable structure.
 
 On screen:
+- Back to Create
+- Canvas outline
+- `Export prompt`
+- selected option history
+- source/memory evidence
+- acceptance tests
 
-- recommended next move
-- target claim or edge
-- expected completion move
+## Do Not Say
 
-## Close
-
-> That is Penny: not a chatbot that generates more text, but a controllable thinking instrument where every meaningful step becomes durable thinking state.
+- Do not say Penny connects to live Gmail or messages in this demo.
+- Do not pitch Penny as a generic memory app, notes app, productivity dashboard, or chatbot.
+- Do not open Slack, Drive, Calendar, OAuth, provider comparison, or dev-only panels.
+- Do not expand every artifact section. The compact outline is the default.
 
 ## Success Bar
 
-- The first visible value is structure, not prose.
-- The pressure point is load-bearing and founder-specific.
-- Penny explains why before challenging.
-- Revise preserves the old claim version.
-- The Challenge Brief is short enough to scan.
-- The final next move is concrete and non-generic.
+- Viewer understands `context -> options -> judgment -> artifact -> learn -> export`.
+- The five Create cards feel equal.
+- The evidence feels personal without claiming live private access.
+- Learn feels useful for application, not like school mode.
+- The ending is a visual/copyable structure, not a wall of chat.
