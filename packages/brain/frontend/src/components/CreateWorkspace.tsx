@@ -455,6 +455,7 @@ export function CreateWorkspace({
             onRejectOption={toggleRejectedOption}
             onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
           />
+          <CreateEvidenceLedgerPanel options={options} selectedOptionIds={selectedOptionIds} />
 
           <CreateLearnBridgePanel artifact={artifact} onLearnThis={onLearnThis} />
 
@@ -493,7 +494,7 @@ export function CreateWorkspace({
           </section>
 
           <div className="create-output-grid">
-            <CreateArtifactPanel artifact={artifact} selectedOptions={selectedOptions} />
+            <CreateArtifactPanel artifact={artifact} selectedOptions={selectedOptions} userComment={userComment} />
             <CreateVerificationPanel verification={verification} />
           </div>
 
@@ -596,6 +597,7 @@ export function CreateJudgmentNextPlace({
   const hasJudgment = selectedOptions.length || rejectedOptions.length || userComment.trim();
   const selectedLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "No selected cards yet";
   const rejectedLabel = rejectedOptions.length ? rejectedOptions.map((option) => option.lens).join(" + ") : "No rejected cards yet";
+  const commentLabel = userComment.trim() ? clipDisplayText(userComment, 120) : "No comment yet";
   const nextPlace = createJudgmentNextPlaceCopy({ hasJudgment: Boolean(hasJudgment), artifact, promptExport, nextBestMove });
 
   return (
@@ -613,6 +615,10 @@ export function CreateJudgmentNextPlace({
         <div>
           <dt>Rejected</dt>
           <dd>{rejectedLabel}</dd>
+        </div>
+        <div>
+          <dt>Comment</dt>
+          <dd>{commentLabel}</dd>
         </div>
       </dl>
     </section>
@@ -1207,78 +1213,86 @@ export function CreateOptionBoard({
         </section>
       ) : null}
       <div className="create-option-grid">
-        {options.map((option) => (
-          <article
-            key={option.id}
-            className={`create-option-card${selectedOptionIds.includes(option.id) ? " is-selected" : ""}${rejectedOptionIds.includes(option.id) ? " is-rejected" : ""}`}
-            data-testid="create-option-card"
-            data-create-lens={option.lens}
-          >
-            <button
-              type="button"
-              className="create-option-select-button"
-              aria-pressed={selectedOptionIds.includes(option.id)}
-              onClick={() => onToggleOption(option.id)}
-              disabled={busy}
+        {options.map((option) => {
+          const selected = selectedOptionIds.includes(option.id);
+          const rejected = rejectedOptionIds.includes(option.id);
+
+          return (
+            <article
+              key={option.id}
+              className={`create-option-card${selected ? " is-selected" : ""}${rejected ? " is-rejected" : ""}`}
+              data-testid="create-option-card"
+              data-create-lens={option.lens}
             >
-              <span>{option.lens}</span>
-              <strong>{option.title}</strong>
-              <p>{option.oneLine}</p>
-            </button>
-            <div className="create-option-memory-meta" aria-label={`${option.lens} evidence and taste grounding`}>
-              <span>Evidence {createEvidenceCount(option)}</span>
-              <span>Taste {createTasteCount(option)}</span>
-              <span>{option.contextLabel}</span>
-            </div>
-            <div className="create-option-source-chips" aria-label={`${option.lens} source chips`}>
-              {uniqueById(option.sourcesUsed)
-                .filter((source) => source.kind !== "rough_idea")
-                .slice(0, 3)
-                .map((source) => (
-                  <span key={source.id}>{source.label}</span>
-                ))}
-            </div>
-            <div>
-              <p>{option.topReason}</p>
-              <small>{option.nextMove}</small>
-            </div>
-            <div className="create-option-card-actions">
               <button
                 type="button"
-                className="create-option-detail-button"
-                onClick={() => setDetailOptionId(option.id)}
-                data-testid="create-option-details-button"
+                className="create-option-select-button"
+                aria-pressed={selected}
+                onClick={() => onToggleOption(option.id)}
+                disabled={busy}
               >
-                <Info size={14} />
-                Details
+                <span>{option.lens}</span>
+                <strong>{option.title}</strong>
+                <p>{option.oneLine}</p>
               </button>
-              {onRejectOption ? (
+              <div className="create-option-memory-meta" aria-label={`${option.lens} evidence and taste grounding`}>
+                <span>Past evidence {createEvidenceCount(option)}</span>
+                <span>Taste {createTasteCount(option)}</span>
+                <span>{option.contextLabel}</span>
+              </div>
+              <div className="create-option-source-chips" aria-label={`${option.lens} source chips`}>
+                {uniqueById(option.sourcesUsed)
+                  .filter((source) => source.kind !== "rough_idea")
+                  .slice(0, 3)
+                  .map((source) => (
+                    <span key={source.id}>{source.label}</span>
+                  ))}
+              </div>
+              <div>
+                <p>{option.topReason}</p>
+                <small>{option.nextMove}</small>
+              </div>
+              <div className="create-option-judgment-state" aria-label={`${option.lens} judgment state`}>
+                <span>{rejected ? "Rejected" : selected ? "Selected" : "Available"}</span>
+              </div>
+              <div className="create-option-card-actions">
                 <button
                   type="button"
                   className="create-option-detail-button"
-                  aria-pressed={rejectedOptionIds.includes(option.id)}
-                  onClick={() => onRejectOption(option.id)}
-                  disabled={busy}
-                  data-testid="create-option-reject-button"
+                  onClick={() => setDetailOptionId(option.id)}
+                  data-testid="create-option-details-button"
                 >
-                  <X size={14} />
-                  Reject
+                  <Info size={14} />
+                  Details
                 </button>
-              ) : null}
-              {onLearnThis ? (
-                <button
-                  type="button"
-                  className="create-option-detail-button"
-                  onClick={() => onLearnThis(option)}
-                  data-testid="create-option-learn-this-button"
-                >
-                  <BookOpen size={14} />
-                  Learn this
-                </button>
-              ) : null}
-            </div>
-          </article>
-        ))}
+                {onRejectOption ? (
+                  <button
+                    type="button"
+                    className="create-option-detail-button"
+                    aria-pressed={rejected}
+                    onClick={() => onRejectOption(option.id)}
+                    disabled={busy}
+                    data-testid="create-option-reject-button"
+                  >
+                    <X size={14} />
+                    Reject
+                  </button>
+                ) : null}
+                {onLearnThis ? (
+                  <button
+                    type="button"
+                    className="create-option-detail-button"
+                    onClick={() => onLearnThis(option)}
+                    data-testid="create-option-learn-this-button"
+                  >
+                    <BookOpen size={14} />
+                    Learn this
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
       </div>
       {activeDetailOption ? (
         <CreateOptionDetailsDrawer
@@ -1289,6 +1303,127 @@ export function CreateOptionBoard({
       ) : null}
     </section>
   );
+}
+
+type CreateEvidenceLedgerRow = {
+  id: string;
+  label: string;
+  detail: string;
+  lensLabels: string[];
+};
+
+export function CreateEvidenceLedgerPanel({
+  options,
+  selectedOptionIds,
+}: {
+  options: CandidateOption[];
+  selectedOptionIds: string[];
+}) {
+  if (!options.length) {
+    return null;
+  }
+
+  const selectedOptions = options.filter((option) => selectedOptionIds.includes(option.id));
+  const visibleOptions = selectedOptions.length ? selectedOptions : options;
+  const scopeLabel = selectedOptions.length
+    ? `Selected ${selectedOptions.map((option) => option.lens).join(" + ")}`
+    : "All five options before selection";
+  const evidenceRows = createEvidenceLedgerRows(visibleOptions, "evidence");
+  const tasteRows = createEvidenceLedgerRows(visibleOptions, "taste");
+
+  return (
+    <section className="create-evidence-ledger" aria-label="Create evidence visibility" data-testid="create-evidence-ledger">
+      <header>
+        <span>Evidence visibility</span>
+        <strong>{scopeLabel}</strong>
+      </header>
+      <div className="create-evidence-ledger-grid">
+        <CreateEvidenceLedgerColumn
+          title="Evidence from past"
+          emptyCopy="No imported evidence is attached to these cards yet."
+          rows={evidenceRows}
+        />
+        <CreateEvidenceLedgerColumn
+          title="Taste interpreted"
+          emptyCopy="No explicit taste signal is attached to these cards yet."
+          rows={tasteRows}
+        />
+      </div>
+    </section>
+  );
+}
+
+function CreateEvidenceLedgerColumn({
+  title,
+  emptyCopy,
+  rows,
+}: {
+  title: string;
+  emptyCopy: string;
+  rows: CreateEvidenceLedgerRow[];
+}) {
+  return (
+    <section aria-label={title}>
+      <span>{title}</span>
+      {rows.length ? (
+        <ul>
+          {rows.slice(0, 5).map((row) => (
+            <li key={row.id}>
+              <strong>{row.label}</strong>
+              <p>{row.detail}</p>
+              <small>{row.lensLabels.join(" + ")}</small>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>{emptyCopy}</p>
+      )}
+    </section>
+  );
+}
+
+function createEvidenceLedgerRows(options: CandidateOption[], kind: "evidence" | "taste"): CreateEvidenceLedgerRow[] {
+  const rows = new Map<string, CreateEvidenceLedgerRow>();
+
+  for (const option of options) {
+    const refs =
+      kind === "evidence"
+        ? [
+            ...option.memoryUsed
+              .filter((memory) => memory.kind !== "preference")
+              .map((memory) => ({ id: `memory:${memory.id}`, label: memory.label, detail: memory.summary })),
+            ...option.sourcesUsed
+              .filter((source) => source.kind !== "rough_idea")
+              .map((source) => ({
+                id: `source:${source.id}`,
+                label: source.label,
+                detail: [source.excerpt, source.sourceRange].filter(Boolean).join(" "),
+              })),
+          ]
+        : option.memoryUsed
+            .filter((memory) => memory.kind === "preference")
+            .map((memory) => ({ id: `taste:${memory.id}`, label: memory.label, detail: memory.summary }));
+
+    for (const ref of refs) {
+      const existing = rows.get(ref.id);
+
+      if (existing) {
+        if (!existing.lensLabels.includes(option.lens)) {
+          existing.lensLabels.push(option.lens);
+        }
+        continue;
+      }
+
+      rows.set(ref.id, {
+        id: ref.id,
+        label: ref.label,
+        detail: ref.detail,
+        lensLabels: [option.lens],
+      });
+    }
+  }
+
+  return [...rows.values()];
 }
 
 export function CreateOptionDetailsDrawer({
@@ -1305,6 +1440,7 @@ export function CreateOptionDetailsDrawer({
   const tasteRefs = memoryRefs.filter((memory) => memory.kind === "preference");
   const evidenceRefs = memoryRefs.filter((memory) => memory.kind !== "preference");
   const importedSourceRefs = sourceRefs.filter((source) => source.kind === "source");
+  const roughIdeaRefs = sourceRefs.filter((source) => source.kind === "rough_idea");
   const groundedClaims = [
     ...evidenceRefs.map((memory) => memory.summary),
     ...importedSourceRefs.map((source) => source.excerpt),
@@ -1354,8 +1490,8 @@ export function CreateOptionDetailsDrawer({
       </section>
 
       <section>
-        <span>Evidence used</span>
-        {evidenceRefs.length || sourceRefs.length ? (
+        <span>Evidence used (provenance)</span>
+        {evidenceRefs.length || importedSourceRefs.length ? (
           <ul>
             {evidenceRefs.map((memory) => (
               <li key={memory.id}>
@@ -1363,7 +1499,7 @@ export function CreateOptionDetailsDrawer({
                 <p>{memory.summary}</p>
               </li>
             ))}
-            {sourceRefs.map((source) => (
+            {importedSourceRefs.map((source) => (
               <li key={source.id}>
                 <strong>{source.label}</strong>
                 <p>{source.excerpt}</p>
@@ -1374,10 +1510,18 @@ export function CreateOptionDetailsDrawer({
         ) : (
           <p>Context-light: no concrete imported evidence matched this direction.</p>
         )}
+        {roughIdeaRefs.length ? (
+          <div className="create-option-seed-grounding">
+            <strong>Seed thought</strong>
+            {roughIdeaRefs.map((source) => (
+              <p key={source.id}>{source.excerpt}</p>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section>
-        <span>Taste interpreted</span>
+        <span>Taste interpreted (pattern)</span>
         {tasteRefs.length ? (
           <ul>
             {tasteRefs.map((memory) => (
@@ -1431,9 +1575,11 @@ export function CreateOptionDetailsDrawer({
 export function CreateArtifactPanel({
   artifact,
   selectedOptions = [],
+  userComment = "",
 }: {
   artifact: CodingPromptArtifact | null;
   selectedOptions?: CandidateOption[];
+  userComment?: string;
 }) {
   const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>([]);
   const [refinedSectionIds, setRefinedSectionIds] = useState<string[]>([]);
@@ -1454,6 +1600,8 @@ export function CreateArtifactPanel({
   }
 
   const selectedLensLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "the current selected option mix";
+  const artifactEvidenceCount = selectedOptions.reduce((total, option) => total + createEvidenceCount(option), 0);
+  const artifactTasteCount = selectedOptions.reduce((total, option) => total + createTasteCount(option), 0);
 
   function toggleValue(values: string[], value: string): string[] {
     return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
@@ -1472,6 +1620,26 @@ export function CreateArtifactPanel({
           ))}
         </div>
       ) : null}
+      <div className="create-artifact-inputs" aria-label="Idea Spec inputs">
+        <article>
+          <span>Seed thought</span>
+          <p>{clipDisplayText(artifact.rawIdea, 140)}</p>
+        </article>
+        <article>
+          <span>Selected history</span>
+          <p>{selectedOptions.length ? selectedLensLabel : "No selected option history recorded yet."}</p>
+        </article>
+        <article>
+          <span>User comment</span>
+          <p>{userComment.trim() ? clipDisplayText(userComment, 140) : "No user comment recorded yet."}</p>
+        </article>
+        <article>
+          <span>Grounding</span>
+          <p>
+            {artifactEvidenceCount} past evidence refs · {artifactTasteCount} taste signals kept separate.
+          </p>
+        </article>
+      </div>
       <div className="yc-artifact-outline" aria-label="YC artifact outline" data-testid="yc-artifact-outline">
         {ycArtifactOutline(artifact).map((section) => {
           const expanded = expandedSectionIds.includes(section.title);
@@ -1971,7 +2139,10 @@ function sortCreateOptions(options: CandidateOption[]): CandidateOption[] {
 }
 
 function createEvidenceCount(option: CandidateOption): number {
-  return uniqueById([...option.memoryUsed.filter((memory) => memory.kind !== "preference"), ...option.sourcesUsed]).length;
+  return uniqueById([
+    ...option.memoryUsed.filter((memory) => memory.kind !== "preference"),
+    ...option.sourcesUsed.filter((source) => source.kind !== "rough_idea"),
+  ]).length;
 }
 
 function createTasteCount(option: CandidateOption): number {
