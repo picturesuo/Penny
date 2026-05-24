@@ -243,6 +243,7 @@ export type BrainMemoryProfile = {
     profileSignalCount: number;
   };
   profileReview: BrainMemoryProfileReview | null;
+  profileReviewHistory: BrainMemoryProfileReview[];
 };
 
 export type BrainMemoryRetrieval = {
@@ -315,6 +316,7 @@ type ScopeMemoryStore = {
   jobs: Map<string, IngestionJob>;
   signals: Map<string, UserProfileSignal>;
   profileReview: BrainMemoryProfileReview | null;
+  profileReviewHistory: BrainMemoryProfileReview[];
 };
 
 type ScopeColumn = AnyPgColumn;
@@ -1058,7 +1060,9 @@ export function createDbBrainMemoryService(
       rebuildProfileSignals(store, now);
       await replaceDbProfileSignals(db, scope, store.signals, new Date(now));
 
-      return profileFromStore(scope, store, await latestDbProfileReview(db, scope));
+      const profileReviewHistory = await dbProfileReviewHistory(db, scope);
+
+      return profileFromStore(scope, store, profileReviewHistory[0] ?? null, profileReviewHistory);
     },
 
     async retrieve(input, request) {
@@ -1213,10 +1217,12 @@ export function createDbBrainMemoryService(
         })
         .onConflictDoNothing();
 
+      const profileReviewHistory = await dbProfileReviewHistory(db, scope);
+
       return {
         reviewed: true,
         profileReview,
-        profile: profileFromStore(scope, store, profileReview),
+        profile: profileFromStore(scope, store, profileReview, profileReviewHistory),
       };
     },
 
@@ -1259,6 +1265,7 @@ export function createInMemoryBrainMemoryService(
       jobs: new Map(),
       signals: new Map(),
       profileReview: null,
+      profileReviewHistory: [],
     };
 
     stores.set(key, store);
@@ -1479,6 +1486,7 @@ export function createInMemoryBrainMemoryService(
 
       rebuildProfileSignals(store, now);
       store.profileReview = profileReviewFromInput(input, now, "local_memory");
+      store.profileReviewHistory = nextProfileReviewHistory(store.profileReview, store.profileReviewHistory);
 
       if (rankerRecorder) {
         await recordProfileReviewDevelopmentEvent(rankerRecorder, {
@@ -1724,18 +1732,32 @@ function profileReviewFromInput(
   };
 }
 
-async function latestDbProfileReview(db: BrainMemoryDb, scope: BrainScope): Promise<BrainMemoryProfileReview | null> {
-  const [row] = await db
+const PROFILE_REVIEW_HISTORY_LIMIT = 8;
+
+async function dbProfileReviewHistory(
+  db: BrainMemoryDb,
+  scope: BrainScope,
+  limit = PROFILE_REVIEW_HISTORY_LIMIT,
+): Promise<BrainMemoryProfileReview[]> {
+  const rows = await db
     .select()
     .from(brainDevelopmentEvents)
     .where(and(scopeCondition(brainDevelopmentEvents, scope), eq(brainDevelopmentEvents.kind, "profile_reviewed")))
     .orderBy(desc(brainDevelopmentEvents.occurredAt))
-    .limit(1);
+    .limit(limit);
 
-  if (!row) {
-    return null;
-  }
+  return rows.flatMap((row) => {
+    const review = profileReviewFromDbEvent(row);
 
+    return review ? [review] : [];
+  });
+}
+
+function profileReviewFromDbEvent(row: {
+  payload: unknown;
+  occurredAt: Date;
+  summary: string;
+}): BrainMemoryProfileReview | null {
   const payload = recordValue(row.payload);
   const fingerprint = stringValue(payload?.fingerprint);
 
@@ -1749,6 +1771,28 @@ async function latestDbProfileReview(db: BrainMemoryDb, scope: BrainScope): Prom
     sourceOfTruth: "brain_development_events",
     summary: row.summary,
   };
+}
+
+function nextProfileReviewHistory(
+  profileReview: BrainMemoryProfileReview | null,
+  profileReviewHistory: BrainMemoryProfileReview[],
+): BrainMemoryProfileReview[] {
+  const reviews = profileReview ? [profileReview, ...profileReviewHistory] : profileReviewHistory;
+  const seen = new Set<string>();
+
+  return reviews
+    .sort((left, right) => Date.parse(right.reviewedAt) - Date.parse(left.reviewedAt))
+    .filter((review) => {
+      const key = `${review.fingerprint}:${review.reviewedAt}`;
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .slice(0, PROFILE_REVIEW_HISTORY_LIMIT);
 }
 
 function isSyncedSourceImport(source: Pick<SourceImport, "sourceUri">): boolean {
@@ -1890,6 +1934,7 @@ async function loadDbMemoryStore(db: BrainMemoryDb, scope: BrainScope): Promise<
     jobs: new Map(),
     signals: new Map(),
     profileReview: null,
+    profileReviewHistory: [],
   };
 
   for (const row of sourceRows) {
@@ -3162,6 +3207,7 @@ function profileFromStore(
   scope: BrainScope,
   store: ScopeMemoryStore,
   profileReview: BrainMemoryProfileReview | null = store.profileReview,
+  profileReviewHistory: BrainMemoryProfileReview[] = store.profileReviewHistory,
 ): BrainMemoryProfile {
   const signals = [...store.signals.values()].sort((left, right) => right.weight - left.weight || left.label.localeCompare(right.label));
   const usableNodes = usableMemoryNodes(store);
@@ -3211,6 +3257,7 @@ function profileFromStore(
       profileSignalCount: store.signals.size,
     },
     profileReview,
+    profileReviewHistory: nextProfileReviewHistory(profileReview, profileReviewHistory),
   };
 }
 

@@ -203,6 +203,12 @@ test("Brain profile review persists explicit profile judgment", async () => {
     { service },
   );
   const reviewPayload = await responsePayload(reviewResponse);
+  const secondFingerprint = `${fingerprint}:updated`;
+  const secondReviewResponse = await handleBrainMemoryProfileReviewRequest(
+    jsonRequest("http://localhost/api/brain/memory/profile/review", { fingerprint: secondFingerprint }),
+    { service },
+  );
+  const secondReviewPayload = await responsePayload(secondReviewResponse);
   const reloadedService = createInMemoryBrainMemoryService(backing, rankerRecorder);
   const profileResponse = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile"), {
     service: reloadedService,
@@ -213,7 +219,13 @@ test("Brain profile review persists explicit profile judgment", async () => {
   assert.equal(reviewPayload.data.reviewed, true);
   assert.equal(reviewPayload.data.profileReview.fingerprint, fingerprint);
   assert.equal(reviewPayload.data.profile.profileReview?.fingerprint, fingerprint);
-  assert.equal(reviewedProfile.profileReview?.fingerprint, fingerprint);
+  assert.equal(secondReviewResponse.status, 200);
+  assert.equal(secondReviewPayload.data.profileReview.fingerprint, secondFingerprint);
+  assert.equal(secondReviewPayload.data.profile.profileReviewHistory[0].fingerprint, secondFingerprint);
+  assert.equal(secondReviewPayload.data.profile.profileReviewHistory[1].fingerprint, fingerprint);
+  assert.equal(reviewedProfile.profileReview?.fingerprint, secondFingerprint);
+  assert.equal(reviewedProfile.profileReviewHistory[0].fingerprint, secondFingerprint);
+  assert.equal(reviewedProfile.profileReviewHistory[1].fingerprint, fingerprint);
   assert.ok(events.some((event) => event.kind === "profile_reviewed" && event.explicitness === "explicit" && event.weight > 0.9));
 });
 
