@@ -16,6 +16,7 @@
     "check:public-repo-publish": "node scripts/check-public-repo-safety.mjs --strict",
     "check:github-deploy-secrets": "node scripts/check-github-deploy-secrets.mjs",
     "prepare:public-snapshot": "node scripts/prepare-public-snapshot.mjs",
+    "publish:public-snapshot": "node scripts/publish-public-snapshot.mjs",
     "smoke:public-staging": "node scripts/smoke-public-staging.mjs",
     "lint": "tsc --noEmit --pretty false && tsc --noEmit --pretty false -p packages/brain/frontend/tsconfig.json",
     "start": "tsx packages/brain/src/server.ts",
