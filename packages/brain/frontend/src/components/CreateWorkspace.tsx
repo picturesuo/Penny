@@ -41,11 +41,11 @@ export const CREATE_WORKSPACE_DRAFT_STORAGE_KEY = "penny.createWorkspaceDraft.v1
 
 const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Idea Spec", "Verification", "Export"];
 const ycFixtureLabels = [
-  "Email fixture",
-  "LinkedIn-style context",
-  "Manual messages transcript",
-  "WhatsApp-style demo",
-  "Founder notes",
+  "Email fixture, not live Gmail",
+  "LinkedIn-style context, not live LinkedIn",
+  "Manual messages context for demo",
+  "No live WhatsApp, iMessage, SMS, Slack, or social connectors",
+  "Founder notes, manual/private",
   "trainingUse=false",
 ];
 const ycArtifactOutlineTitles = [
@@ -1245,7 +1245,9 @@ export function CreateOptionBoard({
                   .filter((source) => source.kind !== "rough_idea")
                   .slice(0, 3)
                   .map((source) => (
-                    <span key={source.id}>{source.label}</span>
+                    <span key={source.id} title={sourceChipTitle(source)}>
+                      {sourceChipDisplayLabel(source)}
+                    </span>
                   ))}
               </div>
               <div>
@@ -1441,6 +1443,8 @@ export function CreateOptionDetailsDrawer({
   const evidenceRefs = memoryRefs.filter((memory) => memory.kind !== "preference");
   const importedSourceRefs = sourceRefs.filter((source) => source.kind === "source");
   const roughIdeaRefs = sourceRefs.filter((source) => source.kind === "rough_idea");
+  const safeFixtureSourceNote =
+    importedSourceRefs.length > 0 && importedSourceRefs.every((source) => isSafeFixtureManualSourceRef(source));
   const groundedClaims = [
     ...evidenceRefs.map((memory) => memory.summary),
     ...importedSourceRefs.map((source) => source.excerpt),
@@ -1491,6 +1495,12 @@ export function CreateOptionDetailsDrawer({
 
       <section>
         <span>Evidence used (provenance)</span>
+        {safeFixtureSourceNote ? (
+          <small>
+            Fixture/manual source evidence only. trainingUse=false; no live Gmail, LinkedIn, WhatsApp, iMessage, SMS,
+            Slack, social, or OAuth access is claimed.
+          </small>
+        ) : null}
         {evidenceRefs.length || importedSourceRefs.length ? (
           <ul>
             {evidenceRefs.map((memory) => (
@@ -1600,8 +1610,8 @@ export function CreateArtifactPanel({
   }
 
   const selectedLensLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "the current selected option mix";
-  const artifactEvidenceCount = selectedOptions.reduce((total, option) => total + createEvidenceCount(option), 0);
-  const artifactTasteCount = selectedOptions.reduce((total, option) => total + createTasteCount(option), 0);
+  const artifactEvidenceCount = createEvidenceLedgerRows(selectedOptions, "evidence").length;
+  const artifactTasteCount = createEvidenceLedgerRows(selectedOptions, "taste").length;
 
   function toggleValue(values: string[], value: string): string[] {
     return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
@@ -1942,7 +1952,7 @@ function sourceImportEvidenceLabel(kind: string): string {
     case "linkedin_context":
       return "LinkedIn-style context: fixture only; no OAuth; trainingUse=false.";
     case "manual_messages_transcript":
-      return "Manual messages transcript: pasted demo text; no live SMS, iMessage, or WhatsApp; trainingUse=false.";
+      return "Manual messages context for demo: pasted demo text; no live WhatsApp, iMessage, SMS, Slack, or social connectors; trainingUse=false.";
     case "founder_notes":
       return "Founder notes: manual private source; trainingUse=false.";
     default:
@@ -1998,7 +2008,43 @@ function isYcFounderFixtureProfile(profile: BrainMemoryProfileData | null): bool
     ...profile.recentMemoryNodes.map((node) => `${node.title} ${node.summary}`),
   ].join(" ");
 
-  return /penny-yc-founder-fixture|Email fixture|LinkedIn-style founder context|Manual WhatsApp-style transcript|Manual messages transcript|Founder notes/i.test(haystack);
+  return /penny-yc-founder-fixture|Email fixture|LinkedIn-style founder context|Manual WhatsApp-style transcript|Manual messages transcript|Manual messages context for demo|Founder notes/i.test(haystack);
+}
+
+function sourceChipDisplayLabel(source: SourceRef): string {
+  const haystack = sourceRefText(source);
+
+  if (/manual messages context|manual messages transcript|whatsapp-style transcript/i.test(haystack)) {
+    return "Manual messages context";
+  }
+
+  if (/email fixture|gmail-style/i.test(haystack)) {
+    return "Email fixture";
+  }
+
+  if (/linkedin-style/i.test(haystack)) {
+    return "LinkedIn-style fixture";
+  }
+
+  if (/founder notes/i.test(haystack)) {
+    return "Founder notes";
+  }
+
+  return source.label;
+}
+
+function sourceChipTitle(source: SourceRef): string {
+  return [source.label, source.excerpt, source.sourceRange].filter(Boolean).join(" - ");
+}
+
+function isSafeFixtureManualSourceRef(source: SourceRef): boolean {
+  return /email fixture|linkedin-style|manual messages context|manual messages transcript|whatsapp-style transcript|founder notes|safe demo data|fixture only|pasted demo text/i.test(
+    sourceRefText(source),
+  );
+}
+
+function sourceRefText(source: SourceRef): string {
+  return [source.label, source.excerpt, source.sourceRange].filter(Boolean).join(" ");
 }
 
 function ycArtifactOutline(artifact: CodingPromptArtifact): Array<{
