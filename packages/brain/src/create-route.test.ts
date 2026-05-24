@@ -542,7 +542,8 @@ test("YC founder fixture feeds Create options, judgment, artifact, and export wi
       sessionId: first.optionSet.sessionId,
       optionSetId: first.optionSet.id,
       selectedOptionIds: selected.map((option) => option.id),
-      userComment: "Keep the founder/builder path: memory-native workbench, human judgment, and buildable specs before coding agents.",
+      userComment:
+        "Make this founder/builder focused. Keep the memory-native creativity angle, but make the output concrete enough that I could build it with Codex.",
       artifact: first.artifact,
     },
     headers,
@@ -572,9 +573,10 @@ test("YC founder fixture feeds Create options, judgment, artifact, and export wi
   assert.match(optionText(first, "Personal"), /thinking instrument|human judgment|workbench/i);
   assert.match(optionText(first, "Critical"), /generic chatbot|GPT-wrapper|fake|rejected/i);
   assert.ok(refined.judgmentEvent);
-  assert.match(sectionBody(refined.artifact, "User intent"), /founder\/builder path|memory-native workbench/i);
+  assert.match(sectionBody(refined.artifact, "User intent"), /founder\/builder focused|memory-native creativity/i);
   assert.equal(exportResponse.status, 200);
   assert.match(exported.text, /## YC Demo Spec/);
+  assert.match(exported.text, /Start Create -> safe fixture synthesis/);
   assert.match(exported.text, /## Selected Option History/);
   assert.match(exported.text, /Personal:/);
   assert.match(exported.text, /Valuable:/);

@@ -2057,7 +2057,7 @@ function buildYcDemoSpecText(
     clipText(`${section("Implementation plan")}\n\n${section("Do-not-break list")}`, 1_400),
     "",
     "### Demo script",
-    "Landing composer -> choose Create -> safe fixture synthesis -> evidence drawer -> Personal + Valuable + Critical judgment -> artifact -> Learn this -> Back to Create -> Canvas -> Export.",
+    "Start Create -> safe fixture synthesis -> evidence drawer -> Personal + Valuable + Critical judgment -> artifact -> Learn this -> Back to Create -> Canvas -> Export.",
     "",
     "### Build prompt/export",
     "Export this artifact as the copyable coding-agent prompt/spec that follows in the remaining sections.",
