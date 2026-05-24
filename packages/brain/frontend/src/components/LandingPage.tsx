@@ -32,8 +32,12 @@ export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "B", label: "Brain" },
   { key: "C", label: "Create" },
   { key: "L", label: "Learn" },
-  { key: "Q", label: "Note" },
+  { key: "N", label: "Note" },
 ];
+
+export function landingShortcutModifierLabel(platform: string = browserPlatform()): "Option" | "Alt" {
+  return /Mac|iPhone|iPad|iPod/i.test(platform) ? "Option" : "Alt";
+}
 
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
   if (key === "L") {
@@ -44,7 +48,7 @@ function destinationForShortcutKey(key: string | null): LandingDestination | nul
     return "Create";
   }
 
-  if (key === "Q") {
+  if (key === "N") {
     return "QuickNote";
   }
 
@@ -66,7 +70,7 @@ function labelForShortcutKey(key: string): string {
 }
 
 export function landingShortcutIntent(key: string): LandingShortcutIntent | null {
-  const normalizedKey = key.trim().toLowerCase();
+  const normalizedKey = normalizeShortcutKey(key);
 
   if (normalizedKey === "b") {
     return { action: "open-mode", mode: "Brain" };
@@ -80,7 +84,7 @@ export function landingShortcutIntent(key: string): LandingShortcutIntent | null
     return { action: "select-destination", destination: "Create" };
   }
 
-  if (normalizedKey === "q") {
+  if (normalizedKey === "n") {
     return { action: "select-destination", destination: "QuickNote" };
   }
 
@@ -106,13 +110,14 @@ export function landingSubmitIntent(destination: LandingDestination | null, rawI
 export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote, onBuildWithPenny }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
   const [sourceMaterial, setSourceMaterial] = useState<LearnSourceMaterialInput | null>(null);
-  const [isCtrlDown, setIsCtrlDown] = useState(false);
+  const [isShortcutModifierDown, setIsShortcutModifierDown] = useState(false);
   const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
   const [selectedShortcutKey, setSelectedShortcutKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeShortcutTimeoutRef = useRef<number | null>(null);
   const submitIntent = landingSubmitIntent(destinationForShortcutKey(selectedShortcutKey), rawIdea);
+  const shortcutModifierLabel = landingShortcutModifierLabel();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -143,31 +148,33 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
         return;
       }
 
-      if (event.key === "Control") {
-        setIsCtrlDown(true);
+      if (event.key === "Alt") {
+        setIsShortcutModifierDown(true);
         return;
       }
 
-      if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
         return;
       }
 
-      if (!landingShortcutIntent(event.key)) {
+      const shortcutKey = shortcutKeyFromKeyboardEvent(event);
+
+      if (!landingShortcutIntent(shortcutKey)) {
         return;
       }
 
       event.preventDefault();
-      void runShortcut(event.key);
+      void runShortcut(shortcutKey);
     }
 
     function handleKeyUp(event: KeyboardEvent) {
-      if (event.key === "Control") {
-        setIsCtrlDown(false);
+      if (event.key === "Alt") {
+        setIsShortcutModifierDown(false);
       }
     }
 
     function handleWindowBlur() {
-      setIsCtrlDown(false);
+      setIsShortcutModifierDown(false);
     }
 
     window.addEventListener("keydown", handleShortcut);
@@ -391,10 +398,10 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                       }}
                     >
                       <kbd
-                        className={isCtrlDown || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined}
-                        aria-label="Control"
+                        className={isShortcutModifierDown || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined}
+                        aria-label={shortcutModifierLabel}
                       >
-                        Ctrl
+                        {shortcutModifierLabel}
                       </kbd>
                       <kbd
                         className={
@@ -423,6 +430,28 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
       </section>
     </main>
   );
+}
+
+function normalizeShortcutKey(key: string): string {
+  const trimmedKey = key.trim();
+
+  if (/^Key[A-Z]$/i.test(trimmedKey)) {
+    return trimmedKey.slice(3).toLowerCase();
+  }
+
+  return trimmedKey.toLowerCase();
+}
+
+function shortcutKeyFromKeyboardEvent(event: KeyboardEvent): string {
+  return event.code || event.key;
+}
+
+function browserPlatform(): string {
+  if (typeof navigator === "undefined") {
+    return "";
+  }
+
+  return navigator.platform || navigator.userAgent;
 }
 
 async function sourceMaterialFromFile(file: File): Promise<LearnSourceMaterialInput> {

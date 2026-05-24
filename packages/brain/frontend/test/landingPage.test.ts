@@ -3,11 +3,11 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { isYcDemoCreatePrompt, pennyYcCreatePrompt } from "../src/App";
-import { landingShortcutIntent, landingShortcuts, landingSubmitIntent } from "../src/components/LandingPage";
+import { landingShortcutIntent, landingShortcutModifierLabel, landingShortcuts, landingSubmitIntent } from "../src/components/LandingPage";
 import { LandingPage } from "../src/components/LandingPage";
 
 test("landing shortcuts either open Brain or select a composer destination", () => {
-  assert.deepEqual(landingShortcutIntent("Q"), {
+  assert.deepEqual(landingShortcutIntent("N"), {
     action: "select-destination",
     destination: "QuickNote",
   });
@@ -22,6 +22,10 @@ test("landing shortcuts either open Brain or select a composer destination", () 
   assert.deepEqual(landingShortcutIntent("B"), {
     action: "open-mode",
     mode: "Brain",
+  });
+  assert.deepEqual(landingShortcutIntent("KeyN"), {
+    action: "select-destination",
+    destination: "QuickNote",
   });
   assert.equal(landingShortcutIntent("X"), null);
 });
@@ -52,8 +56,15 @@ test("landing submit defaults rough ideas to Create and honors selected destinat
 test("landing shortcuts render in Brain, Create, Learn, Quick note order", () => {
   assert.deepEqual(
     landingShortcuts.map((shortcut) => `${shortcut.key} ${shortcut.label}`),
-    ["B Brain", "C Create", "L Learn", "Q Note"],
+    ["B Brain", "C Create", "L Learn", "N Note"],
   );
+});
+
+test("landing shortcut modifier label follows the browser platform", () => {
+  assert.equal(landingShortcutModifierLabel("MacIntel"), "Option");
+  assert.equal(landingShortcutModifierLabel("iPhone"), "Option");
+  assert.equal(landingShortcutModifierLabel("Win32"), "Alt");
+  assert.equal(landingShortcutModifierLabel("Linux x86_64"), "Alt");
 });
 
 test("landing page exposes direct Create and Brain first-run CTAs", () => {
@@ -70,6 +81,7 @@ test("landing page exposes direct Create and Brain first-run CTAs", () => {
   assert.match(markup, /Start with Create/);
   assert.match(markup, /data-testid="landing-create-start"/);
   assert.match(markup, /Start with your Brain/);
+  assert.match(markup, /Alt|Option/);
 });
 
 test("landing page exposes a small YC fixture fallback when fixture loader is wired", () => {
