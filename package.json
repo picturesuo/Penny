@@ -12,6 +12,7 @@
     "dev:frontend": "vite --config packages/brain/frontend/vite.config.ts",
     "dev:api": "tsx packages/brain/src/server.ts",
     "check:launch-readiness": "node scripts/check-launch-readiness.mjs",
+    "check:local-demo-readiness": "node scripts/check-local-demo-readiness.mjs",
     "check:public-readiness": "tsx scripts/check-public-readiness.ts",
     "check:public-mirror": "node scripts/check-public-mirror.mjs",
     "check:public-repo-safety": "node scripts/check-public-repo-safety.mjs",
