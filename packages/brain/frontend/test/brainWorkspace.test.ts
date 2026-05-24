@@ -8,6 +8,7 @@ import {
   GmailKeywordResults,
   GmailSemanticResults,
   GoogleConnectorControl,
+  brainFirstRunSteps,
   isActiveGmailConnection,
   isGmailSearchAvailable,
 } from "../src/components/BrainWorkspace";
@@ -90,6 +91,11 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Private user memory/);
   assert.match(markup, /no global training/i);
   assert.match(markup, /Penny understood/);
+  assert.match(markup, /Profile not reviewed/);
+  assert.match(markup, /Profile looks right/);
+  assert.match(markup, /Sources/);
+  assert.match(markup, /Memories/);
+  assert.match(markup, /Signals/);
   assert.match(markup, /Small reversible builds/);
   assert.match(markup, /Preference - Small reversible builds/);
   assert.match(markup, /Grounded/);
@@ -112,6 +118,36 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Source deleted\. Related chunks and source-backed memories were removed from retrieval and Create/);
   assert.match(markup, /Delete Founder workflow notes/);
   assert.match(markup, /Use this Brain to create something/);
+});
+
+test("Brain first-run flow requires an explicit profile review action", () => {
+  const profile = memoryProfile();
+  const sections = [
+    {
+      title: "Taste signals",
+      items: [{ id: "signal-1", label: "Small reversible builds", summary: "Useful Create signal." }],
+    },
+  ];
+
+  const beforeReview = brainFirstRunSteps({
+    profile,
+    recentNodes: profile.recentMemoryNodes,
+    sections,
+    profileReviewed: false,
+  });
+  const afterReview = brainFirstRunSteps({
+    profile,
+    recentNodes: profile.recentMemoryNodes,
+    sections,
+    profileReviewed: true,
+  });
+
+  assert.equal(beforeReview[1]?.label, "Review Brain profile");
+  assert.equal(beforeReview[1]?.done, false);
+  assert.equal(beforeReview[1]?.active, true);
+  assert.equal(afterReview[1]?.done, true);
+  assert.equal(afterReview[2]?.label, "Confirm/forget/boost memories");
+  assert.equal(afterReview[2]?.active, true);
 });
 
 test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest gated messaging", () => {

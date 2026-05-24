@@ -2463,11 +2463,20 @@ export function BrainMemoryPanel({
   const recentNodes = profile?.recentMemoryNodes ?? [];
   const latestJob = profile?.jobs[0] ?? null;
   const profileSections = profile ? memoryProfileSections(profile, recentNodes) : [];
-  const firstRunSteps = brainFirstRunSteps({ profile, recentNodes, sections: profileSections });
+  const profileReviewKey = profileReviewFingerprint(profile);
+  const [reviewedProfileKey, setReviewedProfileKey] = useState<string | null>(null);
+  const profileReviewed = Boolean(profileReviewKey && reviewedProfileKey === profileReviewKey);
+  const firstRunSteps = brainFirstRunSteps({ profile, recentNodes, sections: profileSections, profileReviewed });
   const hasImportedMemories = (profile?.stats.memoryNodeCount ?? 0) > 0;
   const demoFixtureVisible = showDemoFixture ?? isBrainDemoFixtureMode();
   const canImport = draft.trim().length > 0 && !disabled && !importing;
   const importHint = importHintForKind(kind);
+
+  useEffect(() => {
+    if (!profileReviewKey) {
+      setReviewedProfileKey(null);
+    }
+  }, [profileReviewKey]);
 
   function applyGoogleConnectorResponse(response: GoogleConnectorProviderStateResponse) {
     setGoogleProvider(response.data.provider);
@@ -2808,14 +2817,28 @@ export function BrainMemoryPanel({
       </form>
       <div className="brain-memory-grid">
         <BrainMemorySourcesList sources={sources} disabled={disabled || status === "deleting"} onDeleteSource={onDeleteSource} />
-        <BrainMemoryProfileSummary
-          profile={profile}
-          recentNodes={recentNodes}
-          sections={profileSections}
-          reviewingId={reviewingId ?? null}
-          disabled={disabled}
-          onReviewMemory={onReviewMemory}
-        />
+        <div className="brain-memory-review-column">
+          {profile && hasImportedMemories ? (
+            <BrainProfileReviewCard
+              profile={profile}
+              reviewed={profileReviewed}
+              disabled={disabled || importing}
+              onReview={() => {
+                if (profileReviewKey) {
+                  setReviewedProfileKey(profileReviewKey);
+                }
+              }}
+            />
+          ) : null}
+          <BrainMemoryProfileSummary
+            profile={profile}
+            recentNodes={recentNodes}
+            sections={profileSections}
+            reviewingId={reviewingId ?? null}
+            disabled={disabled}
+            onReviewMemory={onReviewMemory}
+          />
+        </div>
       </div>
       {profile && hasImportedMemories && onStartCreateWithBrain ? (
         <div className="brain-memory-next-step">
@@ -3602,6 +3625,47 @@ function BrainMemorySourcesList({
   );
 }
 
+function BrainProfileReviewCard({
+  profile,
+  reviewed,
+  disabled,
+  onReview,
+}: {
+  profile: BrainMemoryProfileData;
+  reviewed: boolean;
+  disabled: boolean;
+  onReview: () => void;
+}) {
+  return (
+    <section className={`brain-profile-review-card${reviewed ? " is-reviewed" : ""}`} aria-label="Review Brain profile">
+      <div>
+        <strong>{reviewed ? "Profile reviewed" : "Profile not reviewed"}</strong>
+        <p>
+          Check whether Penny's source-backed read on your taste, active ideas, and rejected directions is close enough to guide Create.
+        </p>
+      </div>
+      <dl aria-label="Profile review facts">
+        <div>
+          <dt>Sources</dt>
+          <dd>{profile.stats.sourceCount}</dd>
+        </div>
+        <div>
+          <dt>Memories</dt>
+          <dd>{profile.stats.memoryNodeCount}</dd>
+        </div>
+        <div>
+          <dt>Signals</dt>
+          <dd>{profile.stats.profileSignalCount}</dd>
+        </div>
+      </dl>
+      <button type="button" className="secondary-command" disabled={disabled || reviewed} onClick={onReview}>
+        <CheckCircle2 size={15} aria-hidden="true" />
+        <span>{reviewed ? "Profile looks right" : "Profile looks right"}</span>
+      </button>
+    </section>
+  );
+}
+
 function BrainMemoryProfileSummary({
   profile,
   recentNodes,
@@ -3731,17 +3795,19 @@ type BrainProfileSectionItem = {
   summary: string;
 };
 
-function brainFirstRunSteps({
+export function brainFirstRunSteps({
   profile,
   recentNodes,
   sections,
+  profileReviewed,
 }: {
   profile: BrainMemoryProfileData | null;
   recentNodes: MemoryNode[];
   sections: Array<{ title: string; items: BrainProfileSectionItem[] }>;
+  profileReviewed: boolean;
 }): Array<{ label: string; done: boolean; active: boolean }> {
   const imported = (profile?.stats.sourceCount ?? 0) > 0;
-  const understood = sections.length > 0;
+  const understood = sections.length > 0 && profileReviewed;
   const reviewed = recentNodes.some((node) => node.evidenceLevel === "user_confirmed" || node.confidence >= 0.95);
   const baseSteps = [
     { label: "Import context", done: imported },
@@ -3756,6 +3822,23 @@ function brainFirstRunSteps({
     ...step,
     active: index === (activeIndex === -1 ? baseSteps.length - 1 : activeIndex),
   }));
+}
+
+function profileReviewFingerprint(profile: BrainMemoryProfileData | null): string | null {
+  if (!profile || profile.stats.sourceCount === 0) {
+    return null;
+  }
+
+  const sourcePart = profile.sources.map((source) => `${source.id}:${source.updatedAt}`).join("|");
+  const memoryPart = profile.recentMemoryNodes.map((node) => `${node.id}:${node.lastSeenAt}:${node.confidence}`).join("|");
+
+  return [
+    profile.stats.sourceCount,
+    profile.stats.memoryNodeCount,
+    profile.stats.profileSignalCount,
+    sourcePart,
+    memoryPart,
+  ].join("::");
 }
 
 function memoryProfileSections(profile: BrainMemoryProfileData, recentNodes: MemoryNode[]): Array<{ title: string; items: BrainProfileSectionItem[] }> {

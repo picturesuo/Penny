@@ -3239,6 +3239,79 @@
     gap: 12px;
   }
 
+  .brain-memory-review-column {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .brain-profile-review-card {
+    display: grid;
+    gap: 10px;
+    border: 1px solid #111111;
+    border-radius: 12px;
+    background: #fff6c7;
+    padding: 12px;
+  }
+
+  .brain-profile-review-card.is-reviewed {
+    background: #eff7d2;
+  }
+
+  .brain-profile-review-card strong {
+    font-size: 13px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .brain-profile-review-card p {
+    margin: 6px 0 0;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .brain-profile-review-card dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin: 0;
+  }
+
+  .brain-profile-review-card dl div {
+    border: 1px solid rgb(17 17 17 / 0.22);
+    border-radius: 9px;
+    background: rgb(255 255 255 / 0.72);
+    padding: 8px;
+  }
+
+  .brain-profile-review-card dt,
+  .brain-profile-review-card dd {
+    margin: 0;
+    line-height: 1;
+  }
+
+  .brain-profile-review-card dt {
+    color: rgb(17 17 17 / 0.58);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .brain-profile-review-card dd {
+    margin-top: 5px;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .brain-profile-review-card button {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
   .brain-memory-card {
     display: grid;
     align-content: start;
