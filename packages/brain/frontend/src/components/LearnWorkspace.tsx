@@ -210,6 +210,11 @@ function LearnSessionView({
     void onSearchBrainRelated(question, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
   }
 
+  function handleMeaningMapQuestion(question: string) {
+    setAskPennyOpen(true);
+    setAskPennySeed({ text: question, id: Date.now() });
+  }
+
   return (
     <section className="learn-session-output" aria-label="Learn session output">
       <LearningPathSidebar
@@ -230,6 +235,7 @@ function LearnSessionView({
         lessonPages={lessonPages}
         onPrevious={goToPreviousLesson}
         onNext={goToNextLesson}
+        onMeaningMapQuestion={handleMeaningMapQuestion}
       />
 
       <AskPennyDrawer
@@ -487,6 +493,7 @@ function LearnMainContent({
   lessonPages,
   onPrevious,
   onNext,
+  onMeaningMapQuestion,
 }: {
   pageData: LearnPageData;
   activeStepIndex: number;
@@ -495,6 +502,7 @@ function LearnMainContent({
   lessonPages: LearnLessonPage[];
   onPrevious: () => void;
   onNext: () => void;
+  onMeaningMapQuestion: (question: string) => void;
 }) {
   const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
   const activeSubstep = activeStep?.substeps.find((substep) => substep.id === activeSubstepId);
@@ -505,7 +513,12 @@ function LearnMainContent({
 
   return (
     <article className="learn-editorial-main" aria-label="Current learning step">
-      <MicroLessonSlide lesson={currentStep} activeLessonIndex={activeLessonIndex} lessonCount={lessonPages.length} />
+      <MicroLessonSlide
+        lesson={currentStep}
+        activeLessonIndex={activeLessonIndex}
+        lessonCount={lessonPages.length}
+        onMeaningMapQuestion={onMeaningMapQuestion}
+      />
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
         <div className="learn-nav-control learn-nav-control-previous">
@@ -529,10 +542,12 @@ export function MicroLessonSlide({
   lesson,
   activeLessonIndex,
   lessonCount,
+  onMeaningMapQuestion,
 }: {
   lesson: LearnLesson;
   activeLessonIndex: number;
   lessonCount: number;
+  onMeaningMapQuestion?: (question: string) => void;
 }) {
   const displayExplanation = truncateWords(lesson.shortExplanation, 26);
   const focusFit = microLessonFocusFit(displayExplanation);
@@ -559,12 +574,18 @@ export function MicroLessonSlide({
         </p>
       </section>
 
-      <LearnUnderstandingTour lesson={lesson} />
+      <LearnUnderstandingTour lesson={lesson} {...(onMeaningMapQuestion ? { onAskAboutItem: onMeaningMapQuestion } : {})} />
     </section>
   );
 }
 
-export function LearnUnderstandingTour({ lesson }: { lesson: LearnLesson }) {
+export function LearnUnderstandingTour({
+  lesson,
+  onAskAboutItem,
+}: {
+  lesson: LearnLesson;
+  onAskAboutItem?: (question: string) => void;
+}) {
   const meaningMap = meaningMapItemsForLesson(lesson);
 
   return (
@@ -572,8 +593,14 @@ export function LearnUnderstandingTour({ lesson }: { lesson: LearnLesson }) {
       <ol className="learn-meaning-map" aria-label="Meaning map" data-testid="learn-meaning-map">
         {meaningMap.map((item) => (
           <li key={`${item.label}-${item.text}`}>
-            <span>{item.label}</span>
-            <strong>{item.text}</strong>
+            <button
+              type="button"
+              onClick={() => onAskAboutItem?.(item.question)}
+              aria-label={`Ask about ${item.label}: ${item.text}`}
+            >
+              <span>{item.label}</span>
+              <strong>{item.text}</strong>
+            </button>
           </li>
         ))}
       </ol>
@@ -587,11 +614,31 @@ export function meaningMapItemsForLesson(lesson: LearnLesson) {
   const checkText = `Check against ${meaningMapSourceLabel(lesson.sourceSpans[0]?.label)}`;
 
   return [
-    { label: "Source", text: truncateWords(sourceText, 8) },
-    { label: "Map", text: truncateWords(lesson.title, 5) },
-    { label: "Teach", text: truncateWords(lesson.shortExplanation, 7) },
-    { label: "Use", text: truncateWords(useText, 8) },
-    { label: "Check", text: truncateWords(checkText, 6) },
+    {
+      label: "Source",
+      text: truncateWords(sourceText, 8),
+      question: "What should I learn from this source excerpt?",
+    },
+    {
+      label: "Map",
+      text: truncateWords(lesson.title, 5),
+      question: "How does this map organize the topic?",
+    },
+    {
+      label: "Teach",
+      text: truncateWords(lesson.shortExplanation, 7),
+      question: "Explain this teaching point simply.",
+    },
+    {
+      label: "Use",
+      text: truncateWords(useText, 8),
+      question: "Show how to use this idea on one concrete case.",
+    },
+    {
+      label: "Check",
+      text: truncateWords(checkText, 6),
+      question: "What would prove this understanding is wrong or incomplete?",
+    },
   ];
 }
 
