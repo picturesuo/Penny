@@ -201,6 +201,9 @@ export type RetrievalResult = {
     label: string;
     kind: "brain" | "preference" | "context";
     summary: string;
+    confidence?: number | undefined;
+    evidenceLevel?: "user_confirmed" | "grounded" | "inferred" | undefined;
+    rankEffect?: "user_confirmed" | "boosted" | "high_confidence" | undefined;
   };
   sourceRef: {
     id: string;
@@ -280,6 +283,9 @@ export type CreateMemoryRetrievalContext = {
     label: string;
     kind: "brain" | "preference" | "context";
     summary: string;
+    confidence?: number | undefined;
+    evidenceLevel?: "user_confirmed" | "grounded" | "inferred" | undefined;
+    rankEffect?: "user_confirmed" | "boosted" | "high_confidence" | undefined;
   }>;
   sourceRefs: Array<{
     id: string;
@@ -1576,7 +1582,29 @@ function profileSignalMemoryRefsForCreate(profile: BrainMemoryProfile, query: st
       label: `Profile signal: ${signal.label}`,
       kind: profileSignalMemoryKind(signal.kind),
       summary: signal.summary,
+      confidence: signal.weight,
+      evidenceLevel: "inferred" as const,
+      ...(signal.weight >= 0.82 ? { rankEffect: "high_confidence" as const } : {}),
     }));
+}
+
+function createRankEffectFromMemory(
+  confidence: number,
+  evidenceLevel: MemoryEvidenceLevel,
+): CreateMemoryRetrievalContext["memoryRefs"][number]["rankEffect"] {
+  if (confidence >= 0.92) {
+    return "boosted";
+  }
+
+  if (evidenceLevel === "user_confirmed") {
+    return "user_confirmed";
+  }
+
+  if (confidence >= 0.82) {
+    return "high_confidence";
+  }
+
+  return undefined;
 }
 
 function profileSignalMatchForCreate(signal: UserProfileSignal, query: string, terms: string[]): { matched: boolean; score: number } {
@@ -3171,6 +3199,7 @@ function scoreNode(node: MemoryNode, query: string, terms: string[]): number {
 
 function retrievalResultFromNode(node: MemoryNode, source: SourceImport, chunk: SourceChunk, score: number): RetrievalResult {
   const memoryKind = node.type === "preference" ? "preference" : node.type === "source_fact" ? "context" : "brain";
+  const rankEffect = createRankEffectFromMemory(node.confidence, node.evidenceLevel);
 
   return {
     id: stableId("brain-retrieval", node.id, source.id, chunk.id),
@@ -3190,6 +3219,9 @@ function retrievalResultFromNode(node: MemoryNode, source: SourceImport, chunk: 
       label: `${startCase(node.type)}: ${node.title}`,
       kind: memoryKind,
       summary: node.summary,
+      confidence: node.confidence,
+      evidenceLevel: node.evidenceLevel,
+      ...(rankEffect ? { rankEffect } : {}),
     },
     sourceRef: compactObject({
       id: source.id,
@@ -3528,7 +3560,7 @@ function applyMemoryReview(node: MemoryNode, action: Exclude<MemoryReviewAction,
     case "boost":
       return {
         ...node,
-        confidence: Math.min(0.98, Math.max(node.confidence + 0.12, 0.72)),
+        confidence: Math.min(0.98, Math.max(node.confidence + 0.12, 0.92)),
         lastSeenAt: now,
       };
     case "wrong":

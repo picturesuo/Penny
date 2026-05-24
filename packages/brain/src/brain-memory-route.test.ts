@@ -224,8 +224,8 @@ test("Brain profile review persists explicit profile judgment", async () => {
   assert.equal(secondReviewPayload.data.profile.profileReviewHistory[0].fingerprint, secondFingerprint);
   assert.equal(secondReviewPayload.data.profile.profileReviewHistory[1].fingerprint, fingerprint);
   assert.equal(reviewedProfile.profileReview?.fingerprint, secondFingerprint);
-  assert.equal(reviewedProfile.profileReviewHistory[0].fingerprint, secondFingerprint);
-  assert.equal(reviewedProfile.profileReviewHistory[1].fingerprint, fingerprint);
+  assert.equal(reviewedProfile.profileReviewHistory.at(0)?.fingerprint, secondFingerprint);
+  assert.equal(reviewedProfile.profileReviewHistory.at(1)?.fingerprint, fingerprint);
   assert.ok(events.some((event) => event.kind === "profile_reviewed" && event.explicitness === "explicit" && event.weight > 0.9));
 });
 

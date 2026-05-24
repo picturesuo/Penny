@@ -29,6 +29,9 @@ export type MemoryRef = {
   label: string;
   kind: "brain" | "session" | "preference" | "context";
   summary: string;
+  confidence?: number | undefined;
+  evidenceLevel?: "user_confirmed" | "grounded" | "inferred" | undefined;
+  rankEffect?: "user_confirmed" | "boosted" | "high_confidence" | undefined;
 };
 
 export type SourceRef = {
@@ -360,6 +363,9 @@ const MemoryRefSchema = z
     label: z.string().trim().min(1).max(160),
     kind: z.enum(["brain", "session", "preference", "context"]),
     summary: z.string().trim().min(1).max(1_200),
+    confidence: z.number().min(0).max(1).optional(),
+    evidenceLevel: z.enum(["user_confirmed", "grounded", "inferred"]).optional(),
+    rankEffect: z.enum(["user_confirmed", "boosted", "high_confidence"]).optional(),
   })
   .strict();
 
@@ -1243,10 +1249,14 @@ function buildOptionSet(input: {
   const profile = createProfileInsights(input.rawIdea, memoryRefs, sourceRefs, input.contextLight);
   const optionSubject = subjectForTitle(subject);
   const rankByLens = new Map(input.brainRank.rankedCandidates.map((candidate) => [candidate.lens, candidate]));
+  const humanWeightedMemory = memoryRefs
+    .filter((memory) => memory.rankEffect)
+    .sort((left, right) => memoryRankEffectWeight(right) - memoryRankEffectWeight(left) || left.label.localeCompare(right.label))
+    .slice(0, 3);
   const rankedMemory = (lens: CreateLens, fallback: MemoryRef[]) => {
     const candidateMemory = rankByLens.get(lens)?.memoryRefs ?? [];
 
-    return candidateMemory.length ? candidateMemory : fallback;
+    return uniqueById(candidateMemory.length ? [...candidateMemory, ...humanWeightedMemory] : [...fallback, ...humanWeightedMemory]).slice(0, 4);
   };
   const rankedMeta = (lens: CreateLens, fallbackMemory: MemoryRef[]) =>
     rankMetadataForLens(rankByLens.get(lens), rankedMemory(lens, fallbackMemory), sourceRefs, input.contextLight);
@@ -1343,6 +1353,22 @@ function buildOptionSet(input: {
     sourcesUsed: sourceRefs,
     createdAt: input.now,
   };
+}
+
+function memoryRankEffectWeight(memory: MemoryRef): number {
+  if (memory.rankEffect === "boosted") {
+    return 3;
+  }
+
+  if (memory.rankEffect === "user_confirmed") {
+    return 2;
+  }
+
+  if (memory.rankEffect === "high_confidence") {
+    return 1;
+  }
+
+  return 0;
 }
 
 function rankMetadataForLens(

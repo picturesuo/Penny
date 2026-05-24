@@ -116,6 +116,8 @@ test("CreateEvidenceLedgerPanel separates past evidence from interpreted taste",
   assert.match(markup, /Evidence from past/);
   assert.match(markup, /Project: founder workflow/);
   assert.match(markup, /Founder workflow notes/);
+  assert.match(markup, /96% confidence/);
+  assert.match(markup, /Rank effect: boosted\/high-confidence memory gets extra weight in Create/);
   assert.match(markup, /Taste interpreted/);
   assert.match(markup, /Preference: source-backed cards/);
   assert.doesNotMatch(markup, /Rough idea/);
@@ -140,6 +142,7 @@ test("CreateOptionDetailsDrawer renders rationale, memories, sources, and ground
   assert.match(markup, /Uncertainty/);
   assert.match(markup, /Founder workflow notes/);
   assert.match(markup, /Prefers source-backed cards/);
+  assert.match(markup, /Rank effect: user-confirmed memory is weighted above inferred memory/);
 });
 
 test("CreateJudgmentNextPlace keeps selection, rejection, and comment flow visible", () => {
@@ -579,12 +582,18 @@ function memoryGroundedOption(): CandidateOption {
         label: "Preference: source-backed cards",
         kind: "preference",
         summary: "Prefers source-backed cards over generic suggestions.",
+        confidence: 0.95,
+        evidenceLevel: "user_confirmed",
+        rankEffect: "user_confirmed",
       },
       {
         id: "memory-2",
         label: "Project: founder workflow",
         kind: "brain",
         summary: "Penny Create should help founders shape startup ideas.",
+        confidence: 0.96,
+        evidenceLevel: "grounded",
+        rankEffect: "boosted",
       },
     ],
     sourcesUsed: [

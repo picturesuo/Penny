@@ -196,5 +196,6 @@ function brainProfile(): BrainMemoryProfile {
       profileSignalCount: 2,
     },
     profileReview: null,
+    profileReviewHistory: [],
   };
 }

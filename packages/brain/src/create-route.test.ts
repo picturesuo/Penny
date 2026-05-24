@@ -470,13 +470,16 @@ test("alpha Brain to Create to export golden path uses reviewed personal context
   assert.ok((boostedMemory?.confidence ?? 0) >= memoryToBoost.confidence);
 
   const service = createInMemoryCreateRouteService();
-  const rawIdea = "Use Penny's imported Brain context to make a private-alpha Create demo easier to judge and export.";
+  const rawIdea =
+    "Use Penny's imported Brain context to make a private-alpha Create demo easier to judge and export, especially the small reversible builds and source-backed Create evidence signal.";
   const first = await createNext(
     service,
     {
       rawIdea,
       projectId: "alpha-demo-create-project",
       sessionId: "alpha-demo-create-session",
+      memory: memoryRefsFromProfile(reviewedProfile),
+      sources: sourceRefsFromProfile(reviewedProfile),
     },
     headers,
   );
@@ -511,6 +514,8 @@ test("alpha Brain to Create to export golden path uses reviewed personal context
 
   assert.equal(first.optionSet.options.length, 5);
   assert.ok(first.optionSet.memoryUsed.length >= 1);
+  assert.ok(first.optionSet.memoryUsed.some((memory) => memory.id === boostedMemory?.id && memory.rankEffect === "boosted"));
+  assert.ok(first.optionSet.options.some((option) => option.memoryUsed.some((memory) => memory.id === boostedMemory?.id && memory.confidence && memory.confidence >= 0.92)));
   assert.ok(first.optionSet.sourcesUsed.some((source) => source.label === "Penny demo ChatGPT export"));
   assert.ok(first.observability.memoryCountUsed >= 1);
   assert.deepEqual(selected.map((option) => option.lens), ["Personal", "Practical", "Critical"]);
@@ -1512,6 +1517,15 @@ function memoryRefsFromProfile(profile: BrainMemoryProfile): MemoryRef[] {
     label: node.title,
     kind: node.type === "preference" ? "preference" : node.type === "source_fact" ? "context" : "brain",
     summary: node.summary,
+    confidence: node.confidence,
+    evidenceLevel: node.evidenceLevel,
+    ...(node.confidence >= 0.92
+      ? { rankEffect: "boosted" as const }
+      : node.evidenceLevel === "user_confirmed"
+        ? { rankEffect: "user_confirmed" as const }
+        : node.confidence >= 0.82
+          ? { rankEffect: "high_confidence" as const }
+          : {}),
   }));
 }
 

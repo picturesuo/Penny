@@ -550,12 +550,33 @@ function contextLightReason(lens: BrainCreateLens): string {
 }
 
 function memoryRefFromNode(node: MemoryNode): MemoryRef {
+  const rankEffect = rankEffectFromMemoryNode(node);
+
   return {
     id: node.id,
     label: node.title,
     kind: node.type === "preference" ? "preference" : node.type === "source_fact" ? "context" : "brain",
     summary: node.summary,
+    confidence: node.confidence,
+    evidenceLevel: node.evidenceLevel,
+    ...(rankEffect ? { rankEffect } : {}),
   };
+}
+
+function rankEffectFromMemoryNode(node: MemoryNode): MemoryRef["rankEffect"] {
+  if (node.confidence >= 0.92) {
+    return "boosted";
+  }
+
+  if (node.evidenceLevel === "user_confirmed") {
+    return "user_confirmed";
+  }
+
+  if (node.confidence >= 0.82) {
+    return "high_confidence";
+  }
+
+  return undefined;
 }
 
 function memoryTypeFromRef(memory: MemoryRef): MemoryNode["type"] {
@@ -579,6 +600,10 @@ function memoryTypeFromRef(memory: MemoryRef): MemoryNode["type"] {
 }
 
 function evidenceLevelFromMemoryRef(memory: MemoryRef): MemoryEvidenceLevel {
+  if (memory.evidenceLevel) {
+    return memory.evidenceLevel;
+  }
+
   const text = `${memory.label} ${memory.summary}`;
 
   if (/\b(i|we|my|our)\s+(prefer|want|need|decided|chose|avoid|use|care)\b/i.test(text)) {
@@ -589,6 +614,10 @@ function evidenceLevelFromMemoryRef(memory: MemoryRef): MemoryEvidenceLevel {
 }
 
 function confidenceFromMemoryRef(memory: MemoryRef): number {
+  if (typeof memory.confidence === "number") {
+    return memory.confidence;
+  }
+
   const text = `${memory.label} ${memory.summary}`;
 
   if (/boosted|confirmed|correct|decided|prefer|need|avoid/i.test(text)) {

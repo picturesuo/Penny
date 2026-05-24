@@ -1461,6 +1461,9 @@ export interface MemoryRef {
   label: string;
   kind: "brain" | "session" | "preference" | "context";
   summary: string;
+  confidence?: number;
+  evidenceLevel?: "user_confirmed" | "grounded" | "inferred";
+  rankEffect?: "user_confirmed" | "boosted" | "high_confidence";
 }
 
 export interface SourceRef {

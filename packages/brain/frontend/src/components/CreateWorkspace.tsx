@@ -1453,6 +1453,7 @@ type CreateEvidenceLedgerRow = {
   id: string;
   label: string;
   detail: string;
+  rankEffect: string | null;
   lensLabels: string[];
 };
 
@@ -1515,6 +1516,7 @@ function CreateEvidenceLedgerColumn({
             <li key={row.id}>
               <strong>{row.label}</strong>
               <p>{row.detail}</p>
+              {row.rankEffect ? <small>{row.rankEffect}</small> : null}
               <small>{row.lensLabels.join(" + ")}</small>
             </li>
           ))}
@@ -1535,18 +1537,29 @@ function createEvidenceLedgerRows(options: CandidateOption[], kind: "evidence" |
         ? [
             ...option.memoryUsed
               .filter((memory) => memory.kind !== "preference")
-              .map((memory) => ({ id: `memory:${memory.id}`, label: memory.label, detail: memory.summary })),
+              .map((memory) => ({
+                id: `memory:${memory.id}`,
+                label: memory.label,
+                detail: createMemoryEvidenceDetail(memory),
+                rankEffect: createMemoryRankEffectLabel(memory),
+              })),
             ...option.sourcesUsed
               .filter((source) => source.kind !== "rough_idea")
               .map((source) => ({
                 id: `source:${source.id}`,
                 label: source.label,
                 detail: [source.excerpt, source.sourceRange].filter(Boolean).join(" "),
+                rankEffect: null,
               })),
           ]
         : option.memoryUsed
             .filter((memory) => memory.kind === "preference")
-            .map((memory) => ({ id: `taste:${memory.id}`, label: memory.label, detail: memory.summary }));
+            .map((memory) => ({
+              id: `taste:${memory.id}`,
+              label: memory.label,
+              detail: createMemoryEvidenceDetail(memory),
+              rankEffect: createMemoryRankEffectLabel(memory),
+            }));
 
     for (const ref of refs) {
       const existing = rows.get(ref.id);
@@ -1562,12 +1575,44 @@ function createEvidenceLedgerRows(options: CandidateOption[], kind: "evidence" |
         id: ref.id,
         label: ref.label,
         detail: ref.detail,
+        rankEffect: ref.rankEffect,
         lensLabels: [option.lens],
       });
     }
   }
 
   return [...rows.values()];
+}
+
+function createMemoryEvidenceDetail(memory: MemoryRef): string {
+  const confidence = memory.confidence === undefined ? null : `${Math.round(memory.confidence * 100)}% confidence`;
+  const evidence = memory.evidenceLevel ? `${createMemoryEvidenceLevelLabel(memory.evidenceLevel)} evidence` : null;
+  const meta = [confidence, evidence].filter(Boolean).join(" · ");
+
+  return meta ? `${memory.summary} ${meta}.` : memory.summary;
+}
+
+function createMemoryEvidenceLevelLabel(evidenceLevel: NonNullable<MemoryRef["evidenceLevel"]>): string {
+  return evidenceLevel
+    .split("_")
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function createMemoryRankEffectLabel(memory: MemoryRef): string | null {
+  if (memory.rankEffect === "user_confirmed") {
+    return "Rank effect: user-confirmed memory is weighted above inferred memory.";
+  }
+
+  if (memory.rankEffect === "boosted") {
+    return "Rank effect: boosted/high-confidence memory gets extra weight in Create.";
+  }
+
+  if (memory.rankEffect === "high_confidence") {
+    return "Rank effect: high-confidence memory is treated as stronger evidence.";
+  }
+
+  return null;
 }
 
 export function CreateOptionDetailsDrawer({
@@ -1648,7 +1693,8 @@ export function CreateOptionDetailsDrawer({
             {evidenceRefs.map((memory) => (
               <li key={memory.id}>
                 <strong>{memory.label}</strong>
-                <p>{memory.summary}</p>
+                <p>{createMemoryEvidenceDetail(memory)}</p>
+                {createMemoryRankEffectLabel(memory) ? <small>{createMemoryRankEffectLabel(memory)}</small> : null}
               </li>
             ))}
             {importedSourceRefs.map((source) => (
@@ -1679,7 +1725,8 @@ export function CreateOptionDetailsDrawer({
             {tasteRefs.map((memory) => (
               <li key={memory.id}>
                 <strong>{memory.label}</strong>
-                <p>{memory.summary}</p>
+                <p>{createMemoryEvidenceDetail(memory)}</p>
+                {createMemoryRankEffectLabel(memory) ? <small>{createMemoryRankEffectLabel(memory)}</small> : null}
               </li>
             ))}
           </ul>
@@ -2044,12 +2091,19 @@ function createBrainProfileCreateContext(profile: BrainMemoryProfileData | null)
     `Using imported Brain context with ${profile.stats.memoryNodeCount} memories from ${profile.stats.sourceCount} sources.`,
     topSignals.length ? `Top profile signals: ${topSignals.join("; ")}.` : profile.profile.privacySafeSummary,
   ].join(" ");
-  const memory = profile.recentMemoryNodes.slice(0, 6).map<MemoryRef>((node) => ({
-    id: node.id,
-    label: node.title,
-    kind: memoryKindFromNodeType(node.type),
-    summary: node.summary,
-  }));
+  const memory = profile.recentMemoryNodes.slice(0, 6).map<MemoryRef>((node) => {
+    const rankEffect = createRankEffectFromBrainMemory(node.confidence, node.evidenceLevel);
+
+    return {
+      id: node.id,
+      label: node.title,
+      kind: memoryKindFromNodeType(node.type),
+      summary: node.summary,
+      confidence: node.confidence,
+      evidenceLevel: node.evidenceLevel,
+      ...(rankEffect ? { rankEffect } : {}),
+    };
+  });
   const sources = profile.sources.slice(0, 6).map<SourceRef>((source) => ({
     id: source.id,
     label: source.label,
@@ -2085,6 +2139,25 @@ function memoryKindFromNodeType(type: BrainMemoryProfileData["recentMemoryNodes"
   }
 
   return "brain";
+}
+
+function createRankEffectFromBrainMemory(
+  confidence: number,
+  evidenceLevel: BrainMemoryProfileData["recentMemoryNodes"][number]["evidenceLevel"],
+): MemoryRef["rankEffect"] {
+  if (confidence >= 0.92) {
+    return "boosted";
+  }
+
+  if (evidenceLevel === "user_confirmed") {
+    return "user_confirmed";
+  }
+
+  if (confidence >= 0.82) {
+    return "high_confidence";
+  }
+
+  return undefined;
 }
 
 function sourceImportEvidenceLabel(kind: string): string {
