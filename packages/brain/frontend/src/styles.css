@@ -6436,12 +6436,35 @@
     display: grid;
     gap: 5px;
     min-width: 0;
-    padding: 9px 10px;
     border-right: 1px solid rgb(17 17 17 / 0.24);
   }
 
   .learn-meaning-map li:last-child {
     border-right: 0;
+  }
+
+  .learn-meaning-map button {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    height: 100%;
+    padding: 9px 10px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .learn-meaning-map button:hover,
+  .learn-meaning-map button:focus-visible {
+    background: #f5f0e8;
+    outline: none;
+  }
+
+  .learn-meaning-map button:focus-visible {
+    box-shadow: inset 0 0 0 2px #111111;
   }
 
   .learn-meaning-map strong {
