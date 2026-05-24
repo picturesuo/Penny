@@ -1088,7 +1088,7 @@ export type MemoryNodeType =
 export type MemoryEdgeKind = "derived_from" | "related_to" | "same_cluster" | "supports" | "challenges" | "rejects";
 export type MemoryEvidenceLevel = "user_confirmed" | "grounded" | "inferred";
 export type MemoryLabel = "taste" | "preference" | "project" | "frustration";
-export type MemoryReviewAction = "correct" | "wrong" | "forget" | "boost";
+export type MemoryReviewAction = "correct" | "wrong" | "forget" | "boost" | "restore";
 
 export interface SourcePermission {
   visibility: "private";
