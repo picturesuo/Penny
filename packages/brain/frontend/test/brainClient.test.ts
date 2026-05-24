@@ -26,6 +26,7 @@ import {
   issueChallengeFromCandidate,
   importBrainSource,
   retrieveBrainMemory,
+  reviewBrainProfile,
   reviewBrainMemory,
   respondToChallenge,
   saveBrainObject,
@@ -873,6 +874,24 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
         },
       ],
     }),
+    jsonResponse({
+      reviewed: true,
+      profileReview: {
+        fingerprint: "test-profile-review",
+        reviewedAt: "2026-05-05T12:00:02.000Z",
+        sourceOfTruth: "local_memory",
+        summary: "User confirmed the Brain profile was accurate enough to guide Create.",
+      },
+      profile: {
+        ...profile,
+        profileReview: {
+          fingerprint: "test-profile-review",
+          reviewedAt: "2026-05-05T12:00:02.000Z",
+          sourceOfTruth: "local_memory",
+          summary: "User confirmed the Brain profile was accurate enough to guide Create.",
+        },
+      },
+    }),
     jsonResponse({ reviewed: true, action: "correct", memory: profile.recentMemoryNodes[0], profile }),
     jsonResponse({ deleted: true, profile: { ...profile, sources: [], recentMemoryNodes: [], stats: { ...profile.stats, sourceCount: 0 } } }),
   ]);
@@ -888,6 +907,7 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     const fetchedProfile = await fetchBrainMemoryProfile();
     const exported = await exportBrainCodingPrompt({ goal: "Build a Create artifact." });
     const retrieved = await retrieveBrainMemory({ query: "small reversible builds", limit: 4, nodeTypes: ["preference"] });
+    const reviewedProfile = await reviewBrainProfile({ fingerprint: "test-profile-review" });
     const reviewed = await reviewBrainMemory("memory-node-1", { action: "correct" });
     const deleted = await deleteBrainSource(source.id);
 
@@ -899,6 +919,7 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     assert.match(exported.data.export.text, /small reversible builds/);
     assert.equal(retrieved.data.contextLight, false);
     assert.equal(retrieved.data.results[0]?.memoryRef.kind, "preference");
+    assert.equal(reviewedProfile.data.profileReview.fingerprint, "test-profile-review");
     assert.equal(reviewed.data.action, "correct");
     assert.equal(deleted.data.deleted, true);
     assert.equal(calls[0]?.url, "/api/brain/import");
@@ -918,11 +939,14 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     assert.deepEqual(calls[3]?.body, { goal: "Build a Create artifact." });
     assert.equal(calls[4]?.url, "/api/brain/retrieve");
     assert.deepEqual(calls[4]?.body, { query: "small reversible builds", limit: 4, nodeTypes: ["preference"] });
-    assert.equal(calls[5]?.url, "/api/brain/memories/memory-node-1/review");
+    assert.equal(calls[5]?.url, "/api/brain/memory/profile/review");
     assert.equal(calls[5]?.method, "POST");
-    assert.deepEqual(calls[5]?.body, { action: "correct" });
-    assert.equal(calls[6]?.url, `/api/brain/sources/${source.id}`);
-    assert.equal(calls[6]?.method, "DELETE");
+    assert.deepEqual(calls[5]?.body, { fingerprint: "test-profile-review" });
+    assert.equal(calls[6]?.url, "/api/brain/memories/memory-node-1/review");
+    assert.equal(calls[6]?.method, "POST");
+    assert.deepEqual(calls[6]?.body, { action: "correct" });
+    assert.equal(calls[7]?.url, `/api/brain/sources/${source.id}`);
+    assert.equal(calls[7]?.method, "DELETE");
   } finally {
     restoreFetch();
   }
@@ -1476,6 +1500,7 @@ function brainMemoryProfilePayload() {
       memoryEdgeCount: 0,
       profileSignalCount: 1,
     },
+    profileReview: null,
   };
 }
 

@@ -14,6 +14,7 @@ import type {
   BrainImportJobResponse,
   BrainImportResponse,
   BrainMemoryProfileResponse,
+  BrainMemoryProfileReviewResponse,
   BrainMemoryReviewInput,
   BrainMemoryReviewResponse,
   BrainRecentsResponse,
@@ -281,6 +282,22 @@ export async function fetchBrainMemoryProfile(): Promise<BrainMemoryProfileRespo
   }
 
   return payload as BrainMemoryProfileResponse;
+}
+
+export async function reviewBrainProfile(input: { fingerprint: string }): Promise<BrainMemoryProfileReviewResponse> {
+  const response = await fetch("/api/brain/memory/profile/review", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/memory/profile/review failed with ${response.status}.`));
+  }
+
+  return payload as BrainMemoryProfileReviewResponse;
 }
 
 export async function exportBrainCodingPrompt(input: { goal?: string | null } = {}): Promise<BrainCodingPromptExportResponse> {

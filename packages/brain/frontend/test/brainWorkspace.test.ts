@@ -68,6 +68,8 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
       onImport: async () => undefined,
       onDemoFixtureImport: async () => undefined,
       onDeleteSource: async () => undefined,
+      onConnectorSourceDelete: async () => undefined,
+      onReviewProfile: async () => undefined,
       onStartCreateWithBrain: () => undefined,
       showDemoFixture: true,
     }),
@@ -1013,5 +1015,6 @@ function memoryProfile(): BrainMemoryProfileData {
       memoryEdgeCount: 0,
       profileSignalCount: 1,
     },
+    profileReview: null,
   };
 }

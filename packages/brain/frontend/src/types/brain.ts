@@ -1281,6 +1281,12 @@ export interface BrainMemoryProfileData {
     memoryEdgeCount: number;
     profileSignalCount: number;
   };
+  profileReview: {
+    fingerprint: string;
+    reviewedAt: string;
+    sourceOfTruth: "brain_development_events" | "local_memory" | string;
+    summary: string;
+  } | null;
 }
 
 export interface BrainImportInput {
@@ -1325,6 +1331,14 @@ export interface BrainImportJobResponse {
 
 export interface BrainMemoryProfileResponse {
   data: BrainMemoryProfileData;
+}
+
+export interface BrainMemoryProfileReviewResponse {
+  data: {
+    reviewed: true;
+    profileReview: NonNullable<BrainMemoryProfileData["profileReview"]>;
+    profile: BrainMemoryProfileData;
+  };
 }
 
 export interface BrainRetrieveInput {

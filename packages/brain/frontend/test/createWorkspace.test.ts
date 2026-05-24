@@ -671,6 +671,7 @@ function brainProfile(): BrainMemoryProfileData {
       memoryEdgeCount: 0,
       profileSignalCount: 1,
     },
+    profileReview: null,
   };
 }
 

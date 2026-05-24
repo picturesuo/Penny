@@ -209,6 +209,7 @@ function routesReadyForUiPreflight(): Record<string, MockRoute> {
             sourceCount: 0,
             memoryNodeCount: 0,
           },
+          profileReview: null,
         },
       },
     },

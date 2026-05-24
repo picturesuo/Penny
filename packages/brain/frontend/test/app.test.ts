@@ -84,5 +84,6 @@ function brainProfile(): BrainMemoryProfileData {
       memoryEdgeCount: 0,
       profileSignalCount: 0,
     },
+    profileReview: null,
   };
 }

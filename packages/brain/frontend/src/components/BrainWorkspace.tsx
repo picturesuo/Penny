@@ -72,6 +72,7 @@ import {
   fetchClaimDetail,
   fetchSessionNote,
   importBrainSource,
+  reviewBrainProfile,
   reviewBrainMemory,
   revokeGoogleGmail,
   saveSessionNote,
@@ -520,6 +521,22 @@ export function BrainWorkspace({
     }
   }
 
+  async function handleProfileReview(fingerprint: string) {
+    setMemoryError(null);
+    setMemoryNotice(null);
+
+    try {
+      const response = await reviewBrainProfile({ fingerprint });
+      setMemoryProfile(response.data.profile);
+      setMemoryStatus("ready");
+      setMemoryNotice("Brain profile reviewed. Penny will treat this as explicit judgment for Create.");
+    } catch (error) {
+      setMemoryStatus("error");
+      setMemoryError(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  }
+
   return (
     <main className={`brain-workspace-shell${selectedQuickNote ? " is-quick-note-doc" : ""}`}>
       <BrainSidebar
@@ -572,6 +589,7 @@ export function BrainWorkspace({
           onMemorySourceDelete={handleMemorySourceDelete}
           onGoogleConnectorSourceDelete={handleGoogleConnectorSourceDelete}
           onMemoryReview={handleMemoryReview}
+          onProfileReview={handleProfileReview}
           onStartCreateWithBrain={onStartCreateWithBrain}
           focusSeedRequest={documentSeedFocusRequest}
         />
@@ -2286,6 +2304,7 @@ function BrainDocumentsIndex({
   onMemorySourceDelete,
   onGoogleConnectorSourceDelete,
   onMemoryReview,
+  onProfileReview,
   onStartCreateWithBrain,
   focusSeedRequest,
 }: {
@@ -2303,6 +2322,7 @@ function BrainDocumentsIndex({
   onMemorySourceDelete: (sourceId: string) => Promise<void>;
   onGoogleConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onMemoryReview: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
+  onProfileReview: (fingerprint: string) => Promise<void>;
   onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
   focusSeedRequest?: number | undefined;
 }) {
@@ -2333,6 +2353,7 @@ function BrainDocumentsIndex({
       onDeleteSource={onMemorySourceDelete}
       onConnectorSourceDelete={onGoogleConnectorSourceDelete}
       onReviewMemory={onMemoryReview}
+      onReviewProfile={onProfileReview}
       onStartCreateWithBrain={onStartCreateWithBrain}
     />
   );
@@ -2451,6 +2472,7 @@ export function BrainMemoryPanel({
   onDeleteSource,
   onConnectorSourceDelete,
   onReviewMemory,
+  onReviewProfile,
   onStartCreateWithBrain,
   showDemoFixture,
 }: {
@@ -2465,6 +2487,7 @@ export function BrainMemoryPanel({
   onDeleteSource: (sourceId: string) => Promise<void>;
   onConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onReviewMemory?: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
+  onReviewProfile?: (fingerprint: string) => Promise<void>;
   onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
   showDemoFixture?: boolean | undefined;
 }) {
@@ -2484,14 +2507,16 @@ export function BrainMemoryPanel({
   const [brainExportStatus, setBrainExportStatus] = useState<BrainExportStatus>("idle");
   const [brainExportError, setBrainExportError] = useState<string | null>(null);
   const [brainExportNotice, setBrainExportNotice] = useState<string | null>(null);
+  const [profileReviewing, setProfileReviewing] = useState(false);
   const importing = status === "importing";
   const sources = profile?.sources ?? [];
   const recentNodes = profile?.recentMemoryNodes ?? [];
   const latestJob = profile?.jobs[0] ?? null;
   const profileSections = profile ? memoryProfileSections(profile, recentNodes) : [];
   const profileReviewKey = profileReviewFingerprint(profile);
+  const storedProfileReviewKey = profile?.profileReview?.fingerprint ?? null;
   const [reviewedProfileKey, setReviewedProfileKey] = useState<string | null>(null);
-  const profileReviewed = Boolean(profileReviewKey && reviewedProfileKey === profileReviewKey);
+  const profileReviewed = Boolean(profileReviewKey && (reviewedProfileKey === profileReviewKey || storedProfileReviewKey === profileReviewKey));
   const brainPromptExported = Boolean(brainExport);
   const firstRunSteps = brainFirstRunSteps({ profile, recentNodes, sections: profileSections, profileReviewed, brainPromptExported });
   const hasImportedMemories = (profile?.stats.memoryNodeCount ?? 0) > 0;
@@ -2757,6 +2782,20 @@ export function BrainMemoryPanel({
     setBrainExportNotice(downloaded ? "Download started" : "Download unavailable. Use the textarea.");
   }
 
+  async function handleProfileReview() {
+    if (!profileReviewKey || disabled || importing || profileReviewing || profileReviewed) {
+      return;
+    }
+
+    setProfileReviewing(true);
+    try {
+      await onReviewProfile?.(profileReviewKey);
+      setReviewedProfileKey(profileReviewKey);
+    } finally {
+      setProfileReviewing(false);
+    }
+  }
+
   return (
     <section className="brain-memory-panel" aria-label="Second Brain memory">
       <div className="brain-memory-panel-head">
@@ -2889,11 +2928,10 @@ export function BrainMemoryPanel({
             <BrainProfileReviewCard
               profile={profile}
               reviewed={profileReviewed}
+              reviewing={profileReviewing}
               disabled={disabled || importing}
               onReview={() => {
-                if (profileReviewKey) {
-                  setReviewedProfileKey(profileReviewKey);
-                }
+                void handleProfileReview();
               }}
             />
           ) : null}
@@ -3754,11 +3792,13 @@ function BrainMemorySourcesList({
 function BrainProfileReviewCard({
   profile,
   reviewed,
+  reviewing,
   disabled,
   onReview,
 }: {
   profile: BrainMemoryProfileData;
   reviewed: boolean;
+  reviewing: boolean;
   disabled: boolean;
   onReview: () => void;
 }) {
@@ -3784,9 +3824,9 @@ function BrainProfileReviewCard({
           <dd>{profile.stats.profileSignalCount}</dd>
         </div>
       </dl>
-      <button type="button" className="secondary-command" disabled={disabled || reviewed} onClick={onReview}>
+      <button type="button" className="secondary-command" disabled={disabled || reviewed || reviewing} onClick={onReview}>
         <CheckCircle2 size={15} aria-hidden="true" />
-        <span>{reviewed ? "Profile looks right" : "Profile looks right"}</span>
+        <span>{reviewing ? "Reviewing..." : "Profile looks right"}</span>
       </button>
     </section>
   );
