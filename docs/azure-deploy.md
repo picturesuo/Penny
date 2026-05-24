@@ -254,8 +254,8 @@ The publish command uses the GitHub Git Data API instead of `git push`, because 
 Current public mirror:
 
 - URL: `https://github.com/picturesuo/penny-public`
-- Public snapshot commit: `e6e957cace00722d070f4bee62989ebac8c04feb`
-- Source private snapshot commit recorded by the mirror: `350a2870b7baa3aecffc4c569196cf113e16afc5`
+- Public snapshot commit: `19b3621c217cff4df8741b3df0d9924c8987ea89`
+- Source private snapshot commit recorded by the mirror: `d65d4a4e4fdb275e5bcebcf5dcf33b8d9826c1ff`
 - Verification: a fresh clone of the public mirror passed `node scripts/check-public-repo-safety.mjs --strict` with zero warnings. The mirror has one commit, no `docs/proof/**` files, and only `docs/assets/yc-demo-recording-path.png` from the public media allowlist.
 
 ## Cost Guardrails
