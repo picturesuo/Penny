@@ -15,7 +15,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
 - Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
 - Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
-- `pnpm test`: passed, 668 tests.
+- `pnpm test`: passed, 671 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
 - Latest targeted Brain-first e2e: `PENNY_BASE_URL=http://localhost:3044 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs --reporter=line --output=.tmp-brain-first-memory-undo`: passed, 1 test in 5.8s; includes quick-note save, memory import, two-click forget, undo restore, Create, Learn, export, and refresh restore.
