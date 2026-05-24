@@ -7,7 +7,8 @@
 - Fixture path: `test/fixtures/penny-yc-founder-fixture.json`.
 - Primary entry point: click `Start Create` on the landing page. This loads the YC-safe fixture and preloads the demo prompt.
 - Use the fixture/manual path only. Do not demo live Gmail, LinkedIn, WhatsApp, iMessage, SMS, Slack, Drive, Calendar, or new OAuth setup.
-- The YC fixture is safe fake data with email-style context, LinkedIn-style founder context, manual WhatsApp-style transcript notes, founder notes, rejected directions, and `trainingUse=false`.
+- The YC fixture is safe fake data with email-style context, manual messages transcript notes, founder notes, rejected directions, and `trainingUse=false`. Some labels are intentionally style labels, not live account claims.
+- Product inspiration to preserve: Learn should feel like a graph that teaches, not a graph that impresses. The visible pattern is `source -> concept -> use -> check`, adapted from code-understanding tools such as Understand Anything but applied to any founder material.
 
 ## Exact Demo Prompt
 `Start Create` preloads this prompt. Use it manually only if you are testing the composer fallback:
@@ -28,9 +29,9 @@ I want to create a YC startup around ideation and thinking - maybe a thinking in
 9. In `Comment`, type: `Make this founder/builder focused. Keep the memory-native creativity angle, but make the output concrete enough that I could build it with Codex.`
 10. Click `Update Idea Spec`.
 11. Show the artifact outline: Product thesis, Target user, Problem, Why now, Core loop, Memory layer, Create mode, Learn bridge, Data sources, Moat, Risks, MVP scope, Demo script, Build prompt/export.
-12. Use section actions if useful: `Expand`, `Use selected mix`, `Add comment`.
+12. Keep the artifact outline collapsed by default. Expand one section only if useful; `Use selected mix` and `Add comment` live inside the expanded section.
 13. Click `Learn this`.
-14. In Learn, show `Explain simply`, `Show worked example`, and `Apply to my artifact`.
+14. In Learn, show the compact meaning map plus `Explain simply`, `Show worked example`, and `Apply to my artifact`.
 15. Click `Back to Create` and confirm selections, comment, artifact, evidence drawer, and Canvas are preserved.
 16. Click `Export prompt`.
 17. Show the exported prompt includes `## YC Demo Spec`, selected option history, source/memory evidence, repeated rejected directions, privacy constraints, implementation sequence, acceptance tests, do-not-break list, and definition of done.
@@ -46,7 +47,7 @@ Create gives five equal directions instead of one answer: Personal, Practical, V
 I select Personal, Valuable, and Critical, then add my founder/builder comment. Penny does not pick the best idea for me. I choose the mix, and Penny turns that judgment into a structured artifact.
 
 **1:45-2:20 - Learn bridge and Canvas**
-If I am confused, I click Learn this. Learn explains the concept, shows a worked example, and applies it back to my artifact. Back to Create preserves state. The Canvas outline shows the product loop: Penny -> Brain -> Create -> Learn -> Export.
+If I am confused, I click Learn this. Learn shows the source-to-concept path, explains the concept, gives a worked example, and applies it back to my artifact. Back to Create preserves state. The Canvas outline shows the product loop: Penny -> Brain -> Create -> Learn -> Export.
 
 **2:20-3:00 - Export**
 I export the prompt. The final output is strong enough to paste into Codex or Claude Code: rough idea, selected history, evidence, non-goals, UX/backend/data/privacy requirements, implementation sequence, acceptance tests, and do-not-break list.
@@ -66,6 +67,7 @@ Close with: "Penny is not a chatbot. It is a memory-native creativity workbench 
 - Do not discuss Slack, social connectors, broad ingestion, or new modes.
 - Do not pitch generic notes, dashboard, productivity, or chatbot positioning.
 - Cut manual artifact section comments if the demo clock is tight.
+- Do not expand every artifact section. The compact outline is the recording default.
 
 ## Verification Commands
 - Unit/integration:
