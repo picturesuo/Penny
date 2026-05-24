@@ -64,6 +64,10 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
       status: "ready",
       error: null,
       notice: "Source deleted. Related chunks and source-backed memories were removed from retrieval and Create.",
+      noticeAction: {
+        label: "Undo forget",
+        onClick: () => undefined,
+      },
       disabled: false,
       onImport: async () => undefined,
       onDemoFixtureImport: async () => undefined,
@@ -77,6 +81,7 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
 
   assert.match(markup, /Second Brain memory/);
   assert.match(markup, /Private context for Create/);
+  assert.match(markup, /Undo forget/);
   assert.match(markup, /Import context/);
   assert.match(markup, /Review Brain profile/);
   assert.match(markup, /Confirm\/forget\/boost memories/);

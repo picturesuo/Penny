@@ -96,6 +96,11 @@ type BrainMemoryStatus = "idle" | "loading" | "ready" | "importing" | "deleting"
 type BrainExportStatus = "idle" | "exporting" | "ready" | "error";
 type BrainDemoFixtureKind = "penny" | "yc-founder";
 type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "syncing" | "revoking" | "deleting" | "error";
+type BrainMemoryNoticeAction = {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+};
 
 type GoogleConnectorConnectionView = {
   id: string;
@@ -267,6 +272,7 @@ export function BrainWorkspace({
   const [memoryError, setMemoryError] = useState<string | null>(null);
   const [memoryNotice, setMemoryNotice] = useState<string | null>(null);
   const [memoryReviewingId, setMemoryReviewingId] = useState<string | null>(null);
+  const [memoryUndo, setMemoryUndo] = useState<{ nodeId: string; title: string } | null>(null);
   const [documentSeedFocusRequest, setDocumentSeedFocusRequest] = useState(0);
   const quickNotes = useMemo(() => [...recents, ...archivedRecents], [recents, archivedRecents]);
   const selectedQuickNote = quickNotes.find((recent) => recent.id === selectedQuickNoteId) ?? null;
@@ -506,12 +512,20 @@ export function BrainWorkspace({
     setMemoryReviewingId(nodeId);
     setMemoryError(null);
     setMemoryNotice(null);
-    const targetMemoryTitle = memoryProfile?.recentMemoryNodes.find((node) => node.id === nodeId)?.title ?? "Memory";
+    const targetMemoryTitle =
+      memoryProfile?.recentMemoryNodes.find((node) => node.id === nodeId)?.title ??
+      (memoryUndo?.nodeId === nodeId ? memoryUndo.title : "Memory");
+    if (action !== "forget") {
+      setMemoryUndo(null);
+    }
 
     try {
       const response = await reviewBrainMemory(nodeId, { action });
       setMemoryProfile(response.data.profile);
       setMemoryStatus("ready");
+      if (action === "forget" && response.data.reviewed) {
+        setMemoryUndo({ nodeId, title: targetMemoryTitle });
+      }
       setMemoryNotice(memoryReviewNotice(action, targetMemoryTitle));
     } catch (error) {
       setMemoryStatus("error");
@@ -536,6 +550,16 @@ export function BrainWorkspace({
       throw error;
     }
   }
+
+  const memoryNoticeAction = memoryUndo
+    ? {
+        label: "Undo forget",
+        disabled: isThinking || memoryReviewingId === memoryUndo.nodeId,
+        onClick: () => {
+          void handleMemoryReview(memoryUndo.nodeId, "restore");
+        },
+      }
+    : null;
 
   return (
     <main className={`brain-workspace-shell${selectedQuickNote ? " is-quick-note-doc" : ""}`}>
@@ -580,6 +604,7 @@ export function BrainWorkspace({
           memoryStatus={memoryStatus}
           memoryError={memoryError}
           memoryNotice={memoryNotice}
+          memoryNoticeAction={memoryNoticeAction}
           memoryReviewingId={memoryReviewingId}
           disabled={isThinking}
           onCreateDocument={onSeed}
@@ -2295,6 +2320,7 @@ function BrainDocumentsIndex({
   memoryStatus,
   memoryError,
   memoryNotice,
+  memoryNoticeAction,
   memoryReviewingId,
   disabled,
   onCreateDocument,
@@ -2313,6 +2339,7 @@ function BrainDocumentsIndex({
   memoryStatus: BrainMemoryStatus;
   memoryError: string | null;
   memoryNotice: string | null;
+  memoryNoticeAction: BrainMemoryNoticeAction | null;
   memoryReviewingId: string | null;
   disabled: boolean;
   onCreateDocument: (rawIdea: string) => Promise<void>;
@@ -2346,6 +2373,7 @@ function BrainDocumentsIndex({
       status={memoryStatus}
       error={memoryError}
       notice={memoryNotice}
+      noticeAction={memoryNoticeAction}
       reviewingId={memoryReviewingId}
       disabled={disabled}
       onImport={onMemoryImport}
@@ -2465,6 +2493,7 @@ export function BrainMemoryPanel({
   status,
   error,
   notice,
+  noticeAction,
   reviewingId,
   disabled,
   onImport,
@@ -2480,6 +2509,7 @@ export function BrainMemoryPanel({
   status: BrainMemoryStatus;
   error: string | null;
   notice?: string | null;
+  noticeAction?: BrainMemoryNoticeAction | null;
   reviewingId?: string | null;
   disabled: boolean;
   onImport: (input: BrainImportInput) => Promise<void>;
@@ -2813,7 +2843,7 @@ export function BrainMemoryPanel({
           "No private user memory has been imported yet. Create will label suggestions context-light until sources are added."}
       </p>
       {latestJob ? <BrainMemoryImportStatus job={latestJob} /> : null}
-      {notice ? <BrainMemoryNotice message={notice} /> : null}
+      {notice ? <BrainMemoryNotice message={notice} action={noticeAction ?? null} /> : null}
       <ol className="brain-first-run-steps" aria-label="Brain first-run flow">
         {firstRunSteps.map((step, index) => (
           <li key={step.label} className={`${step.done ? "is-done" : ""}${step.active ? " is-active" : ""}`.trim()}>
@@ -3670,11 +3700,16 @@ function formatNullableDate(value: string | null): string {
   return date.toLocaleString();
 }
 
-function BrainMemoryNotice({ message }: { message: string }) {
+function BrainMemoryNotice({ message, action }: { message: string; action?: BrainMemoryNoticeAction | null }) {
   return (
     <div className="brain-memory-import-status is-completed" role="status" aria-live="polite" data-testid="brain-memory-notice">
       <strong>Memory updated</strong>
       <span>{message}</span>
+      {action ? (
+        <button type="button" className="brain-memory-notice-action" disabled={action.disabled} onClick={action.onClick}>
+          {action.label}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -3712,6 +3747,8 @@ function memoryReviewNotice(action: MemoryReviewAction, title: string): string {
       return `${memoryName} marked wrong. Penny will keep it out of normal retrieval unless reviewed again.`;
     case "forget":
       return `${memoryName} forgotten. It was removed from retrieval and Create grounding.`;
+    case "restore":
+      return `${memoryName} restored. It is available for retrieval and Create grounding again.`;
   }
 }
 
