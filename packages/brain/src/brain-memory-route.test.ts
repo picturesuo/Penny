@@ -637,7 +637,7 @@ test("GET /api/brain/demo-fixture/yc-founder returns a private YC founder fixtur
   );
   assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /Email fixture/);
   assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /LinkedIn-style founder context fixture/);
-  assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /Manual WhatsApp-style transcript fixture/);
+  assert.match(payload.data.importInputs.map((input: { label: string }) => input.label).join("\n"), /Manual messages context for demo/);
   assert.match(payload.data.importInputs.map((input: { content: string }) => input.content).join("\n"), /trainingUse=false/);
   assert.ok(payload.data.importInputs.every((input: { privacy?: { visibility?: string; trainingUse?: boolean; rawRetention?: boolean; source?: string } }) => (
     input.privacy?.visibility === "private_memory"
@@ -683,7 +683,7 @@ test("GET /api/brain/demo-fixture/yc-founder returns a private YC founder fixtur
   );
   assert.match(profileText, /not a chatbot|human judgment|without taking judgment/i);
   assert.ok(profile.sources.some((source) => source.kind === "manual_messages_transcript"));
-  assert.ok(profile.sources.some((source) => /Not live WhatsApp, SMS, or iMessage/i.test(source.preview?.excerpt ?? "")));
+  assert.ok(profile.sources.some((source) => /Not live WhatsApp, SMS, iMessage, Slack, or social messages/i.test(source.preview?.excerpt ?? "")));
   assert.ok(profile.profile.repeatedRejectedDirections.some((signal) => /chatbot|dashboard|notes app|assistant/i.test(`${signal.label} ${signal.summary}`)));
 });
 
