@@ -208,7 +208,15 @@ GitHub's billing docs say standard GitHub-hosted Actions runners are free for pu
 pnpm check:public-repo-safety
 ```
 
-The checker fails on tracked env files or high-confidence secret patterns. It also warns on committed proof screenshots, videos, and traces under `docs/proof/`; those artifacts should be reviewed or moved out of the public history before changing repository visibility.
+The routine checker fails on tracked env files or high-confidence secret patterns. It also warns on committed proof screenshots, videos, and traces under `docs/proof/`; those artifacts should be reviewed or moved out of the public history before changing repository visibility.
+
+For the actual publication gate, use strict mode:
+
+```sh
+pnpm check:public-repo-publish
+```
+
+Strict mode fails on proof-media warnings too. If it fails, keep the repo private or publish from a sanitized mirror/new repository instead of flipping this repository public.
 
 ## Cost Guardrails
 
