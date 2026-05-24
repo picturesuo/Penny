@@ -131,6 +131,8 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used|## Product Goal/i, {
     timeout: 15_000,
   });
+  await expect(page.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download .md" })).toBeVisible();
   await expect(page.getByTestId("yc-demo-canvas")).toContainText(/(?:Artifact\/export|Export).*\.md/s);
   await captureProof(page, testInfo, "10-export");
 
@@ -147,6 +149,8 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   await expect(page.locator(".create-judgment-panel textarea")).toHaveValue(/source-grounded/);
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/source-grounded|Personal|Critical/i);
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used|## Product Goal/i);
+  await expect(page.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download .md" })).toBeVisible();
   await expect(page.getByTestId("yc-demo-canvas")).toContainText(/(?:Artifact\/export|Export).*\.md/s);
   await captureProof(page, testInfo, "11-refresh-restored");
 });

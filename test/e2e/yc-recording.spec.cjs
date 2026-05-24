@@ -158,6 +158,8 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Source \/ Memory Evidence/);
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Selected Option History/);
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Repeated Rejected Directions/);
+  await expect(page.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download .md" })).toBeVisible();
   await captureProof(page, testInfo, "08-export");
 });
 
