@@ -198,6 +198,20 @@ gh workflow run deploy-azure.yml --repo picturesuo/Penny --ref main
 
 Required GitHub secrets are `ACR_LOGIN_SERVER`, `ACR_USERNAME`, `ACR_PASSWORD`, `AZURE_CREDENTIALS`, `AZURE_RESOURCE_GROUP`, `AZURE_WEBAPP_NAME`, `DATABASE_URL`, `PENNY_API_TOKEN`, `PENNY_CORS_ORIGINS`, and `PENNY_SESSION_SECRET`. `PENNY_PUBLIC_SMOKE_BASE_URL` is optional; if omitted, the workflow smokes `https://<AZURE_WEBAPP_NAME>.azurewebsites.net`.
 
+Before starting the manual workflow, run the local preflight:
+
+```sh
+pnpm check:github-deploy-secrets
+```
+
+Do not trigger `deploy-azure.yml` until that command passes. As of May 24, 2026, the safe deterministic secrets have been set in GitHub, but `DATABASE_URL` is still missing and must point at the real Azure Postgres database:
+
+```sh
+gh secret set DATABASE_URL --repo picturesuo/Penny --body 'postgresql://pennyadmin:<password>@penny-prod-postgres.postgres.database.azure.com:5432/penny?sslmode=require'
+```
+
+The current machine also needs `az login` before `scripts/azure-bootstrap.sh` or direct Azure resource checks can run.
+
 The workflow builds and pushes the container, applies strict Penny settings, restarts App Service, and runs `scripts/smoke-public-staging.mjs` against the deployed URL.
 
 ## Repo Visibility And Actions Minutes
