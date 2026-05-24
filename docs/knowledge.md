@@ -27,6 +27,7 @@
 - Durable product fact: `docs/private-working-memory-engine-strategy.md` is the current strategy spec for Penny as a private working-memory engine. Connector, memory, retrieval, privacy, and training work should follow that spec while preserving the MVP guardrail against broad ingestion before the seed-to-challenge-to-learn-to-artifact loop works end to end.
 - Durable deployment fact: dogfood/private-alpha deployments require strict env validation, safe structured logs, scoped Create export feedback capture, and Brain import size caps before use with real private material.
 - Durable product fact: destructive Brain memory actions should be reversible through server-owned review state, so retrieval/Create grounding and the UI agree after forget/restore instead of relying on local-only hiding.
+- Durable Learn benchmark: keep Learn map-first and node-askable. Understand-Anything's useful pattern is an interactive knowledge graph with plain-English explanations; NotebookLM Mind Maps' useful pattern is selecting a node to ask about that specific topic. Penny should apply that to any source material while staying tied to Brain/Create judgment instead of expanding into a generic worksheet.
 
 ## Supermemory Understanding
 - Last updated: 2026-04-27.
