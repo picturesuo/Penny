@@ -18,6 +18,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - `pnpm test`: passed, 668 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
+- Latest targeted Brain-first e2e: `PENNY_BASE_URL=http://localhost:3044 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs --reporter=line --output=.tmp-brain-first-memory-undo`: passed, 1 test in 5.8s; includes quick-note save, memory import, two-click forget, undo restore, Create, Learn, export, and refresh restore.
 - Latest targeted browser e2e: `PENNY_BASE_URL=http://localhost:3042 pnpm dlx @playwright/test test test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-learn-understanding-tour`: passed, 1 test in 1.7s.
 - Prior in-app browser smoke: imported a Brain note, rendered the Brain export panel, and exported a coding-agent prompt with Codex target, private context, and human-judgment guardrails.
 - Prior in-app browser smoke: Create path renders six step buttons and the Judgment step button scrolls to the judgment section.
@@ -38,7 +39,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Brain | Review Brain Profile | Mark profile review complete. | Works; Brain shows a profile review card and the first-run flow only marks review done after `Profile looks right`. | `POST /api/brain/memory/profile/review` now records an explicit `profile_reviewed` Brain development event, the profile response returns `profileReview`, and the UI respects the stored fingerprint after reload. | Later: expose profile review history if multiple profile revisions need comparison. |
 | Brain | Confirm memory | Update memory review state. | Works; memory cards show explicit `Memory state` labels and the update notice is a single `role=status` region with a stable test id and memory-specific text. | Icon-only button calls `reviewBrainMemory(node.id, "correct")`; UI now reflects the reviewed node state. | Keep. |
 | Brain | Boost memory | Increase memory importance. | Works; boosted/high-confidence nodes get a visible state label and the update notice names the reviewed memory. | Icon-only button calls `reviewBrainMemory(node.id, "boost")`. | Later: show exact rank effect in Create evidence if needed. |
-| Brain | Forget memory | Remove memory from retrieval. | Works and is reversible; first click arms the memory card with `Click trash again to forget`, second click soft-deletes it from retrieval, and the notice offers `Undo forget`. | `reviewBrainMemory(node.id, "forget")` now stores forgotten nodes server-side and `restore` clears the deleted state before retrieval/Create grounding. | Add browser coverage for visible removal/count decrease plus undo when the next Brain e2e pass expands memory review controls. |
+| Brain | Forget memory | Remove memory from retrieval. | Works and is reversible; first click arms the memory card with `Click trash again to forget`, second click soft-deletes it from retrieval, and the notice offers `Undo forget`. Browser e2e now verifies removal count, restore, and continued Create flow. | `reviewBrainMemory(node.id, "forget")` stores forgotten nodes server-side and `restore` clears the deleted state before retrieval/Create grounding. | Keep. |
 | Brain | Start Create With This Brain | Open Create carrying actual Brain context. | Works; Create opens with Brain context and a generated rough idea from `createPromptFromBrainProfile`. | `handleStartCreateWithBrain` sets both `createBrainProfile` and `createInitialSeedText`; frontend test covers the seed prompt. | Later: let users pick a specific Brain note/document as the seed. |
 | Brain | Export Coding Prompt | Export a coding prompt from the Brain flow. | Works; after imported Brain memory exists, Brain renders a coding-agent prompt panel and exports a prompt for Codex, Claude Code, and Cursor with private context, source evidence, memory evidence, human-judgment guardrails, copy, download, and textarea fallback. | `POST /api/brain/export-coding-prompt` builds from the private Brain memory profile; the Brain-first e2e asserts the exported textarea plus copy/download actions. | Keep. |
 | Brain | Gmail disabled copy | Show honest Gmail unavailable/privacy state. | Works; status says unconfigured with missing Nango config and privacy copy says consent/no human review/trainingUse=false/delete-revoke. | Gmail connector status route reports gated/unconfigured state. | Keep. Ensure button remains disabled unless config is present. |
@@ -64,6 +65,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 3. New Document uses `/brain/seed` and returns `201` in local demo mode.
 4. Brain import creates source-backed memories.
 5. Create uses that Brain context, preserves judgment through Learn, exports, and restores after refresh.
+6. Browser e2e proves Brain memory forget can be undone before Create uses the restored memory.
 
 ## Priority Fixes
 
