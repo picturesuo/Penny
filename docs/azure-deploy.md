@@ -242,6 +242,15 @@ node scripts/check-public-repo-safety.mjs --strict
 
 The snapshot is a new one-commit Git repository generated from the current tracked tree. It excludes `docs/proof/**`, tracked local env files, and unallowlisted binary/media files, then writes `PUBLIC-SNAPSHOT.md` with the source commit. After reviewing the snapshot, publish that directory to a new public GitHub repo instead of changing visibility on the private repository's full history.
 
+To update the existing mirror, dry-run first, then publish:
+
+```sh
+pnpm publish:public-snapshot -- --snapshot tmp/penny-public-snapshot --repo picturesuo/penny-public --dry-run
+pnpm publish:public-snapshot -- --snapshot tmp/penny-public-snapshot --repo picturesuo/penny-public
+```
+
+The publish command uses the GitHub Git Data API instead of `git push`, because large proof history and local HTTP pack behavior have made normal pushes unreliable. By default it force-points the public branch at a one-commit sanitized snapshot so the mirror never inherits private repo history.
+
 Current public mirror:
 
 - URL: `https://github.com/picturesuo/penny-public`
