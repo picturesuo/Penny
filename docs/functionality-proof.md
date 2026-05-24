@@ -32,6 +32,7 @@ Result: `HTTP/1.1 200 OK`.
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm smoke:local-demo -- --port 3007 --output .tmp-local-demo-smoke
 PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs --reporter=line --output=.tmp-brain-first
 PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-yc-recording-check
 PENNY_BASE_URL=http://localhost:3007 PENNY_PROOF_DIR=docs/proof/functionality/brain-first-screenshots PENNY_PLAYWRIGHT_SLOWMO_MS=100 PENNY_PLAYWRIGHT_VIDEO=on PENNY_PLAYWRIGHT_TRACE=on PENNY_PLAYWRIGHT_SCREENSHOT=on pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs --headed --reporter=line --output=docs/proof/functionality/brain-first-playwright-output
@@ -43,6 +44,7 @@ Results:
 - `pnpm typecheck`: passed.
 - `pnpm test`: passed, 641 tests.
 - `pnpm build`: passed.
+- `pnpm smoke:local-demo`: wrapper command for the Brain-first, YC fixture, and Learn understanding browser specs.
 - Brain-first e2e: passed, including refresh restore assertions.
 - YC recording e2e: passed.
 - Headed Brain-first proof: passed.
