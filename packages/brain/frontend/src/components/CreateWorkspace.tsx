@@ -943,9 +943,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryProfileData | null }) {
   const memoryCount = profile?.stats.memoryNodeCount ?? 0;
   const sourceCount = profile?.stats.sourceCount ?? 0;
-  const topSignals = profile ? topBrainProfileSignals(profile).slice(0, 3).map((signal) => compactBrainSignal(signal)) : [];
-  const sourceLabels = profile?.sources.slice(0, 3).map((source) => source.label) ?? [];
   const fixtureLabels = isYcFounderFixtureProfile(profile) ? ycFixtureLabels : [];
+  const topSignals = profile && !fixtureLabels.length ? topBrainProfileSignals(profile).slice(0, 3).map((signal) => compactBrainSignal(signal)) : [];
+  const sourceLabels = !fixtureLabels.length ? profile?.sources.slice(0, 3).map((source) => source.label) ?? [] : [];
 
   if (!memoryCount) {
     return (
