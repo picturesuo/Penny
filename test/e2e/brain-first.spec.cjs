@@ -92,6 +92,12 @@ test("Brain-first loop reaches Create, Learn, and export", async ({ page }, test
   );
   await page.getByRole("button", { name: /Import to Brain/ }).click();
   await expect(page.getByText("Last import completed")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Export coding prompt" }).click();
+  await expect(page.getByLabel("Brain coding prompt export text")).toHaveValue(/Private Context Summary|Human Judgment/i, {
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download .md" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Use this Brain to create something" })).toBeVisible();
   await captureProof(page, testInfo, "04-imported-brain-profile");
   await page.getByRole("button", { name: "Use this Brain to create something" }).click();
