@@ -185,6 +185,10 @@
 - Learn outcomes: user got it right with a mastery marker, user struggled with a struggle marker and re-teaching later, or user disagreed and the user's preferred framing plus the disagreement becomes shape data.
 - Concepts learned in context become Learning-sphere nodes connected to the claim that triggered them.
 - Learning should track mastery, recurring gaps, and what concepts need re-scaffolding.
+- External product research from Understand Anything and NotebookLM reinforces this direction: users learn faster when sources become a navigable concept graph, the product offers a guided tour in the right order, search/ask stays grounded in the source material, and outputs can become study guides or briefings.
+- Penny should adapt that pattern beyond code: any information the user brings in should become Source -> concept map -> guided tour -> worked example -> check/teach-back -> durable Brain concept, without turning Learn into a generic chat pane.
+- The graph should teach, not merely impress. Prefer a small visible source-to-concept tour, source spans, active concept, and next check over dense graph decoration or long generated prose.
+- Keep Learn source-honest: distinguish Brain/source-grounded explanation from web-backed explanation, and do not imply live connectors when the material came from a fixture, paste, or manual import.
 
 ### Brain Surfaces
 - Map is the spatial, aesthetic graph. It is the marketing screenshot and the place users go to see the topology of their thinking.
