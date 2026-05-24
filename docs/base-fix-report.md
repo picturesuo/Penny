@@ -68,4 +68,4 @@ Keep out of the recorded path:
 - Create shows the required YC artifact sections in the fixture-backed path.
 - Learn exposes the Brain Ranker technical option from Create with a return path back to Create.
 
-Remaining non-demo work: production auth/rate limiting/Postgres, real connector proof, backend-derived non-demo Canvas, and deciding whether quick notes become Brain profile memories.
+Remaining non-demo work: production auth/rate limiting/Postgres, real connector proof, backend-derived non-demo Canvas, persisted profile-review moves, and deciding whether quick notes become Brain profile memories.

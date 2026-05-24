@@ -16,7 +16,7 @@ Visual evidence is captured under `docs/proof/yc-recording/`, including named sc
 - Browser verification: Playwright Chrome fallback. The in-app Browser plugin was checked, but no `iab` browser was available in this session.
 
 ## Verification
-- `pnpm test`: passed, 659 tests.
+- `pnpm test`: passed, 660 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
 - `PENNY_BASE_URL=http://localhost:3039 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs test/e2e/brain-first.spec.cjs test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-e2e-latest`: passed, 3 tests in 23.1s.

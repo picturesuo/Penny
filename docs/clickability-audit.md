@@ -15,7 +15,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 - Local server: `PORT=3039 PENNY_AUTH_MODE=dev PENNY_SKIP_DATABASE_PREP=true pnpm start`.
 - Direct API check: `POST /api/brain/recents` returned `201` and later `GET /api/brain/recents` returned the same quick note.
 - Direct API check: `POST /brain/seed` returned `201` in local fallback mode despite the stale configured database URL.
-- `pnpm test`: passed, 659 tests.
+- `pnpm test`: passed, 660 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
 - Browser e2e: `yc-recording.spec.cjs`, `brain-first.spec.cjs`, and `learn-understanding-tour.spec.cjs` passed together, 3 tests in 23.1s.
@@ -32,7 +32,7 @@ This is still not a production-readiness pass. Public/staging still needs real P
 | Brain | Start a document form | Create a Brain document from typed thought. | Works in local demo mode through `/brain/seed` fallback and document listing fallback. | `brain-seed-route.ts` stores a scoped in-memory persisted seed; `brain-documents-route.ts` lists it. | Keep local fallback dev-only. |
 | Brain | Add Folder | Create a folder or clearly disable it. | Disabled and labeled unavailable in the demo. | The visible command is intentionally not in scope. | Keep disabled until folder persistence is real. |
 | Brain | Import Context | Import pasted context and show source-backed memories. | Works on current localhost; import completed and memory/source counts updated. | Brain memory route has explicit in-memory dev fallback. | Keep, then assert refresh behavior. Align recents/objects with this route's fallback model. |
-| Brain | Review Brain Profile | Mark profile review complete. | Passive checklist/profile view only; no explicit review control. | `brainFirstRunSteps` infers "Review Brain profile" from profile sections, not user action. | Add an explicit review/confirm profile control or remove it from the checklist. |
+| Brain | Review Brain Profile | Mark profile review complete. | Works; Brain shows a profile review card and the first-run flow only marks review done after `Profile looks right`. | `brainFirstRunSteps` now requires explicit local profile review state instead of treating displayed sections as review. | Later: persist profile-review moves if this becomes more than a first-run UI judgment. |
 | Brain | Confirm memory | Update memory review state. | Works in code and UI shows a notice; audit locator hit multiple matching status elements. | Icon-only button calls `reviewBrainMemory(node.id, "correct")`; notice text is non-unique. | Add stable labels/test ids after behavior; show one clear live region. |
 | Brain | Boost memory | Increase memory importance. | Works in code and UI shows a notice; same status text ambiguity. | Icon-only button calls `reviewBrainMemory(node.id, "boost")`. | Same as above; add visible state change such as boosted label/weight. |
 | Brain | Forget memory | Remove memory from retrieval. | Button is wired in code but was not destructive-clicked in this sweep. | Icon-only button calls `reviewBrainMemory(node.id, "forget")`; no confirmation. | Add confirmation or undo, then test the visible node removal/count decrease. |
