@@ -401,19 +401,38 @@ export function BrainWorkspace({
     try {
       const fixture =
         fixtureKind === "yc-founder" ? await fetchBrainYcFounderFixtureImport() : await fetchBrainDemoFixtureImport();
-      const response = await importBrainSource(fixture.data.importInput);
-      setMemoryProfile(response.data.profile);
+      const importInputs =
+        fixtureKind === "yc-founder" && fixture.data.importInputs?.length ? fixture.data.importInputs : [fixture.data.importInput];
+      let profile: BrainMemoryProfileData | null = null;
 
-      if (response.data.job.status === "failed") {
+      for (const [index, importInput] of importInputs.entries()) {
+        setMemoryNotice(
+          fixtureKind === "yc-founder"
+            ? `Importing safe YC fixture source ${index + 1}/${importInputs.length}.`
+            : "Importing demo fixture.",
+        );
+        const response = await importBrainSource(importInput);
+
+        if (response.data.job.status === "failed") {
+          setMemoryStatus("error");
+          setMemoryError(response.data.job.errorMessages.join(" ") || "Brain fixture import failed.");
+          return;
+        }
+
+        profile = response.data.profile;
+        setMemoryProfile(profile);
+      }
+
+      if (!profile) {
         setMemoryStatus("error");
-        setMemoryError(response.data.job.errorMessages.join(" ") || "Brain fixture import failed.");
+        setMemoryError("Brain fixture did not contain importable sources.");
         return;
       }
 
       setMemoryStatus("ready");
       setMemoryNotice(
         fixtureKind === "yc-founder"
-          ? "YC founder fixture imported. Review the derived source-backed memories below before starting Create."
+          ? `YC founder fixture imported from ${importInputs.length} safe fixture/manual sources. Review the derived source-backed memories below before starting Create.`
           : "Demo fixture imported. Review the source-backed memories below before starting Create.",
       );
     } catch (error) {
