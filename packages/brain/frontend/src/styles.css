@@ -3802,6 +3802,24 @@
     opacity: 0.42;
   }
 
+  .brain-memory-review-actions button.is-danger {
+    background: #ffd8d0;
+  }
+
+  .brain-memory-forget-confirm {
+    justify-self: end;
+    margin: 0;
+    border: 1px solid #111111;
+    border-radius: 999px;
+    background: #ffd8d0;
+    padding: 5px 7px;
+    color: #111111 !important;
+    font-size: 10px !important;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
   .brain-memory-next-step {
     display: flex;
     align-items: center;

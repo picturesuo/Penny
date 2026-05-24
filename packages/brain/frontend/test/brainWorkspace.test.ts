@@ -105,6 +105,8 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /chunk brain-ch/);
   assert.match(markup, /Reinforced/);
   assert.match(markup, /Mark Preference - Small reversible builds correct/);
+  assert.match(markup, /aria-label="Forget Preference - Small reversible builds"/);
+  assert.match(markup, /aria-pressed="false"/);
   assert.match(markup, /Supports ChatGPT export ZIPs/i);
   assert.match(markup, /Google/);
   assert.match(markup, /Connect Gmail/);

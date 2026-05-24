@@ -3685,6 +3685,13 @@ function BrainMemoryProfileSummary({
   onReviewMemory: ((nodeId: string, action: MemoryReviewAction) => Promise<void>) | undefined;
 }) {
   const sourceById = new Map((profile?.sources ?? []).map((source) => [source.id, source]));
+  const [forgetConfirmingId, setForgetConfirmingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (forgetConfirmingId && !recentNodes.some((node) => node.id === forgetConfirmingId)) {
+      setForgetConfirmingId(null);
+    }
+  }, [forgetConfirmingId, recentNodes]);
 
   return (
     <section className="brain-memory-card" aria-label="Memory profile summary">
@@ -3719,6 +3726,7 @@ function BrainMemoryProfileSummary({
           const source = sourceById.get(node.sourceId);
           const busy = reviewingId === node.id;
           const reviewState = memoryReviewState(node);
+          const forgetPending = forgetConfirmingId === node.id;
 
           return (
             <article key={node.id} className="brain-memory-node" data-memory-state={reviewState.kind}>
@@ -3747,6 +3755,7 @@ function BrainMemoryProfileSummary({
                   aria-label={`Mark ${node.title} correct`}
                   disabled={disabled || busy || !onReviewMemory}
                   onClick={() => {
+                    setForgetConfirmingId(null);
                     void onReviewMemory?.(node.id, "correct");
                   }}
                 >
@@ -3758,6 +3767,7 @@ function BrainMemoryProfileSummary({
                   aria-label={`Boost ${node.title}`}
                   disabled={disabled || busy || !onReviewMemory}
                   onClick={() => {
+                    setForgetConfirmingId(null);
                     void onReviewMemory?.(node.id, "boost");
                   }}
                 >
@@ -3769,6 +3779,7 @@ function BrainMemoryProfileSummary({
                   aria-label={`Mark ${node.title} wrong`}
                   disabled={disabled || busy || !onReviewMemory}
                   onClick={() => {
+                    setForgetConfirmingId(null);
                     void onReviewMemory?.(node.id, "wrong");
                   }}
                 >
@@ -3776,16 +3787,29 @@ function BrainMemoryProfileSummary({
                 </button>
                 <button
                   type="button"
-                  title="Forget memory"
-                  aria-label={`Forget ${node.title}`}
+                  className={forgetPending ? "is-danger" : ""}
+                  title={forgetPending ? "Confirm forget memory" : "Forget memory"}
+                  aria-label={forgetPending ? `Confirm forget ${node.title}` : `Forget ${node.title}`}
+                  aria-pressed={forgetPending}
                   disabled={disabled || busy || !onReviewMemory}
                   onClick={() => {
+                    if (!forgetPending) {
+                      setForgetConfirmingId(node.id);
+                      return;
+                    }
+
+                    setForgetConfirmingId(null);
                     void onReviewMemory?.(node.id, "forget");
                   }}
                 >
                   <Trash2 size={14} aria-hidden="true" />
                 </button>
               </div>
+              {forgetPending ? (
+                <p className="brain-memory-forget-confirm" role="status">
+                  Click trash again to forget.
+                </p>
+              ) : null}
             </article>
           );
         })}
