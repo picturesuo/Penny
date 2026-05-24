@@ -8,7 +8,7 @@ PASS for the current YC demo path and the local Brain-first dogfood path.
 
 The visible YC fixture path reaches Create, Learn, Canvas, and export. The normal Brain-first path now also works in local demo mode with `PENNY_SKIP_DATABASE_PREP=true`: quick notes, save-to-Brain, document seed, import, Create, Learn, export, and refresh restore all pass in `test/e2e/brain-first.spec.cjs`.
 
-This is still not a production-readiness pass. Public/staging now has an executable `pnpm check:public-readiness` gate for real Postgres schema proof, token auth, explicit rate limits, structured logs, and live Gmail staging evidence; that gate must pass against the actual target environment before any broad demo claims.
+This is still not a production-readiness pass. Public/staging now has an executable `pnpm check:public-readiness` gate for real Postgres schema proof, token auth, explicit rate limits, structured logs, DB-backed Create workspace tables, and live Gmail staging evidence; that gate must pass against the actual target environment before any broad demo claims.
 
 ## Audit Commands
 
@@ -18,7 +18,7 @@ This is still not a production-readiness pass. Public/staging now has an executa
 - `pnpm test`: passed, 675 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- `pnpm check:public-readiness -- --schema-tables-file=<complete required table list>`: passed with synthetic private-alpha env and live Gmail disabled; the same command failed in local/dev auth mode, as intended.
+- `pnpm check:public-readiness -- --schema-tables-file=<complete required table list>`: passed with synthetic private-alpha env and live Gmail disabled; the same command failed in local/dev auth mode, as intended. The required table list now includes DB-backed Create option sets, artifacts, and judgment events.
 - Latest targeted Brain-first e2e: `PENNY_BASE_URL=http://localhost:3044 pnpm dlx @playwright/test test test/e2e/brain-first.spec.cjs --reporter=line --output=.tmp-brain-first-memory-undo`: passed, 1 test in 5.8s; includes quick-note save, memory import, two-click forget, undo restore, Create, Learn, export, and refresh restore.
 - Latest targeted YC e2e: `PENNY_BASE_URL=http://localhost:3048 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-yc-learn-refresh`: passed, 1 test in 3.4s; Create -> Learn now reloads while still in Learn, restores the Create-origin lesson, then returns to Create with selections, comment, artifact, and evidence drawer preserved.
 - Latest targeted browser e2e: `PENNY_BASE_URL=http://localhost:3042 pnpm dlx @playwright/test test test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-learn-understanding-tour`: passed, 1 test in 1.7s.
@@ -52,7 +52,7 @@ This is still not a production-readiness pass. Public/staging now has an executa
 | Create | Option cards | Toggle Personal, Practical, Valuable, Critical, Weird selections. | Works and restores after refresh/back from Learn. | `toggleOption` updates `selectedOptionIds`, and the Create draft persists selected/rejected IDs. | Keep. |
 | Create | Evidence details | Open readable source and memory evidence. | Works through the `Details` drawer; the open drawer now restores after a reload inside Learn and Back to Create. | Option card details button opens `CreateOptionDetailsDrawer`; `activeDetailOptionId` is persisted in the Create draft. | Keep the UI language as `Details`, not chips. |
 | Create | Comment | Save user judgment comment. | Works; comments are autosaved in the local Create draft before `Update artifact`, then recorded in the judgment payload when the artifact is updated. | `userComment` is persisted in `penny.createWorkspaceDraft.v1` and sent to `/api/create/next` with selected/rejected options. | Keep. Later make the draft server-backed if Create sessions need multi-device resume. |
-| Create | Artifact | Visibly change based on selected cards and comment. | Works; artifact text updates after selections/comment and restores after refresh in Brain-first and YC reload flows. | `/api/create/next` returns updated artifact and verification; `CreateWorkspace` persists the artifact in draft storage. | Keep refresh assertions in browser e2e. |
+| Create | Artifact | Visibly change based on selected cards and comment. | Works; artifact text updates after selections/comment and restores after refresh in Brain-first and YC reload flows. | `/api/create/next` returns updated artifact and verification; strict DB-backed environments persist Create option sets, artifacts, and judgment events in scoped Postgres tables while the frontend draft keeps recording refresh ergonomics. | Keep refresh assertions in browser e2e. |
 | Create | Learn this | Open Learn from a technical Create option. | Works; Learn opens focused explanation, survives a browser reload while still in Learn, and returns to Create with the selected options, comment, artifact, and details drawer preserved. | `onLearnThis` persists the Create-origin Learn focus in the Create boot record before switching modes; `CreateWorkspace` persists the active details drawer in the draft. | Keep reload coverage in the YC e2e so the bridge is not only a hidden-mounted component trick. |
 | Learn | Source-to-concept tour | Turn arbitrary input into a compact understanding path. | Works; Learn now renders a five-part Source / Map / Teach / Use / Check path with source-specific source and lesson-specific use/check text instead of generic filler. Each node is also an askable target that opens Ask Penny with a focused question. | `meaningMapItemsForLesson` derives the compact tour from source spans, lesson title, explanation, and source label; e2e asserts all five labels and that the Source node seeds Ask Penny. | Keep it compact; do not reintroduce long worksheet copy on the first screen. |
 | Learn | Explain simply / worked example / applies to artifact | Each choice changes visible lesson content. | Works in the Create Learn bridge path; YC e2e now clicks all three choices and asserts distinct lesson content before returning to Create. | `LearnWorkspace` builds three focused steps for the Create bridge node and marks the active path step with `aria-current="step"`. | Keep. |
@@ -72,7 +72,7 @@ This is still not a production-readiness pass. Public/staging now has an executa
 ## Priority Fixes
 
 1. Keep `brain-first.spec.cjs` and `yc-recording.spec.cjs` green before recording.
-2. Keep local fallback dev-only; production/staging must pass `pnpm check:public-readiness` against the target Postgres database and connector evidence before broad claims.
+2. Keep local fallback dev-only; production/staging must pass `pnpm check:public-readiness` against the target Postgres database, including Create workspace tables, and connector evidence before broad claims.
 3. Keep backend Create Canvas snapshot coverage green; later merge it with a broader session canvas if cross-mode history becomes necessary.
 4. Keep quick-note-to-memory promotion server-owned and covered by the Brain-first e2e.
 5. Do not demo live Gmail, SMS/iMessage, Slack, Drive, or Calendar until their proof bundles pass.
