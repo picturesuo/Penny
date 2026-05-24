@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "dev:frontend": "vite --config packages/brain/frontend/vite.config.ts",
     "dev:api": "tsx packages/brain/src/server.ts",
+    "check:public-readiness": "tsx scripts/check-public-readiness.ts",
     "lint": "tsc --noEmit --pretty false && tsc --noEmit --pretty false -p packages/brain/frontend/tsconfig.json",
     "start": "tsx packages/brain/src/server.ts",
     "test": "tsx --test packages/brain/src/*.test.ts packages/brain/frontend/test/*.test.ts test/brain/nextMoveEngine.test.ts",
