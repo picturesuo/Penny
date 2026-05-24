@@ -2,6 +2,7 @@
 
 ## Now
 - [x] Complete the repository cleanup audit for archived, unused, and inefficient frontend artifacts.
+- [ ] Finish private-alpha deploy readiness after `DATABASE_URL` is available and Azure CLI is logged in.
 
 ## Next
 - [ ] Keep legacy backend compatibility routes until each has an explicit replacement and migrated tests.
@@ -11,7 +12,8 @@
 - [ ] Expand only when the project grows.
 
 ## Blocked
-- [ ] No blockers recorded.
+- [ ] Hosted private-alpha deploy is blocked on the real Postgres `DATABASE_URL` GitHub secret and `az login` on this machine.
+- [ ] Directly publicizing `picturesuo/Penny` is blocked by committed proof media; use the sanitized `picturesuo/penny-public` mirror unless those artifacts are reviewed/removed from private history.
 
 ## Discovered While Working
 - [x] Removed unused frontend components, stale tests, dead CSS, and unused Create/Learn props.
