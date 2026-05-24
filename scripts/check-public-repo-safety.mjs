@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 const allowedEnvFiles = new Set([".env.example"]);
 const proofMediaExtensions = new Set([".har", ".jpg", ".jpeg", ".mov", ".mp4", ".png", ".trace", ".webm", ".webp", ".zip"]);
 const maxTextBytes = 2_000_000;
+const strictMode = process.argv.includes("--strict") || process.env.PENNY_PUBLIC_REPO_STRICT === "true";
 
 const secretPatterns = [
   { name: "GitHub personal access token", pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}\b/g },
@@ -54,6 +55,10 @@ for (const file of trackedFiles) {
   }
 }
 
+if (strictMode && warnings.length > 0) {
+  blockers.push(`${warnings.length} proof media review warning${warnings.length === 1 ? "" : "s"} must be cleared before publicizing`);
+}
+
 if (blockers.length > 0) {
   console.error("Public repo safety check failed.");
   console.error("");
@@ -73,4 +78,8 @@ if (blockers.length > 0) {
   process.exit(1);
 }
 
-console.log(`Public repo safety check passed: ${trackedFiles.length} tracked files scanned, ${warnings.length} review warnings.`);
+console.log(
+  `Public repo safety check passed: ${trackedFiles.length} tracked files scanned, ${warnings.length} review warnings${
+    strictMode ? ", strict mode enabled" : ""
+  }.`,
+);
