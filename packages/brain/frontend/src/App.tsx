@@ -71,6 +71,7 @@ type PersistedCreateWorkspaceBoot = {
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const CREATE_WORKSPACE_BOOT_KEY = "penny.createWorkspaceBoot.v1";
 const SESSION_QUERY_PARAM = "sessionId";
+const LOCAL_DEMO_MODE_STATUS = "Local demo mode";
 export const pennyYcCreatePrompt =
   "I want to create a YC startup around ideation and thinking - maybe a thinking instrument. It should use my past emails, messages, and notes to help me turn vague ideas into buildable structure. I want it to feel like a workbench that gives ideas direction without taking judgment away from the human.";
 
@@ -199,10 +200,10 @@ export function App() {
         const sessionId = payload.data.session.id;
         rememberActiveSession(sessionId);
         setSelectedDocumentId(sessionId);
-        await refreshDocuments(sessionId);
         setStatus("Doc created");
 
         try {
+          await refreshDocuments(sessionId);
           await tickAutopilot(sessionId);
           const cockpit = await refreshCockpit(sessionId, payload.data);
           setFocusedClaimId(
@@ -214,7 +215,7 @@ export function App() {
           );
           await refreshDocuments(sessionId);
         } catch (followUpError) {
-          setStatus(`Doc saved; ${formatErrorMessage(followUpError)}`);
+          setStatus(successStatusAfterFollowUp("Doc saved", followUpError));
         }
       }
     } catch (error) {
@@ -249,9 +250,9 @@ export function App() {
         const sessionId = learnData.session.id;
         rememberActiveSession(sessionId);
         setSelectedDocumentId(sessionId);
-        await refreshDocuments(sessionId);
 
         try {
+          await refreshDocuments(sessionId);
           const cockpit = await refreshCockpit(sessionId, learnData);
           setFocusedClaimId(
             cockpit.autopilot.focusState?.focusedClaimId ??
@@ -262,7 +263,7 @@ export function App() {
           );
           await refreshDocuments(sessionId);
         } catch (followUpError) {
-          setStatus(`Learn path created; ${formatErrorMessage(followUpError)}`);
+          setStatus(successStatusAfterFollowUp("Learn path created", followUpError));
         }
       }
     } catch (error) {
@@ -1141,18 +1142,24 @@ function responseLabel(response: ChallengeResponseKind): string {
   return response.charAt(0).toUpperCase() + response.slice(1);
 }
 
-function formatErrorMessage(error: unknown): string {
+export function formatErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
 
   if (isRawDatabaseFailure(message)) {
-    return "Local Brain database unavailable";
+    return LOCAL_DEMO_MODE_STATUS;
   }
 
   return message;
 }
 
+function successStatusAfterFollowUp(baseStatus: string, error: unknown): string {
+  const message = formatErrorMessage(error);
+
+  return message === LOCAL_DEMO_MODE_STATUS ? baseStatus : `${baseStatus}; ${message}`;
+}
+
 function isRawDatabaseFailure(message: string): boolean {
-  return /Failed query:|ENOTFOUND|tenant\/user postgres/i.test(message);
+  return /DATABASE_URL is required|Failed query:|ENOTFOUND|tenant\/user postgres/i.test(message);
 }
 
 function claimIdFromCanvasNode(node: CanvasNode): string | null {
