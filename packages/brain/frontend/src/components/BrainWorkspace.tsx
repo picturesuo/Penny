@@ -370,6 +370,22 @@ export function BrainWorkspace({
   ) {
     await onQuickNoteAction?.(recent, action);
 
+    if (action === "brain") {
+      setMemoryStatus("loading");
+      setMemoryError(null);
+      setMemoryNotice(null);
+
+      try {
+        const response = await fetchBrainMemoryProfile();
+        setMemoryProfile(response.data);
+        setMemoryStatus("ready");
+        setMemoryNotice("Quick note saved into private Brain memory.");
+      } catch (error) {
+        setMemoryStatus("error");
+        setMemoryError(error instanceof Error ? error.message : String(error));
+      }
+    }
+
     if (action === "archive" && recent.id === selectedQuickNoteId) {
       setSelectedQuickNoteId(null);
     }

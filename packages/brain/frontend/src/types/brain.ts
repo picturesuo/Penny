@@ -421,6 +421,13 @@ export interface SaveBrainObjectResponse {
       createdAt: string;
       updatedAt: string;
     };
+    memoryImport?: {
+      status: "queued" | "running" | "completed" | "failed";
+      jobId: string;
+      sourceId: string | null;
+      sourceLabel: string | null;
+      memoryNodeCount: number;
+    };
   };
 }
 

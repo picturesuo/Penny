@@ -893,7 +893,7 @@ export function App() {
 
     try {
       if (action === "brain") {
-        await saveBrainObject({
+        const saved = await saveBrainObject({
           objectType: "quick_note",
           title: recent.rawIdea,
           summary: "Promoted from Quick Notes.",
@@ -903,7 +903,7 @@ export function App() {
             recentId: recent.id,
           },
         });
-        setStatus("Quick note added to Brain");
+        setStatus(saved.data.memoryImport?.status === "completed" ? "Quick note saved into private Brain memory" : "Quick note added to Brain");
         await refreshRecents();
       } else {
         if (action === "learn") {
