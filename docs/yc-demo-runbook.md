@@ -70,6 +70,8 @@ Close with: "Penny is not a chatbot. It is a memory-native creativity workbench 
 - Do not expand every artifact section. The compact outline is the recording default.
 
 ## Verification Commands
+- Full local demo readiness gate:
+  `pnpm check:local-demo-readiness -- --port 3007 --smoke-output .tmp-local-demo-readiness`
 - Unit/integration:
   `pnpm test`
 - Typecheck:
