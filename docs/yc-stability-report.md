@@ -16,10 +16,10 @@ Visual evidence is captured under `docs/proof/yc-recording/`, including named sc
 - Browser verification: Playwright Chrome fallback. The in-app Browser plugin was checked, but no `iab` browser was available in this session.
 
 ## Verification
-- `pnpm test`: passed, 658 tests.
+- `pnpm test`: passed, 659 tests.
 - `pnpm typecheck`: passed.
 - `pnpm build`: passed.
-- `PENNY_BASE_URL=http://localhost:3039 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs test/e2e/brain-first.spec.cjs test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-e2e-latest`: passed, 3 tests in 6.5s.
+- `PENNY_BASE_URL=http://localhost:3039 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs test/e2e/brain-first.spec.cjs test/e2e/learn-understanding-tour.spec.cjs --reporter=line --output=.tmp-e2e-latest`: passed, 3 tests in 23.1s.
 - `PENNY_BASE_URL=http://localhost:3007 pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --reporter=line --output=.tmp-playwright-results`: passed, 1 test in 2.6s.
 - `PENNY_BASE_URL=http://localhost:3007 PENNY_PLAYWRIGHT_SLOWMO_MS=150 PENNY_PLAYWRIGHT_VIDEO=on PENNY_PLAYWRIGHT_TRACE=on PENNY_PLAYWRIGHT_SCREENSHOT=on PENNY_PROOF_DIR=docs/proof/yc-recording/screenshots pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --headed --reporter=line --output=docs/proof/yc-recording/playwright-headed`: passed, 1 headed test in 6.4s.
 - `PENNY_BASE_URL=http://localhost:3007 PENNY_PLAYWRIGHT_SLOWMO_MS=75 PENNY_PLAYWRIGHT_VIDEO=on PENNY_PLAYWRIGHT_TRACE=on PENNY_PLAYWRIGHT_SCREENSHOT=on pnpm dlx @playwright/test test test/e2e/yc-recording.spec.cjs --repeat-each=10 --headed --workers=1 --reporter=line --output=docs/proof/yc-recording/playwright-headed-10`: passed, 10 headed tests in 32.7s.
