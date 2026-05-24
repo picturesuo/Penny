@@ -420,11 +420,8 @@ export function CreateWorkspace({
         <article className="check-main-cycle create-workspace-card">
           <header className="check-cycle-hero">
             <span>CREATE KERNEL</span>
-            <h1>Options -&gt; judgment -&gt; Idea Spec.</h1>
-            <p>
-              Turn a rough idea into five equal directions, judge the strongest mix, and export a verified prompt for Codex,
-              Claude Code, or Cursor.
-            </p>
+            <h1>Five directions. One buildable spec.</h1>
+            <p>Use Brain context, keep judgment human, and export the shape when it is ready.</p>
           </header>
 
           {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
@@ -490,7 +487,7 @@ export function CreateWorkspace({
                 <CheckCircle2 size={15} />
                 Update Idea Spec
               </button>
-              {judgmentEvent ? <span>JudgmentEvent: {judgmentEvent.inferredSignals.join(", ") || "recorded"}</span> : null}
+              {judgmentEvent ? <span>Judgment recorded</span> : null}
             </div>
           </section>
 
@@ -547,9 +544,7 @@ export function CreateLearnBridgePanel({
       <div>
         <span>Learn bridge</span>
         <strong>{createLearnBridgeConcept}</strong>
-        <p>
-          Explain simply, show a worked example, and show how this applies to my Idea Spec without losing the selected Create cards.
-        </p>
+        <p>Explain simply. Show a worked example. Apply to my Idea Spec.</p>
       </div>
       <button
         type="button"
@@ -604,7 +599,7 @@ export function CreateJudgmentNextPlace({
       : "Record the first judgment into an Idea Spec"
     : nextBestMove?.title ?? "Pick the card with the most creative energy";
   const nextDetail = hasJudgment
-    ? "Penny will preserve selected cards, rejected directions, and your comment before suggesting the next useful place."
+    ? "Selections, rejections, and notes will shape the Idea Spec."
     : nextBestMove?.action ?? "Select, reject, or comment. The next step will stay visible without making one card the boss.";
 
   return (
@@ -832,7 +827,7 @@ function createCanvasNodes(input: {
       id: "penny-workbench",
       label: "Penny",
       detail: "Memory-native creativity workbench",
-      note: "Human judgment stays in control.",
+      note: "Judgment stays human.",
       edgeToNext: "grounds",
     },
     {
@@ -841,7 +836,7 @@ function createCanvasNodes(input: {
       detail: sourceLabels.length
         ? `${input.brainProfile?.stats.memoryNodeCount ?? 0} memories from ${sourceLabels.join(", ")}`
         : "Context-light until Brain imports are attached",
-      note: "Safe fixture/manual sources only.",
+      note: "Fixture/manual only.",
       edgeToNext: "suggests",
     },
     {
@@ -852,21 +847,21 @@ function createCanvasNodes(input: {
         : generatedLenses.length
           ? `Generated ${generatedLenses.join(" / ")}`
           : "Waiting for five directions",
-      note: "Five equal cards: Personal, Practical, Valuable, Critical, Weird.",
+      note: "Five equal cards.",
       edgeToNext: "explains",
     },
     {
       id: "learn-explanation",
       label: "Learn",
       detail: createLearnBridgeConcept,
-      note: "Bridge opens without losing Create state.",
+      note: "State stays put.",
       edgeToNext: "returns",
     },
     {
       id: "artifact-export",
       label: "Export",
       detail: input.promptExport?.fileName ?? input.artifact?.title ?? "Idea Spec not generated yet",
-      note: "Export prompt carries selections, evidence, taste, and non-goals.",
+      note: "Spec plus evidence.",
       edgeToNext: "ships",
     },
   ];
@@ -948,8 +943,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryProfileData | null }) {
   const memoryCount = profile?.stats.memoryNodeCount ?? 0;
   const sourceCount = profile?.stats.sourceCount ?? 0;
-  const topSignals = profile ? topBrainProfileSignals(profile).slice(0, 3) : [];
-  const sourceLabels = profile?.sources.slice(0, 3).map((source) => `${source.label} · trainingUse=${String(source.privacy.trainingUse)}`) ?? [];
+  const topSignals = profile ? topBrainProfileSignals(profile).slice(0, 3).map((signal) => compactBrainSignal(signal)) : [];
+  const sourceLabels = profile?.sources.slice(0, 3).map((source) => source.label) ?? [];
   const fixtureLabels = isYcFounderFixtureProfile(profile) ? ycFixtureLabels : [];
 
   if (!memoryCount) {
@@ -959,7 +954,7 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
           <span>Context-light</span>
           <strong>No imported Brain memories yet</strong>
         </div>
-        <p>Create will use the rough idea and any open session context until private memory is imported.</p>
+        <p>Using the rough idea for now.</p>
       </section>
     );
   }
@@ -987,7 +982,9 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
       {sourceLabels.length ? (
         <div className="create-demo-fixture-labels" aria-label="Brain source privacy">
           {sourceLabels.map((label) => (
-            <span key={label}>{label}</span>
+            <span key={label} title={label}>
+              {compactBrainSignal(label)}
+            </span>
           ))}
         </div>
       ) : null}
@@ -997,15 +994,7 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
 
 export function CreateProviderStatusPanel({ observability }: { observability: CreateObservability | null }) {
   if (!observability) {
-    return (
-      <section className="create-provider-status" aria-label="Create provider status">
-        <div>
-          <span>Provider</span>
-          <strong>Not run yet</strong>
-        </div>
-        <p>Create will report whether the generated directions came from deterministic, model-backed, or fallback output.</p>
-      </section>
-    );
+    return null;
   }
 
   return (
@@ -1162,7 +1151,7 @@ export function CreateOptionBoard({
           <span>Directions</span>
           <strong>Personal / Practical / Valuable / Critical / Weird</strong>
         </header>
-        <p>Enter a rough idea to generate the five Create cards.</p>
+        <p>Write the rough idea, then generate five cards.</p>
       </section>
     );
   }
@@ -1171,14 +1160,16 @@ export function CreateOptionBoard({
     <section className="create-option-board" aria-label="Create directions" data-testid="create-option-board">
       <header>
         <span>Directions</span>
-        <strong>Five equal options; choose, combine, reject, or inspect</strong>
+        <strong>Five equal options</strong>
       </header>
       {nextBestMove ? (
-        <section className={`create-next-best-move${nextBestMove.grounded ? " is-grounded" : " is-context-light"}`}>
+        <section
+          className={`create-next-best-move${nextBestMove.grounded ? " is-grounded" : " is-context-light"}`}
+          title={nextBestMove.whyItMatters}
+        >
           <span>Possible move</span>
           <strong>{nextBestMove.title}</strong>
           <p>{nextBestMove.action}</p>
-          <small>{nextBestMove.whyItMatters}</small>
         </section>
       ) : null}
       <div className="create-option-grid">
@@ -1215,7 +1206,6 @@ export function CreateOptionBoard({
             </div>
             <div>
               <p>{option.topReason}</p>
-              <p>{option.rationale}</p>
               <small>{option.nextMove}</small>
             </div>
             <div className="create-option-card-actions">
@@ -1859,6 +1849,13 @@ function clipDisplayText(text: string, maxLength: number): string {
   }
 
   return `${clean.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function compactBrainSignal(signal: string): string {
+  const clean = signal.replace(/\s+/g, " ").trim();
+  const withoutPrefix = clean.includes(" - ") ? clean.split(" - ").pop() ?? clean : clean;
+
+  return clipDisplayText(withoutPrefix, 44);
 }
 
 function namedBlock(text: string, label: string): string {
