@@ -112,6 +112,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await page.getByRole("button", { name: /Update artifact|Update Idea Spec/ }).click();
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/Personal|Valuable|Critical/, { timeout: 30_000 });
   await expect(page.getByTestId("create-artifact-panel")).toContainText(/founder\/builder focused|memory-native creativity/i);
+  await expect(page.getByRole("region", { name: "Next best place" })).toContainText(/Learn a fuzzy point or export/);
   await expect(page.getByTestId("yc-artifact-outline")).toContainText("Product thesis");
   await expect(page.getByTestId("yc-artifact-outline")).toContainText("Target user");
   await expect(page.getByTestId("yc-artifact-outline")).toContainText("Problem");
@@ -149,6 +150,7 @@ test("YC recording path: landing fixture to Create, Learn, and export", async ({
   await expect(page.getByRole("button", { name: "Export prompt" })).toBeEnabled({ timeout: 15_000 });
   await page.getByRole("button", { name: "Export prompt" }).click();
   await expect(page.getByTestId("create-export-prompt")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("region", { name: "Next best place" })).toContainText(/Review the exported prompt/);
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## Personal Context Used/);
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/## YC Demo Spec/);
   await expect(page.getByTestId("create-export-prompt")).toHaveValue(/### Product thesis/);

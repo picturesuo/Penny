@@ -473,6 +473,7 @@ export function CreateWorkspace({
               userComment={userComment}
               nextBestMove={optionSet?.nextBestMove ?? null}
               artifact={artifact}
+              promptExport={promptExport}
             />
             <label>
               <span>Comment</span>
@@ -583,31 +584,26 @@ export function CreateJudgmentNextPlace({
   userComment,
   nextBestMove,
   artifact,
+  promptExport,
 }: {
   selectedOptions: CandidateOption[];
   rejectedOptions: CandidateOption[];
   userComment: string;
   nextBestMove?: NextBestMove | null;
   artifact: CodingPromptArtifact | null;
+  promptExport?: PromptExport | null;
 }) {
   const hasJudgment = selectedOptions.length || rejectedOptions.length || userComment.trim();
   const selectedLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "No selected cards yet";
   const rejectedLabel = rejectedOptions.length ? rejectedOptions.map((option) => option.lens).join(" + ") : "No rejected cards yet";
-  const nextTitle = hasJudgment
-    ? artifact
-      ? "Update the Idea Spec from this judgment"
-      : "Record the first judgment into an Idea Spec"
-    : nextBestMove?.title ?? "Pick the card with the most creative energy";
-  const nextDetail = hasJudgment
-    ? "Selections, rejections, and notes will shape the Idea Spec."
-    : nextBestMove?.action ?? "Select, reject, or comment. The next step will stay visible without making one card the boss.";
+  const nextPlace = createJudgmentNextPlaceCopy({ hasJudgment: Boolean(hasJudgment), artifact, promptExport, nextBestMove });
 
   return (
     <section className="create-judgment-next-place" aria-label="Next best place">
       <div>
         <span>Next place</span>
-        <strong>{nextTitle}</strong>
-        <p>{nextDetail}</p>
+        <strong>{nextPlace.title}</strong>
+        <p>{nextPlace.detail}</p>
       </div>
       <dl>
         <div>
@@ -621,6 +617,44 @@ export function CreateJudgmentNextPlace({
       </dl>
     </section>
   );
+}
+
+export function createJudgmentNextPlaceCopy({
+  hasJudgment,
+  artifact,
+  promptExport,
+  nextBestMove,
+}: {
+  hasJudgment: boolean;
+  artifact: CodingPromptArtifact | null;
+  promptExport?: PromptExport | null | undefined;
+  nextBestMove?: NextBestMove | null | undefined;
+}) {
+  if (promptExport) {
+    return {
+      title: "Review the exported prompt",
+      detail: "Rate it, tighten comments, or export again after one more judgment.",
+    };
+  }
+
+  if (artifact) {
+    return {
+      title: "Learn a fuzzy point or export",
+      detail: "The Idea Spec has your judgment. Use Learn this for confusion, or Export prompt when the structure is right.",
+    };
+  }
+
+  if (hasJudgment) {
+    return {
+      title: "Record the first judgment into an Idea Spec",
+      detail: "Selections, rejections, and notes will shape the Idea Spec.",
+    };
+  }
+
+  return {
+    title: nextBestMove?.title ?? "Pick the card with the most creative energy",
+    detail: nextBestMove?.action ?? "Select, reject, or comment. The next step will stay visible without making one card the boss.",
+  };
 }
 
 export function buildCreateOptionLearnNode(option: CandidateOption, artifact: CodingPromptArtifact | null): CanvasNode {

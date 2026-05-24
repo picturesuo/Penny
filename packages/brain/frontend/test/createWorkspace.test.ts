@@ -19,6 +19,7 @@ import {
   CreateVerificationPanel,
   artifactOutlinePreview,
   createLearnBridgeConcept,
+  createJudgmentNextPlaceCopy,
   isCreateComparisonDevMode,
 } from "../src/components/CreateWorkspace";
 import type { BrainMemoryProfileData, CandidateOption, CreateProviderComparisonResponse } from "../src/types/brain";
@@ -81,16 +82,57 @@ test("CreateJudgmentNextPlace keeps selection, rejection, and comment flow visib
       rejectedOptions: [optionForLens("Critical")],
       userComment: "Combine the personal evidence with the practical scope.",
       nextBestMove: nextBestMove(),
-      artifact: createComparisonArm("deterministic", [memoryGroundedOption()]).artifact,
+      artifact: null,
     }),
   );
 
   assert.match(markup, /Next place/);
-  assert.match(markup, /Update the Idea Spec from this judgment/);
+  assert.match(markup, /Record the first judgment into an Idea Spec/);
   assert.match(markup, /Selected/);
   assert.match(markup, /Personal/);
   assert.match(markup, /Rejected/);
   assert.match(markup, /Critical/);
+});
+
+test("Create next place advances from options to artifact, Learn/export, and feedback", () => {
+  const arm = createComparisonArm("deterministic", [memoryGroundedOption()]);
+
+  assert.match(
+    createJudgmentNextPlaceCopy({
+      hasJudgment: false,
+      artifact: null,
+      promptExport: null,
+      nextBestMove: nextBestMove(),
+    }).title,
+    /Advance through Personal/,
+  );
+  assert.match(
+    createJudgmentNextPlaceCopy({
+      hasJudgment: true,
+      artifact: null,
+      promptExport: null,
+      nextBestMove: nextBestMove(),
+    }).title,
+    /Record the first judgment/,
+  );
+  assert.match(
+    createJudgmentNextPlaceCopy({
+      hasJudgment: true,
+      artifact: arm.artifact,
+      promptExport: null,
+      nextBestMove: nextBestMove(),
+    }).title,
+    /Learn a fuzzy point or export/,
+  );
+  assert.match(
+    createJudgmentNextPlaceCopy({
+      hasJudgment: true,
+      artifact: arm.artifact,
+      promptExport: arm.promptExport,
+      nextBestMove: nextBestMove(),
+    }).title,
+    /Review the exported prompt/,
+  );
 });
 
 test("Create option Learn node carries option meaning, rationale, worked example, and artifact ref", () => {
