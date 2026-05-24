@@ -164,7 +164,7 @@ export function App() {
         if (!cancelled) {
           forgetActiveSession();
           setLandingVisible(true);
-          setStatus(error instanceof Error ? error.message : String(error));
+          setStatus(formatErrorMessage(error));
         }
       } finally {
         if (!cancelled) {
@@ -219,7 +219,7 @@ export function App() {
       }
     } catch (error) {
       await refreshDocumentsAfterSeedFailure();
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -267,7 +267,7 @@ export function App() {
       }
     } catch (error) {
       await refreshDocumentsAfterSeedFailure();
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -283,7 +283,7 @@ export function App() {
       setArchivedRecents(payload.data.archived ?? archivedRecents);
       setStatus("Quick note saved");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -298,7 +298,7 @@ export function App() {
       await loadSession(sessionId, data);
       setStatus("Doc opened");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -411,7 +411,7 @@ export function App() {
       setStatus(`YC demo Brain synthesized from ${sourceCount} safe fixture sources`);
     } catch (error) {
       setLandingVisible(true);
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -468,7 +468,7 @@ export function App() {
       setCreateWorkspaceMounted(true);
       setStatus("Create ready");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -498,7 +498,7 @@ export function App() {
       }
       setStatus("Autopilot focus started");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -534,7 +534,7 @@ export function App() {
       setFocusedClaimId(issued.data.targetClaim.id ?? cockpit.activeChallenge?.targetClaimId ?? null);
       setStatus("Challenge issued");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -562,7 +562,7 @@ export function App() {
       setFocusedClaimId(response.data.receipt.targetClaimId ?? cockpit.autopilot.suggestion?.targetClaimId ?? null);
       setStatus(`${responseLabel(draft.response)} saved`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -584,7 +584,7 @@ export function App() {
       await refreshDocuments(data.session.id);
       setStatus("Doc created");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -626,7 +626,7 @@ export function App() {
       setFocusedClaimId(cockpit.autopilot.focusState?.focusedClaimId ?? claimId);
       setStatus("Manual selection saved");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -685,7 +685,7 @@ export function App() {
     } catch (error) {
       const failedSearch = { available: false, results: [], meta: { query: trimmedQuery, resultCount: 0 } };
       setRelatedBrainSearch(failedSearch);
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
       return failedSearch;
     } finally {
       setIsThinking(false);
@@ -749,7 +749,7 @@ export function App() {
       setStatus("Verify completed");
     } catch (error) {
       setActiveMode("Create");
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -785,7 +785,7 @@ export function App() {
       await refreshDocuments(data?.session?.id ?? selectedDocument?.sessionId ?? null);
       setStatus("Canvas node saved to Brain");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -875,7 +875,7 @@ export function App() {
       setArchivedRecents(payload.data.archived ?? []);
       setStatus(nextStatus === "archived" ? "Quick note archived" : "Quick note restored");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -941,7 +941,7 @@ export function App() {
         setArchivedRecents(payload.data.archived ?? []);
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(formatErrorMessage(error));
     } finally {
       setIsThinking(false);
     }
@@ -1142,7 +1142,17 @@ function responseLabel(response: ChallengeResponseKind): string {
 }
 
 function formatErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (isRawDatabaseFailure(message)) {
+    return "Local Brain database unavailable";
+  }
+
+  return message;
+}
+
+function isRawDatabaseFailure(message: string): boolean {
+  return /Failed query:|ENOTFOUND|tenant\/user postgres/i.test(message);
 }
 
 function claimIdFromCanvasNode(node: CanvasNode): string | null {
