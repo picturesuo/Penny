@@ -770,6 +770,40 @@ test("Brain memory review can confirm, boost, weaken, and forget a memory", asyn
   assert.equal(boostResponse.status, 200);
   assert.ok((boostResult.memory?.confidence ?? 0) >= (correctResult.memory?.confidence ?? 0));
 
+  const forgetResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "forget" }),
+    memory.id,
+    { service },
+  );
+  const forgetPayload = await responsePayload(forgetResponse);
+  const forgetResult = forgetPayload.data as BrainMemoryReviewResult;
+
+  assert.equal(forgetResponse.status, 200);
+  assert.equal(forgetResult.memory, null);
+  assert.equal(forgetResult.profile.sources[0]?.memoryNodeCount, 0);
+
+  const restoreResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "restore" }),
+    memory.id,
+    { service },
+  );
+  const restorePayload = await responsePayload(restoreResponse);
+  const restoreResult = restorePayload.data as BrainMemoryReviewResult;
+
+  assert.equal(restoreResponse.status, 200);
+  assert.equal(restoreResult.reviewed, true);
+  assert.equal(restoreResult.memory?.id, memory.id);
+  assert.equal(restoreResult.profile.sources[0]?.memoryNodeCount, 1);
+  assert.ok(restoreResult.profile.recentMemoryNodes.some((node) => node.id === memory.id));
+
+  const restoredRetrieveResponse = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", { query: "frostline ledger source-backed coding prompts", limit: 3 }),
+    { service },
+  );
+  const restoredRetrievePayload = await responsePayload(restoredRetrieveResponse);
+
+  assert.equal((restoredRetrievePayload.data as BrainMemoryRetrieval).contextLight, false);
+
   const wrongResponse = await handleBrainMemoryReviewRequest(
     jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "wrong" }),
     memory.id,
@@ -790,21 +824,9 @@ test("Brain memory review can confirm, boost, weaken, and forget a memory", asyn
 
   assert.equal((retrievePayload.data as BrainMemoryRetrieval).contextLight, true);
 
-  const forgetResponse = await handleBrainMemoryReviewRequest(
-    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "forget" }),
-    memory.id,
-    { service },
-  );
-  const forgetPayload = await responsePayload(forgetResponse);
-  const forgetResult = forgetPayload.data as BrainMemoryReviewResult;
-
-  assert.equal(forgetResponse.status, 200);
-  assert.equal(forgetResult.memory, null);
-  assert.equal(forgetResult.profile.sources[0]?.memoryNodeCount, 0);
-
   const missingResponse = await handleBrainMemoryReviewRequest(
-    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "boost" }),
-    memory.id,
+    jsonRequest("http://localhost/api/brain/memories/memory-does-not-exist/review", { action: "restore" }),
+    "memory-does-not-exist",
     { service },
   );
 
