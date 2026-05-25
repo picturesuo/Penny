@@ -1430,8 +1430,8 @@ export function CreateOptionBoard({
         <span>Directions</span>
         <strong>Five equal options</strong>
       </header>
-      <div className="create-option-grid">
-        {options.map((option) => {
+      <div className="create-option-list">
+        {options.map((option, index) => {
           const selected = selectedOptionIds.includes(option.id);
           const rejected = rejectedOptionIds.includes(option.id);
 
@@ -1446,34 +1446,19 @@ export function CreateOptionBoard({
                 type="button"
                 className="create-option-select-button"
                 aria-pressed={selected}
+                aria-label={`${selected ? "Unselect" : "Select"} direction ${index + 1}: ${option.title}`}
                 onClick={() => onToggleOption(option.id)}
                 disabled={busy}
               >
-                <span>{option.lens}</span>
-                <strong>{option.title}</strong>
-                <p>{option.oneLine}</p>
+                <span className="create-option-number">{index + 1}</span>
+                <span className="create-option-main-copy">
+                  <span>{option.lens}</span>
+                  <strong>{option.title}</strong>
+                  <p>{truncateWords(option.oneLine, 18)}</p>
+                </span>
               </button>
-              <div className="create-option-memory-meta" aria-label={`${option.lens} evidence and taste grounding`}>
-                <span>Past evidence {createEvidenceCount(option)}</span>
-                <span>Taste {createTasteCount(option)}</span>
-                <span>{option.contextLabel}</span>
-              </div>
-              <div className="create-option-source-chips" aria-label={`${option.lens} source chips`}>
-                {uniqueById(option.sourcesUsed)
-                  .filter((source) => source.kind !== "rough_idea")
-                  .slice(0, 3)
-                  .map((source) => (
-                    <span key={source.id} title={sourceChipTitle(source)}>
-                      {sourceChipDisplayLabel(source)}
-                    </span>
-                  ))}
-              </div>
-              <div>
-                <p>{option.topReason}</p>
-                <small>{option.nextMove}</small>
-              </div>
               <div className="create-option-judgment-state" aria-label={`${option.lens} judgment state`}>
-                <span>{rejected ? "Rejected" : selected ? "Selected" : "Available"}</span>
+                <span>{rejected ? "Rejected" : selected ? "Selected" : "Choose"}</span>
               </div>
               <div className="create-option-card-actions">
                 <button
@@ -1496,17 +1481,6 @@ export function CreateOptionBoard({
                   >
                     <X size={14} />
                     Reject
-                  </button>
-                ) : null}
-                {onLearnThis ? (
-                  <button
-                    type="button"
-                    className="create-option-detail-button"
-                    onClick={() => onLearnThis(option)}
-                    data-testid="create-option-learn-this-button"
-                  >
-                    <BookOpen size={14} />
-                    Learn this
                   </button>
                 ) : null}
               </div>
