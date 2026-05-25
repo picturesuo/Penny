@@ -561,9 +561,9 @@ test("CreateWorkspace keeps the Create entry free of sidebar return controls", (
   assert.doesNotMatch(markup, /Open Brain/);
 });
 
-test("isCreateComparisonDevMode only exposes comparison in dev, test, or explicit flag", () => {
-  assert.equal(isCreateComparisonDevMode({ DEV: true }), true);
-  assert.equal(isCreateComparisonDevMode({ MODE: "test" }), true);
+test("isCreateComparisonDevMode only exposes comparison with an explicit flag", () => {
+  assert.equal(isCreateComparisonDevMode({ DEV: true }), false);
+  assert.equal(isCreateComparisonDevMode({ MODE: "test" }), false);
   assert.equal(isCreateComparisonDevMode({ VITE_PENNY_CREATE_COMPARE: "true" }), true);
   assert.equal(isCreateComparisonDevMode({ DEV: false, MODE: "production" }), false);
 });
