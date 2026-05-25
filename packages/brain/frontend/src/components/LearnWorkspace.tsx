@@ -600,54 +600,43 @@ export function MicroLessonSlide({
         </p>
       </section>
 
-      <LessonPartsStrip lesson={lesson} />
+      <AiLessonOutput lesson={lesson} />
 
       <LearnUnderstandingTour lesson={lesson} {...(onMeaningMapQuestion ? { onAskAboutItem: onMeaningMapQuestion } : {})} />
     </section>
   );
 }
 
-function LessonPartsStrip({ lesson }: { lesson: LearnLesson }) {
-  const parts = lessonPartsForDisplay(lesson);
-
-  if (parts.length === 0) {
-    return null;
-  }
-
+function AiLessonOutput({ lesson }: { lesson: LearnLesson }) {
   return (
-    <section className="lesson-parts-strip" aria-label="Main lesson parts">
-      <ol>
-        {parts.map((part, index) => (
-          <li key={`${part.title}-${index}`}>
-            <span>{part.title}</span>
-            <strong>{part.body}</strong>
-          </li>
-        ))}
-      </ol>
+    <section className="ai-lesson-output" aria-label="AI lesson output">
+      <article>
+        <span>Visual</span>
+        <strong>{lesson.visual.title}</strong>
+        <p>{lesson.visual.description}</p>
+        {lesson.visual.items?.length ? (
+          <ol>
+            {lesson.visual.items.slice(0, 4).map((item) => (
+              <li key={`${item.label}-${item.text}`}>
+                <span>{item.label}</span>
+                <strong>{item.text}</strong>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>{lesson.visual.body}</p>
+        )}
+      </article>
+      <article>
+        <span>Check</span>
+        <p>{lesson.quickCheck}</p>
+      </article>
+      <article>
+        <span>Takeaway</span>
+        <p>{lesson.takeaway}</p>
+      </article>
     </section>
   );
-}
-
-function lessonPartsForDisplay(lesson: LearnLesson): Array<{ title: string; body: string }> {
-  const teachingParts = lesson.teachingSections
-    .filter((section) => section.title.trim() && section.body.trim())
-    .slice(0, 3)
-    .map((section) => ({
-      title: section.title,
-      body: truncateWords(section.body, 12),
-    }));
-
-  if (teachingParts.length > 0) {
-    return teachingParts;
-  }
-
-  return lesson.coreIdea.bullets
-    .filter((bullet) => bullet.trim())
-    .slice(0, 3)
-    .map((bullet, index) => ({
-      title: `Part ${index + 1}`,
-      body: truncateWords(bullet, 12),
-    }));
 }
 
 export function LearnUnderstandingTour({
@@ -1252,17 +1241,6 @@ export function AskPennyDrawer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const trimmedDraft = draft.trim();
   const activeLessonPayload = askPennyActiveLessonPayload(lesson, activeLessonIndex, lessonCount);
-  const quickActions: Array<{
-    id: NonNullable<Parameters<typeof askPennyQuestion>[0]["quickAction"]>;
-    label: string;
-    question: string;
-  }> = [
-    { id: "explain_visual", label: "Explain this", question: "Explain this lesson focus." },
-    { id: "another_example", label: "Give another example", question: "Give another example for this lesson." },
-    { id: "make_simpler", label: "Make simpler", question: "Make this lesson simpler." },
-    { id: "quiz_me", label: "Quiz me", question: "Quiz me on this lesson." },
-    { id: "connect_previous", label: "Connect to previous", question: "Connect this to the previous lesson." },
-  ];
 
   useEffect(() => {
     if (!selectedQuestionSeed) {
@@ -1344,35 +1322,11 @@ export function AskPennyDrawer({
   return (
     <aside className={`ask-penny-panel ask-penny-drawer${isOpen ? " is-open" : ""}`} aria-label="Ask Penny" aria-hidden={!isOpen}>
       <header>
-        <div>
-          <span>Ask Penny</span>
-          <p>
-            Lesson {activeLessonIndex + 1} context: {lesson.title}
-          </p>
-        </div>
+        <span>Ask Penny</span>
         <button type="button" onClick={onClose} aria-label="Close Ask Penny">
           ×
         </button>
       </header>
-
-      <div className="ask-penny-context-card" aria-label="Current lesson context">
-        <span>lesson focus</span>
-        <strong>{lesson.title}</strong>
-        <p>{lesson.shortExplanation}</p>
-      </div>
-
-      <div className="ask-penny-quick-actions" aria-label="Ask Penny quick actions">
-        {quickActions.map((action) => (
-          <button
-            key={action.id}
-            type="button"
-            disabled={disabled || isRunning}
-            onClick={() => void submitPrompt(action.question, action.id)}
-          >
-            {action.label}
-          </button>
-        ))}
-      </div>
 
       <div className="ask-penny-thread" role="log" aria-live="polite">
         {messages.map((message, index) => (
@@ -1518,12 +1472,12 @@ function buildLearnPageData(
     return buildCreateOptionLearnPageData(focusNode);
   }
 
-  if (output.learningPlan) {
-    return buildLearnPageDataFromPlan(output.learningPlan, sourceText, output);
-  }
-
   if (output.sessionV2) {
     return buildLearnPageDataFromSessionV2(output.sessionV2);
+  }
+
+  if (output.learningPlan) {
+    return buildLearnPageDataFromPlan(output.learningPlan, sourceText, output);
   }
 
   const goal = goalFrom(output.coreIdea);

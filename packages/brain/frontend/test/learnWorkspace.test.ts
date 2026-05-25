@@ -353,6 +353,11 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.match(markup, /Package pricing/);
   assert.match(markup, /Iterate pricing/);
   assert.match(markup, /An expert starts by naming what the pricing decision must accomplish/);
+  assert.match(markup, /Ask Penny/);
+  assert.doesNotMatch(markup, /Lesson 1 context/);
+  assert.doesNotMatch(markup, /aria-label="Current lesson context"/);
+  assert.doesNotMatch(markup, /Ask Penny quick actions/);
+  assert.doesNotMatch(markup, /Give another example/);
   assert.doesNotMatch(markup, /What is the strongest true version/);
   assert.doesNotMatch(markup, /What should this not mean/);
   assert.doesNotMatch(markup, /What twist changes the answer/);
@@ -363,9 +368,6 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.match(markup, /Name the failure signal/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
-  assert.doesNotMatch(markup, /Pricing value map/);
-  assert.doesNotMatch(markup, /Your turn/);
-  assert.doesNotMatch(markup, /Takeaway/);
 });
 
 test("LearnWorkspace keeps backend V2 pages as single visible steps", () => {

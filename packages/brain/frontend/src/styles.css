@@ -6918,12 +6918,12 @@
     min-width: 0;
   }
 
-  .lesson-parts-strip {
+  .ai-lesson-output {
     display: grid;
     min-width: 0;
   }
 
-  .lesson-parts-strip ol {
+  .ai-lesson-output {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0;
@@ -6931,10 +6931,9 @@
     padding: 0;
     border: 1px solid #111111;
     background: #ffffff;
-    list-style: none;
   }
 
-  .lesson-parts-strip li {
+  .ai-lesson-output article {
     display: grid;
     align-content: start;
     gap: 5px;
@@ -6944,11 +6943,12 @@
     padding: 9px 10px;
   }
 
-  .lesson-parts-strip li:last-child {
+  .ai-lesson-output article:last-child {
     border-right: 0;
   }
 
-  .lesson-parts-strip span {
+  .ai-lesson-output article > span,
+  .ai-lesson-output li span {
     min-width: 0;
     overflow: hidden;
     color: rgb(17 17 17 / 0.58);
@@ -6960,9 +6960,11 @@
     white-space: nowrap;
   }
 
-  .lesson-parts-strip strong {
+  .ai-lesson-output article > strong,
+  .ai-lesson-output article > p {
     display: -webkit-box;
     min-width: 0;
+    margin: 0;
     overflow: hidden;
     color: #111111;
     font-size: 13px;
@@ -6971,6 +6973,31 @@
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+  }
+
+  .ai-lesson-output ol {
+    display: grid;
+    gap: 3px;
+    margin: 1px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ai-lesson-output li {
+    display: grid;
+    grid-template-columns: minmax(34px, auto) minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .ai-lesson-output li strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111111;
+    font-size: 12px;
+    line-height: 1.12;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .learn-understanding-tour article {
@@ -7865,8 +7892,8 @@
     top: 0;
     left: 0;
     display: grid;
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-    gap: 12px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 0;
     min-width: 0;
     width: var(--learn-path-width);
     height: 100%;
@@ -7876,7 +7903,7 @@
     border-right: 1px solid #111111;
     border-left: 0;
     background: var(--penny-paper);
-    padding: 16px;
+    padding: 16px 16px 14px;
     transform: translateX(calc(-100% - 1px));
     opacity: 0;
     transition:
@@ -7893,11 +7920,11 @@
 
   .ask-penny-panel header {
     display: flex;
-    align-items: start;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
     border-bottom: 1px solid #111111;
-    padding-bottom: 12px;
+    padding-bottom: 14px;
   }
 
   .ask-penny-panel header span {
@@ -7905,13 +7932,6 @@
     font-weight: 700;
     line-height: 1;
     text-transform: none;
-  }
-
-  .ask-penny-panel header p {
-    margin: 7px 0 0;
-    color: rgb(17 17 17 / 0.58);
-    font-size: 12px;
-    line-height: 1.1;
   }
 
   .ask-penny-panel header button {
@@ -7933,9 +7953,10 @@
     gap: 0;
     min-height: 0;
     overflow: auto;
-    border: 1px solid #111111;
+    border: 0;
+    border-bottom: 1px solid #111111;
     padding: 0;
-    background: #fbfaf6;
+    background: transparent;
     color: #111111;
     font-family: inherit;
   }
@@ -7952,7 +7973,7 @@
     align-items: start;
     gap: 10px;
     border-bottom: 1px solid rgb(17 17 17 / 0.14);
-    padding: 11px 12px;
+    padding: 11px 0;
   }
 
   .ask-penny-message:last-child {
@@ -8123,7 +8144,6 @@
     grid-template-columns: minmax(0, 1fr) 42px;
     align-items: end;
     gap: 8px;
-    border-top: 1px solid #111111;
     padding-top: 12px;
   }
 
@@ -8134,6 +8154,7 @@
     gap: 9px;
     width: 100%;
     min-width: 0;
+    min-height: 58px;
     border: 1px solid #111111;
     border-radius: 0;
     padding: 10px;
@@ -8148,7 +8169,8 @@
   .ask-penny-input-shell textarea {
     width: 100%;
     min-width: 0;
-    max-height: 40dvh;
+    min-height: 34px;
+    max-height: min(34dvh, 260px);
     border: 0;
     padding: 0;
     background: transparent;
@@ -8161,54 +8183,6 @@
 
   .ask-penny-input-shell textarea::placeholder {
     color: rgb(17 17 17 / 0.42);
-  }
-
-  .ask-penny-context-card {
-    display: grid;
-    gap: 6px;
-    border: 1px solid #111111;
-    background: #ffffff;
-    padding: 12px;
-  }
-
-  .ask-penny-context-card span {
-    color: rgb(17 17 17 / 0.58);
-    font-size: 10px;
-    font-weight: 800;
-    line-height: 1;
-    text-transform: uppercase;
-  }
-
-  .ask-penny-context-card strong {
-    color: #111111;
-    font-size: 18px;
-    font-weight: 650;
-    line-height: 1.08;
-  }
-
-  .ask-penny-context-card p {
-    margin: 0;
-    color: rgb(17 17 17 / 0.68);
-    font-size: 13px;
-    line-height: 1.22;
-  }
-
-  .ask-penny-quick-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-  }
-
-  .ask-penny-quick-actions button {
-    min-height: 30px;
-    border: 1px solid #111111;
-    border-radius: 999px;
-    background: transparent;
-    color: #111111;
-    padding: 0 10px;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1;
   }
 
   .ask-penny-input button {
