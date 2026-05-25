@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
+  Briefcase,
   CheckCircle2,
   CircleHelp,
   Copy,
@@ -10,8 +11,11 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  GraduationCap,
+  Hash,
   Lightbulb,
   Mail,
+  MessageCircle,
   Plus,
   Search,
   Send,
@@ -2211,6 +2215,7 @@ function BrainDocumentsIndex({
   focusSeedRequest?: number | undefined;
 }) {
   const documents = documentsData?.documents ?? [];
+  const [activeBrainPage, setActiveBrainPage] = useState<"vault" | "analysis" | "import">("vault");
   const [searchQuery, setSearchQuery] = useState("");
   const [seedText, setSeedText] = useState("");
   const seedInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -2227,7 +2232,6 @@ function BrainDocumentsIndex({
 
     return searchDocumentRows(documents, normalizedQuery);
   }, [documents, normalizedQuery]);
-  const memoryFirstRunActive = (memoryProfile?.stats.sourceCount ?? 0) === 0;
   const profileSections = memoryProfile ? memoryProfileSections(memoryProfile, memoryProfile.recentMemoryNodes ?? []) : [];
   const thinkingHighlights = profileSections
     .filter((section) => ["Common frustrations", "Preferred build style", "Repeated rejected directions", "Active projects"].includes(section.title))
@@ -2274,8 +2278,8 @@ function BrainDocumentsIndex({
     <section className="brain-library-panel" aria-label="Brain document library">
       <div className="brain-bank-hero">
         <div>
-          <span className="eyebrow">Brain bank</span>
-          <h1>Your vault, notes, and thinking patterns</h1>
+          <span className="eyebrow">Brain vault</span>
+          <h1>Your notes and previous work</h1>
         </div>
         <dl className="brain-bank-stats" aria-label="Brain inventory">
           <div>
@@ -2292,148 +2296,211 @@ function BrainDocumentsIndex({
           </div>
         </dl>
       </div>
-      <section className="brain-bank-top-grid" aria-label="Brain essentials">
-        <section className="brain-search-panel is-primary" aria-label="Search Brain">
-          <label htmlFor="brainDocumentSearch">
-            <Search size={18} aria-hidden="true" />
-            <span>Search Brain</span>
-          </label>
-          <input
-            id="brainDocumentSearch"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search documents, claims, notes, and saved thinking"
-            type="search"
-          />
-          <p>Search stays Penny-native: documents and claims first, with quick notes becoming Brain memory when you save them there.</p>
-        </section>
-        <BrainQuickNotesPanel
-          recents={recents}
-          archivedRecents={archivedRecents}
-          selectedQuickNoteId={null}
-          disabled={disabled}
-          onSelectQuickNote={onSelectQuickNote}
-          onQuickNoteCreate={onQuickNoteCreate}
-          onQuickNoteAction={onQuickNoteAction}
-        />
-      </section>
-      <form className="brain-document-seed" onSubmit={handleCreateDocument}>
-        <label htmlFor="brainDocumentSeed">Create a brain document</label>
-        <div className="brain-document-seed-row">
-          <textarea
-            id="brainDocumentSeed"
-            ref={seedInputRef}
-            value={seedText}
-            onChange={(event) => setSeedText(event.target.value)}
-            placeholder="Write the thought you want Penny to structure."
-            rows={2}
-            disabled={disabled}
-          />
-          <button type="submit" className="primary-command" disabled={disabled || !seedText.trim()}>
-            <Send size={15} aria-hidden="true" />
-            <span>Create</span>
-          </button>
-        </div>
-      </form>
-      {hasDocuments ? (
-        <p className="brain-learn-transfer-note">
-          Later: a Brain document should be transportable into Learn mode so someone else can learn the way you are thinking about it.
-        </p>
-      ) : null}
-      {normalizedQuery ? (
-        <section className="brain-search-results" aria-label="Search results">
-          <div className="brain-section-title">
-            <strong>Search results</strong>
-            <span>{searchResults.length} matches</span>
-          </div>
-          {searchResults.length > 0 ? (
-            <div className="document-log-table">
-              {searchResults.map((result) => (
-                <SearchResultRow key={result.id} result={result} onSelectDocument={onSelectDocument} />
-              ))}
-            </div>
-          ) : (
-            <article className="document-empty-state">
-              <strong>No matches</strong>
-              <span>Try a different keyword or phrase.</span>
-            </article>
-          )}
-        </section>
-      ) : (
-        <section className="brain-bank-doc-grid" aria-label="Brain vault and learn documents">
-          <section className="brain-recent-documents" aria-label="Created documents">
-          <div className="brain-section-title">
-            <strong>Created documents</strong>
-            <span>{recentDocuments.length} shown</span>
-          </div>
-          {recentDocuments.length > 0 ? (
-            <div className="document-log-table" aria-label="Most recent documents">
-              {recentDocuments.map((document) => (
-                <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
-              ))}
-            </div>
-          ) : (
-            <article className="document-empty-state">
-              <strong>Start a document</strong>
-              <span>Start with a thought and Penny will create the first record.</span>
-            </article>
-          )}
-        </section>
-          <section className="brain-recent-documents" aria-label="Learn documents">
-            <div className="brain-section-title">
-              <strong>Learn documents</strong>
-              <span>{recentLearnDocuments.length} shown</span>
-            </div>
-            {recentLearnDocuments.length > 0 ? (
-              <div className="document-log-table" aria-label="Learn documents">
-                {recentLearnDocuments.map((document) => (
-                  <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
-                ))}
+      <div className="brain-bank-layout">
+        <nav className="brain-bank-page-nav" aria-label="Brain pages">
+          {[
+            { id: "vault", label: "Vault", icon: BookOpen, meta: `${documents.length} docs` },
+            { id: "analysis", label: "Thinking analysis", icon: Lightbulb, meta: `${memoryProfile?.stats.profileSignalCount ?? 0} signals` },
+            { id: "import", label: "Import", icon: Database, meta: `${memoryProfile?.stats.sourceCount ?? 0} sources` },
+          ].map((item) => {
+            const Icon = item.icon;
+            const active = activeBrainPage === item.id;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`brain-bank-page-button${active ? " is-active" : ""}`}
+                aria-current={active ? "page" : undefined}
+                onClick={() => setActiveBrainPage(item.id as "vault" | "analysis" | "import")}
+              >
+                <Icon size={16} aria-hidden="true" />
+                <span>{item.label}</span>
+                <small>{item.meta}</small>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="brain-bank-page">
+          {activeBrainPage === "vault" ? (
+            <>
+              <section className="brain-bank-top-grid" aria-label="Brain essentials">
+                <section className="brain-search-panel is-primary" aria-label="Search Brain">
+                  <label htmlFor="brainDocumentSearch">
+                    <Search size={18} aria-hidden="true" />
+                    <span>Search Brain</span>
+                  </label>
+                  <input
+                    id="brainDocumentSearch"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search documents, claims, notes, and saved thinking"
+                    type="search"
+                  />
+                  <p>Search stays Penny-native: documents and claims first, with quick notes becoming Brain memory when you save them there.</p>
+                </section>
+                <BrainQuickNotesPanel
+                  recents={recents}
+                  archivedRecents={archivedRecents}
+                  selectedQuickNoteId={null}
+                  disabled={disabled}
+                  onSelectQuickNote={onSelectQuickNote}
+                  onQuickNoteCreate={onQuickNoteCreate}
+                  onQuickNoteAction={onQuickNoteAction}
+                />
+              </section>
+              <form className="brain-document-seed" onSubmit={handleCreateDocument}>
+                <label htmlFor="brainDocumentSeed">Create a brain document</label>
+                <div className="brain-document-seed-row">
+                  <textarea
+                    id="brainDocumentSeed"
+                    ref={seedInputRef}
+                    value={seedText}
+                    onChange={(event) => setSeedText(event.target.value)}
+                    placeholder="Write the thought you want Penny to structure."
+                    rows={2}
+                    disabled={disabled}
+                  />
+                  <button type="submit" className="primary-command" disabled={disabled || !seedText.trim()}>
+                    <Send size={15} aria-hidden="true" />
+                    <span>Create</span>
+                  </button>
+                </div>
+              </form>
+              {hasDocuments ? (
+                <p className="brain-learn-transfer-note">
+                  Later: a Brain document should be transportable into Learn mode so someone else can learn the way you are thinking about it.
+                </p>
+              ) : null}
+              {normalizedQuery ? (
+                <section className="brain-search-results" aria-label="Search results">
+                  <div className="brain-section-title">
+                    <strong>Search results</strong>
+                    <span>{searchResults.length} matches</span>
+                  </div>
+                  {searchResults.length > 0 ? (
+                    <div className="document-log-table">
+                      {searchResults.map((result) => (
+                        <SearchResultRow key={result.id} result={result} onSelectDocument={onSelectDocument} />
+                      ))}
+                    </div>
+                  ) : (
+                    <article className="document-empty-state">
+                      <strong>No matches</strong>
+                      <span>Try a different keyword or phrase.</span>
+                    </article>
+                  )}
+                </section>
+              ) : (
+                <section className="brain-bank-doc-grid" aria-label="Brain vault and learn documents">
+                  <section className="brain-recent-documents" aria-label="Created documents">
+                    <div className="brain-section-title">
+                      <strong>Created documents</strong>
+                      <span>{recentDocuments.length} shown</span>
+                    </div>
+                    {recentDocuments.length > 0 ? (
+                      <div className="document-log-table" aria-label="Most recent documents">
+                        {recentDocuments.map((document) => (
+                          <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
+                        ))}
+                      </div>
+                    ) : (
+                      <article className="document-empty-state">
+                        <strong>Start a document</strong>
+                        <span>Start with a thought and Penny will create the first record.</span>
+                      </article>
+                    )}
+                  </section>
+                  <section className="brain-recent-documents" aria-label="Learn documents">
+                    <div className="brain-section-title">
+                      <strong>Learn documents</strong>
+                      <span>{recentLearnDocuments.length} shown</span>
+                    </div>
+                    {recentLearnDocuments.length > 0 ? (
+                      <div className="document-log-table" aria-label="Learn documents">
+                        {recentLearnDocuments.map((document) => (
+                          <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
+                        ))}
+                      </div>
+                    ) : (
+                      <article className="document-empty-state">
+                        <strong>Lessons live here</strong>
+                        <span>Concepts you turn into Learn sessions will be kept separate from created work.</span>
+                      </article>
+                    )}
+                  </section>
+                </section>
+              )}
+            </>
+          ) : activeBrainPage === "analysis" ? (
+            <section className="brain-thinking-analysis" aria-label="Thinking analysis">
+              <div className="brain-section-title">
+                <strong>Thinking analysis</strong>
+                <span>{memoryProfile?.stats.profileSignalCount ?? 0} signals</span>
               </div>
-            ) : (
-              <article className="document-empty-state">
-                <strong>Lessons live here</strong>
-                <span>Concepts you turn into Learn sessions will be kept separate from created work.</span>
-              </article>
-            )}
-          </section>
-        </section>
-      )}
-      <section className="brain-thinking-analysis" aria-label="Thinking analysis">
-        <div className="brain-section-title">
-          <strong>Thinking analysis</strong>
-          <span>{memoryProfile?.stats.profileSignalCount ?? 0} signals</span>
-        </div>
-        {thinkingHighlights.length > 0 ? (
-          <div className="brain-thinking-analysis-grid">
-            {thinkingHighlights.map((section) => (
-              <article key={section.title} className="brain-thinking-card">
-                <strong>{section.title}</strong>
-                <ul>
-                  {section.items.slice(0, 3).map((item) => (
-                    <li key={item.id} title={item.summary}>
-                      {item.label}
-                    </li>
+              {thinkingHighlights.length > 0 ? (
+                <div className="brain-thinking-analysis-grid">
+                  {thinkingHighlights.map((section) => (
+                    <article key={section.title} className="brain-thinking-card">
+                      <strong>{section.title}</strong>
+                      <ul>
+                        {section.items.slice(0, 3).map((item) => (
+                          <li key={item.id} title={item.summary}>
+                            {item.label}
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
                   ))}
-                </ul>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <article className="document-empty-state">
-            <strong>Patterns appear after context</strong>
-            <span>Penny will summarize recurring interests, habits, and blind spots once the Brain has enough source-backed memory.</span>
-          </article>
-        )}
-      </section>
-      <details className="brain-memory-details" open={memoryFirstRunActive}>
-        <summary>
-          <Database size={15} aria-hidden="true" />
-          <span>Brain import and source controls</span>
-        </summary>
-        {memoryPanel}
-      </details>
+                </div>
+              ) : (
+                <article className="document-empty-state">
+                  <strong>Patterns appear after context</strong>
+                  <span>Penny will summarize recurring interests, habits, and blind spots once the Brain has enough source-backed memory.</span>
+                </article>
+              )}
+            </section>
+          ) : (
+            <section className="brain-import-page" aria-label="Brain import">
+              <div className="brain-section-title">
+                <strong>Import connections</strong>
+                <span>Context sources</span>
+              </div>
+              <BrainConnectorStrip />
+              {memoryPanel}
+            </section>
+          )}
+        </div>
+      </div>
     </section>
+  );
+}
+
+function BrainConnectorStrip() {
+  const connectors = [
+    { label: "iMessage", status: "manual export", icon: MessageCircle },
+    { label: "LinkedIn", status: "profile notes", icon: Briefcase },
+    { label: "Gmail", status: "email source", icon: Mail },
+    { label: "Slack", status: "workspace notes", icon: Hash },
+    { label: "Canvas", status: "course context", icon: GraduationCap },
+  ];
+
+  return (
+    <div className="brain-connector-strip" aria-label="Supported import sources">
+      {connectors.map((connector) => {
+        const Icon = connector.icon;
+
+        return (
+          <article key={connector.label} className={`brain-connector-card is-${connector.label.toLowerCase()}`}>
+            <span className="brain-connector-mark" aria-hidden="true">
+              <Icon size={17} />
+            </span>
+            <strong>{connector.label}</strong>
+            <small>{connector.status}</small>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
