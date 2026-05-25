@@ -234,7 +234,7 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
   return {
     async create(input, request) {
       const context = resolveDevContext(request, input);
-      const sourceContext = buildLearningSourceContext(input);
+      const sourceContext = await buildLearningSourceContext(input);
       const seedRawIdea = seedIdeaFromLearnInput(input, sourceContext);
       const seedInput: BrainSeedInput = {
         rawIdea: seedRawIdea,
@@ -647,23 +647,166 @@ function seedIdeaFromLearnInput(input: LearnSessionRequest, sourceContext: Learn
   );
 }
 
-function buildLearningSourceContext(input: LearnSessionRequest): LearningSourceContext | null {
+type LearnWebSourceContextOptions = {
+  fetch?: typeof fetch;
+};
+
+export async function buildLearningSourceContext(
+  input: LearnSessionRequest,
+  options: LearnWebSourceContextOptions = {},
+): Promise<LearningSourceContext | null> {
   const material = input.sourceMaterial;
 
-  if (!material) {
-    return null;
+  if (material) {
+    const text = normalizeSourceText(material.extractedText);
+    const clusters = buildSourceClusters(text);
+    const fileName = material.fileName ?? null;
+
+    return {
+      kind: material.kind,
+      fileName,
+      mainIdea: summarizeText(text, 360) || input.rawIdea || fileName || "Uploaded source",
+      clusters,
+    };
   }
 
-  const text = normalizeSourceText(material.extractedText);
-  const clusters = buildSourceClusters(text);
-  const fileName = material.fileName ?? null;
+  if (input.searchWeb) {
+    return buildRequestedWebSourceContext(input.rawIdea, options);
+  }
+
+  return null;
+}
+
+async function buildRequestedWebSourceContext(
+  rawIdea: string,
+  options: LearnWebSourceContextOptions,
+): Promise<LearningSourceContext> {
+  const topic = normalizeSourceText(rawIdea) || "requested web topic";
+  const ycTopic = /\b(yc|y\s*combinator|ycombinator)\b/i.test(topic);
+  const webPages = ycTopic ? await fetchYcOfficialPages(options.fetch ?? fetch) : [];
+  const clusters = webPages.length ? webPages.map(webPageCluster) : ycTopic ? ycFallbackWebClusters() : genericWebRequestClusters(topic);
 
   return {
-    kind: material.kind,
-    fileName,
-    mainIdea: summarizeText(text, 360) || input.rawIdea || fileName || "Uploaded source",
+    kind: "text",
+    fileName: ycTopic ? "Official YC web sources" : "Web sources requested",
+    mainIdea: ycTopic
+      ? "Use current official YC source material to explain what YC does, what funding path means, and which application signals matter."
+      : `Use web sources for: ${clipText(topic, 220)}`,
     clusters,
   };
+}
+
+type WebSourcePage = {
+  title: string;
+  url: string;
+  text: string;
+};
+
+async function fetchYcOfficialPages(callFetch: typeof fetch): Promise<WebSourcePage[]> {
+  const targets = [
+    { title: "YC program overview", url: "https://www.ycombinator.com/about" },
+    { title: "YC application path", url: "https://www.ycombinator.com/apply" },
+  ];
+  const pages = await Promise.all(targets.map((target) => fetchTextPage(callFetch, target)));
+
+  return pages.filter((page): page is WebSourcePage => Boolean(page));
+}
+
+async function fetchTextPage(callFetch: typeof fetch, target: { title: string; url: string }): Promise<WebSourcePage | null> {
+  try {
+    const response = await callFetch(target.url, {
+      headers: { "user-agent": "Penny local Learn source loader" },
+      signal: AbortSignal.timeout(4_500),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const text = htmlToText(await response.text());
+
+    if (text.length < 120) {
+      return null;
+    }
+
+    return { ...target, text };
+  } catch {
+    return null;
+  }
+}
+
+function webPageCluster(page: WebSourcePage, index: number): LearningSourceContext["clusters"][number] {
+  return {
+    id: `web-source-${index + 1}`,
+    title: page.title,
+    summary: summarizeText(page.text, 300) || `${page.title} should be checked from ${page.url}.`,
+    sourceRange: page.url,
+  };
+}
+
+function ycFallbackWebClusters(): LearningSourceContext["clusters"] {
+  return [
+    {
+      id: "web-source-yc-overview",
+      title: "YC program overview",
+      summary:
+        "Use official YC material to explain YC as a startup accelerator for early companies: the program gives founders structure, advice, community, and preparation for launch or fundraising.",
+      sourceRange: "official YC pages requested",
+    },
+    {
+      id: "web-source-yc-funding-path",
+      title: "Application and funding path",
+      summary:
+        "Teach the path as application, selection/interview, program participation, and fundraising readiness. Treat current dates and exact investment terms as facts that must be checked on official YC pages.",
+      sourceRange: "official YC application/funding pages requested",
+    },
+    {
+      id: "web-source-yc-signals",
+      title: "Signals YC asks about",
+      summary:
+        "Frame funding as evidence, not magic: team, problem, product progress, user pull, market, and clarity of thinking are the kinds of signals a learner should organize before applying.",
+      sourceRange: "YC application signal research requested",
+    },
+  ];
+}
+
+function genericWebRequestClusters(topic: string): LearningSourceContext["clusters"] {
+  return [
+    {
+      id: "web-source-request-1",
+      title: "Web source request",
+      summary:
+        `The learner explicitly requested web sources for ${clipText(topic, 120)}. Keep the lesson grounded in source-checking instead of treating Brain context as enough.`,
+      sourceRange: "web sources requested",
+    },
+    {
+      id: "web-source-request-2",
+      title: "Current facts to verify",
+      summary:
+        "Separate stable concepts from current facts. Dates, prices, program terms, claims about companies, and recent changes should stay marked as evidence-needed until a current source is attached.",
+      sourceRange: "current-source verification",
+    },
+    {
+      id: "web-source-request-3",
+      title: "Loaded source discipline",
+      summary:
+        "Prefer official or primary sources first, then use secondary sources only to clarify context. Each lesson page should say what the source supports and what remains unknown.",
+      sourceRange: "source-quality rule",
+    },
+  ];
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function buildSourceClusters(text: string): LearningSourceContext["clusters"] {

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  LearnSessionRequestSchema,
+  buildLearningSourceContext,
   handleLearnSessionRequest,
   type LearnSessionPayload,
 } from "./learn-session-route.ts";
@@ -63,6 +65,32 @@ test("POST /api/learn/session uses a local fallback when database prep is skippe
     restoreEnv("PENNY_AUTH_MODE", previousAuthMode);
     restoreEnv("DATABASE_URL", previousDatabaseUrl);
   }
+});
+
+test("Learn web sources build a source context instead of a generic Brain-only lesson", async () => {
+  const sourceContext = await buildLearningSourceContext(
+    LearnSessionRequestSchema.parse({
+      rawIdea: "what does YC do and how do I get funded?",
+      searchWeb: true,
+    }),
+    {
+      async fetch(url) {
+        return new Response(
+          `<main><h1>YC source</h1><p>Y Combinator helps founders build startups, apply to the program, and prepare for funding conversations.</p><p>Applicants should explain the company, team, progress, users, and why the problem matters.</p></main>`,
+          {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          },
+        );
+      },
+    },
+  );
+
+  assert.ok(sourceContext);
+  assert.equal(sourceContext.fileName, "Official YC web sources");
+  assert.match(sourceContext.mainIdea, /official YC/i);
+  assert.match(sourceContext.clusters[0]?.summary ?? "", /founders build startups/i);
+  assert.match(sourceContext.clusters[1]?.summary ?? "", /funding conversations/i);
 });
 
 test("POST /api/learn/session structures a dropped idea and ticks Autopilot", async () => {

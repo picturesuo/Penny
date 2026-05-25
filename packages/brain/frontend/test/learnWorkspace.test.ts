@@ -6,6 +6,7 @@ import {
   LearnWorkspace,
   askPennyContextForStep,
   isLearnSubmitShortcut,
+  learnAskShortcutLabel,
   meaningMapItemsForLesson,
   visibleLearningPathSteps,
 } from "../src/components/LearnWorkspace";
@@ -80,6 +81,11 @@ test("Learn composer submits on Command or Control Enter without stealing plain 
   assert.equal(isLearnSubmitShortcut({ key: "a", metaKey: true, ctrlKey: false }), false);
 });
 
+test("LearnWorkspace labels Ask Penny with platform-safe Alt or Option shortcut", () => {
+  assert.equal(learnAskShortcutLabel("MacIntel"), "⌥+A");
+  assert.equal(learnAskShortcutLabel("Win32"), "Alt+A");
+});
+
 test("LearnWorkspace renders the Create Learn bridge with a Back to Create control", () => {
   const markup = renderToStaticMarkup(
     createElement(
@@ -103,6 +109,8 @@ test("LearnWorkspace renders the Create Learn bridge with a Back to Create contr
   assert.match(markup, /Explain simply/);
   assert.match(markup, /Show worked example/);
   assert.match(markup, /Apply to my artifact/);
+  assert.match(markup, /(Alt|⌥)\+A/);
+  assert.doesNotMatch(markup, /Ctrl\+A/);
   assert.match(markup, /aria-current="step"/);
   assert.match(markup, /explicit judgment events are the things you deliberately do/i);
   assert.match(markup, /selecting cards, writing comments, and rating exports/i);
