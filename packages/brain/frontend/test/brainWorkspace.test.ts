@@ -57,6 +57,45 @@ test("BrainWorkspace renders persisted quick notes as the first sidebar folder",
   assert.match(markup, /class="quick-note-open"/);
 });
 
+test("BrainWorkspace keeps the empty Brain view focused on starting and importing", () => {
+  const markup = renderToStaticMarkup(
+    createElement(BrainWorkspace, {
+      documentsData: noDocumentsData(),
+      selectedDocument: null,
+      data: null,
+      moves: [],
+      autopilot: null,
+      latestArtifact: null,
+      focusedClaimId: null,
+      canvasOpen: false,
+      status: "Ready",
+      isThinking: false,
+      recents: [],
+      archivedRecents: [],
+      onSelectDocument: () => undefined,
+      onBackToLibrary: () => undefined,
+      onNewThought: () => undefined,
+      onSeed: async () => undefined,
+      onQuickNoteCreate: async () => undefined,
+      onQuickNoteAction: async () => undefined,
+      onClaimSelect: () => undefined,
+      onReworkDocument: async () => undefined,
+      onCanvasOpenChange: () => undefined,
+      onCanvasNodeAction: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Start a document/);
+  assert.match(markup, /Brain import/);
+  assert.match(markup, /Add context/);
+  assert.match(markup, /Import to Brain/);
+  assert.doesNotMatch(markup, /Google Workspace connector/);
+  assert.doesNotMatch(markup, /Gmail not configured/);
+  assert.doesNotMatch(markup, /Search email/);
+  assert.doesNotMatch(markup, /Most recent docs/);
+  assert.doesNotMatch(markup, /Start with a thought and Penny will create the first record/);
+});
+
 test("BrainMemoryPanel renders imported sources, profile summary, and recent memory nodes", () => {
   const markup = renderToStaticMarkup(
     createElement(BrainMemoryPanel, {
@@ -79,8 +118,8 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
     }),
   );
 
-  assert.match(markup, /Second Brain memory/);
-  assert.match(markup, /Private context for Create/);
+  assert.match(markup, /Brain import/);
+  assert.match(markup, /Add context/);
   assert.match(markup, /Undo forget/);
   assert.match(markup, /Import context/);
   assert.match(markup, /Review Brain profile/);
@@ -117,16 +156,9 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /aria-label="Forget Preference - Small reversible builds"/);
   assert.match(markup, /aria-pressed="false"/);
   assert.match(markup, /Supports ChatGPT export ZIPs/i);
-  assert.match(markup, /Google/);
-  assert.match(markup, /Connect Gmail/);
-  assert.match(markup, /Penny reads Gmail only after consent/);
-  assert.match(markup, /trainingUse=false/);
-  assert.match(markup, /Search email/);
-  assert.match(markup, /Semantic search/);
-  assert.match(markup, /Sync Gmail first/);
-  assert.match(markup, /Sync now/);
-  assert.match(markup, /Revoke/);
-  assert.match(markup, /Delete Gmail source/);
+  assert.doesNotMatch(markup, /Connect Gmail/);
+  assert.doesNotMatch(markup, /Search email/);
+  assert.doesNotMatch(markup, /Semantic search/);
   assert.match(markup, /Memory updated/);
   assert.match(markup, /data-testid="brain-memory-notice"/);
   assert.match(markup, /Source deleted\. Related chunks and source-backed memories were removed from retrieval and Create/);
@@ -825,6 +857,28 @@ function emptyDocumentsData(): BrainDocumentsData {
     },
     meta: {
       documentCount: 1,
+      claimCount: 0,
+      edgeCount: 0,
+    },
+  };
+}
+
+function noDocumentsData(): BrainDocumentsData {
+  return {
+    sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts",
+    documents: [],
+    hierarchy: [],
+    sidebar: {
+      quickNotes: [],
+      folders: [],
+      research: [],
+    },
+    graph: {
+      nodes: [],
+      edges: [],
+    },
+    meta: {
+      documentCount: 0,
       claimCount: 0,
       edgeCount: 0,
     },

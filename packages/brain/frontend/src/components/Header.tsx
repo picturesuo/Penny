@@ -23,9 +23,7 @@ export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNa
       <div className="masthead">
         <button className="brand" type="button" aria-label="Go to Penny home" onClick={onLogoSelect}>
           <PennyMark />
-          <span className="brand-name">
-            <span className="sr-only">P</span>ENNY
-          </span>
+          <span className="brand-name">enny</span>
         </button>
 
         <nav className="nav-tabs" aria-label="Penny modes">

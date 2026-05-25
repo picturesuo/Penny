@@ -2359,6 +2359,7 @@ function BrainDocumentsIndex({
   const seedInputRef = useRef<HTMLTextAreaElement | null>(null);
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const recentDocuments = useMemo(() => recentDocumentRows(documents), [documents]);
+  const hasDocuments = documents.length > 0;
   const searchResults = useMemo(() => {
     if (!normalizedQuery) {
       return [];
@@ -2412,7 +2413,6 @@ function BrainDocumentsIndex({
           <h1>Documents</h1>
         </div>
       </div>
-      {memoryFirstRunActive ? memoryPanel : null}
       <form className="brain-document-seed" onSubmit={handleCreateDocument}>
         <label htmlFor="brainDocumentSeed">Start a document</label>
         <div className="brain-document-seed-row">
@@ -2431,20 +2431,23 @@ function BrainDocumentsIndex({
           </button>
         </div>
       </form>
+      {memoryFirstRunActive ? memoryPanel : null}
       {memoryFirstRunActive ? null : memoryPanel}
-      <section className="brain-search-panel" aria-label="Search through your thinking">
-        <label className="sr-only" htmlFor="brainDocumentSearch">
-          Search through your thinking
-        </label>
-        <input
-          id="brainDocumentSearch"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search through your thinking"
-          type="search"
-        />
-        <p>Search scans your documents and claims for matching keywords.</p>
-      </section>
+      {hasDocuments ? (
+        <section className="brain-search-panel" aria-label="Search through your thinking">
+          <label className="sr-only" htmlFor="brainDocumentSearch">
+            Search through your thinking
+          </label>
+          <input
+            id="brainDocumentSearch"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search through your thinking"
+            type="search"
+          />
+          <p>Search scans your documents and claims for matching keywords.</p>
+        </section>
+      ) : null}
       {normalizedQuery ? (
         <section className="brain-search-results" aria-label="Search results">
           <div className="brain-section-title">
@@ -2464,7 +2467,7 @@ function BrainDocumentsIndex({
             </article>
           )}
         </section>
-      ) : (
+      ) : hasDocuments ? (
         <section className="brain-recent-documents" aria-label="Most recent documents">
           <div className="brain-section-title">
             <strong>Most recent docs</strong>
@@ -2483,7 +2486,7 @@ function BrainDocumentsIndex({
             </article>
           )}
         </section>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -2551,6 +2554,10 @@ export function BrainMemoryPanel({
   const firstRunSteps = brainFirstRunSteps({ profile, recentNodes, sections: profileSections, profileReviewed, brainPromptExported });
   const hasImportedMemories = (profile?.stats.memoryNodeCount ?? 0) > 0;
   const demoFixtureVisible = showDemoFixture ?? isBrainDemoFixtureMode();
+  const googleConnectorVisible =
+    Boolean(googleProvider?.configured) ||
+    Boolean(gmailConnectorStatus?.configured) ||
+    googleConnectorState.connections.some((connection) => connection.status !== "revoked");
   const canImport = draft.trim().length > 0 && !disabled && !importing;
   const importHint = importHintForKind(kind);
 
@@ -2832,46 +2839,40 @@ export function BrainMemoryPanel({
         <div>
           <span>
             <Database size={15} aria-hidden="true" />
-            Second Brain memory
+            Brain import
           </span>
-          <h2>Private context for Create</h2>
+          <h2>Add context</h2>
         </div>
         <BrainMemoryStatusPill status={status} latestJob={latestJob} />
       </div>
       <p className="brain-memory-summary">
         {profile?.profile.privacySafeSummary ??
-          "No private user memory has been imported yet. Create will label suggestions context-light until sources are added."}
+          "Import ChatGPT, Claude, notes, markdown, CSV, or extracted text. Penny turns it into private context for Create."}
       </p>
       {latestJob ? <BrainMemoryImportStatus job={latestJob} /> : null}
       {notice ? <BrainMemoryNotice message={notice} action={noticeAction ?? null} /> : null}
-      <ol className="brain-first-run-steps" aria-label="Brain first-run flow">
-        {firstRunSteps.map((step, index) => (
-          <li key={step.label} className={`${step.done ? "is-done" : ""}${step.active ? " is-active" : ""}`.trim()}>
-            <span>{index + 1}</span>
-            <strong>{step.label}</strong>
-          </li>
-        ))}
-      </ol>
       <p className="brain-memory-import-hint">
         Supports ChatGPT export ZIPs, conversations.json, extracted ChatGPT files, Claude JSON/CSV/text, notes, markdown, CSV, and
         already-extracted PDF text.
       </p>
-      <GoogleConnectorControl
-        provider={googleProvider}
-        connectorState={googleConnectorState}
-        gmailStatus={gmailConnectorStatus}
-        status={googleStatus}
-        error={googleError}
-        warning={googleWarning}
-        connectLink={googleConnectLink}
-        disabled={disabled || importing}
-        onConnect={handleGoogleConnect}
-        onSyncNow={handleGoogleSyncNow}
-        onRevoke={handleGoogleRevoke}
-        onDeleteSource={handleGoogleDeleteSource}
-        onKeywordSearch={handleGmailKeywordSearch}
-        onSemanticSearch={handleGmailSemanticSearch}
-      />
+      {googleConnectorVisible ? (
+        <GoogleConnectorControl
+          provider={googleProvider}
+          connectorState={googleConnectorState}
+          gmailStatus={gmailConnectorStatus}
+          status={googleStatus}
+          error={googleError}
+          warning={googleWarning}
+          connectLink={googleConnectLink}
+          disabled={disabled || importing}
+          onConnect={handleGoogleConnect}
+          onSyncNow={handleGoogleSyncNow}
+          onRevoke={handleGoogleRevoke}
+          onDeleteSource={handleGoogleDeleteSource}
+          onKeywordSearch={handleGmailKeywordSearch}
+          onSemanticSearch={handleGmailSemanticSearch}
+        />
+      ) : null}
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {demoFixtureVisible && onDemoFixtureImport ? (
         <div className="brain-memory-demo-fixtures" aria-label="Demo fixture loaders">
@@ -2909,8 +2910,8 @@ export function BrainMemoryPanel({
       <form className="brain-memory-import" onSubmit={handleSubmit}>
         <div className="brain-memory-import-row">
           <label>
-            <span>Source label</span>
-            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Product notes, conversations.json..." />
+            <span>Name</span>
+            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="ChatGPT export, Claude notes, product ideas..." />
           </label>
           <label>
             <span>Kind</span>
@@ -2941,7 +2942,7 @@ export function BrainMemoryPanel({
               setDraft(event.target.value);
             }
           }}
-          placeholder="Paste notes, manual messages transcript, markdown, ChatGPT conversations.json, Claude JSON/CSV/text, docs text, or canvas notes."
+          placeholder="Paste notes, a ChatGPT conversations.json export, Claude text, markdown, CSV, or doc text."
           readOnly={kind === "zip" && Boolean(fileName && draft)}
           rows={4}
         />
@@ -2951,37 +2952,49 @@ export function BrainMemoryPanel({
           <span>{importing ? "Importing..." : "Import to Brain"}</span>
         </button>
       </form>
-      <div className="brain-memory-grid">
-        <BrainMemorySourcesList sources={sources} disabled={disabled || status === "deleting"} onDeleteSource={onDeleteSource} />
-        <div className="brain-memory-review-column">
-          {profile && hasImportedMemories ? (
-            <BrainProfileReviewCard
+      {hasImportedMemories ? (
+        <ol className="brain-first-run-steps" aria-label="Brain first-run flow">
+          {firstRunSteps.map((step, index) => (
+            <li key={step.label} className={`${step.done ? "is-done" : ""}${step.active ? " is-active" : ""}`.trim()}>
+              <span>{index + 1}</span>
+              <strong>{step.label}</strong>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {hasImportedMemories ? (
+        <div className="brain-memory-grid">
+          <BrainMemorySourcesList sources={sources} disabled={disabled || status === "deleting"} onDeleteSource={onDeleteSource} />
+          <div className="brain-memory-review-column">
+            {profile ? (
+              <BrainProfileReviewCard
+                profile={profile}
+                reviewed={profileReviewed}
+                reviewing={profileReviewing}
+                disabled={disabled || importing}
+                onReview={() => {
+                  void handleProfileReview();
+                }}
+              />
+            ) : null}
+            <BrainMemoryProfileSummary
               profile={profile}
-              reviewed={profileReviewed}
-              reviewing={profileReviewing}
-              disabled={disabled || importing}
-              onReview={() => {
-                void handleProfileReview();
-              }}
+              recentNodes={recentNodes}
+              sections={profileSections}
+              reviewingId={reviewingId ?? null}
+              disabled={disabled}
+              onReviewMemory={onReviewMemory}
+              onStartCreateWithMemory={
+                profile && onStartCreateWithBrain
+                  ? (node) => {
+                      onStartCreateWithBrain(profile, node);
+                    }
+                  : undefined
+              }
             />
-          ) : null}
-          <BrainMemoryProfileSummary
-            profile={profile}
-            recentNodes={recentNodes}
-            sections={profileSections}
-            reviewingId={reviewingId ?? null}
-            disabled={disabled}
-            onReviewMemory={onReviewMemory}
-            onStartCreateWithMemory={
-              profile && onStartCreateWithBrain
-                ? (node) => {
-                    onStartCreateWithBrain(profile, node);
-                  }
-                : undefined
-            }
-          />
+          </div>
         </div>
-      </div>
+      ) : null}
       {profile && hasImportedMemories && onStartCreateWithBrain ? (
         <div className="brain-memory-next-step">
           <div>
