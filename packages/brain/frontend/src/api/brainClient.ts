@@ -113,8 +113,21 @@ export type LearnSourceMaterialInput = {
   extractedText: string;
 };
 
-export async function createLearnSession(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput): Promise<LearnSessionResponse> {
-  const body = JSON.stringify({ rawIdea, ...(sourceMaterial ? { sourceMaterial } : {}), autopilot: { limit: 6 } });
+export type CreateLearnSessionOptions = {
+  searchWeb?: boolean;
+};
+
+export async function createLearnSession(
+  rawIdea: string,
+  sourceMaterial?: LearnSourceMaterialInput,
+  options: CreateLearnSessionOptions = {},
+): Promise<LearnSessionResponse> {
+  const body = JSON.stringify({
+    rawIdea,
+    ...(sourceMaterial ? { sourceMaterial } : {}),
+    ...(options.searchWeb ? { searchWeb: true } : {}),
+    autopilot: { limit: 6 },
+  });
   let response: Response;
 
   try {

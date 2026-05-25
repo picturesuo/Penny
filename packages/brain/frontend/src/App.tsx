@@ -231,12 +231,12 @@ export function App() {
     }
   }
 
-  async function handleLearnSeed(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput) {
+  async function handleLearnSeed(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput, searchWeb = false) {
     setIsThinking(true);
     setStatus("Building Learn path");
 
     try {
-      const payload = await createLearnSession(rawIdea, sourceMaterial);
+      const payload = await createLearnSession(rawIdea, sourceMaterial, { searchWeb });
       const learnData = payload.data;
       setData(learnData);
       setAutopilot(learnData.autopilot ?? null);
@@ -1037,7 +1037,7 @@ export function App() {
             isThinking={isThinking}
             status={status}
             recents={recents}
-            onLearnSeed={handleLearnSeed}
+            onLearnSeed={(rawIdea, options) => handleLearnSeed(rawIdea, undefined, options?.searchWeb ?? false)}
             onKeepRecent={handleKeepRecentIdea}
             onSearchBrainRelated={handleBrainRelatedSearch}
             {...(shouldRenderCreateWorkspace ? { onBackToCreate: handleBackToCreateFromLearn } : {})}

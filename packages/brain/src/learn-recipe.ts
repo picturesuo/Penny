@@ -80,6 +80,7 @@ export type LearnRecipeInput = {
   nextMoves: ReadonlyArray<LearnRecipeNextMove>;
   sourceContext?: LearningSourceContext | null;
   learningPlanProvider?: LearningPlanProvider;
+  forceWebSearch?: boolean;
 };
 
 export type LearnRecipeSeedPayload = {
@@ -122,6 +123,7 @@ type LearnRecipeContext = {
   brainContext?: LearnRecipeOutput["brainContext"];
   sourceContext?: LearningSourceContext | null;
   searchDecision?: SearchDecision;
+  forceWebSearch?: boolean;
 };
 
 const learningPlanOutputSpec = Output.object<LearningPlan>({
@@ -237,7 +239,7 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
           {
             query: context.rawIdea,
             text: context.rawIdea,
-            userRequest: context.rawIdea,
+            userRequest: context.forceWebSearch ? `Use web sources for this Learn request.\n${context.rawIdea}` : context.rawIdea,
           },
           "learn",
           {
@@ -301,6 +303,7 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
     seedPayload: input.seedPayload,
     nextMoves: input.nextMoves,
     sourceContext: input.sourceContext ?? null,
+    forceWebSearch: input.forceWebSearch ?? false,
   });
   const learningPlanInput = {
     rawIdea: input.rawIdea,

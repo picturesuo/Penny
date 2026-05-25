@@ -89,6 +89,37 @@ test("LearnRecipe structures recipe steps and keeps web search hidden behind Sea
   assert.match(output.recipe.steps[4]?.summary ?? "", /Recommended Check next/);
 });
 
+test("LearnRecipe honors the Learn web sources toggle as an explicit search request", async () => {
+  const baseInput = {
+    rawIdea: "Teach me how to choose a startup name.",
+    seedPayload: {
+      session: { id: uuidAt(250) },
+      source: {
+        id: uuidAt(251),
+        rawText: "Teach me how to choose a startup name.",
+      },
+      ideaMap: {
+        keyInsight: "A startup name should make the project easier to understand and remember.",
+        claims: [
+          { id: uuidAt(252), kind: "belief" as const, text: "A startup name should communicate the product clearly." },
+          { id: uuidAt(253), kind: "concept" as const, text: "Naming strategy is the concept to learn." },
+        ],
+      },
+      learnCandidates: [{ term: "naming strategy", claimId: uuidAt(253) }],
+      explorationPaths: [{ title: "Name test", prompt: "Try the name on a real user." }],
+    },
+    nextMoves: [],
+  };
+
+  const brainOnly = await runLearnRecipe(baseInput);
+  const withWebSources = await runLearnRecipe({ ...baseInput, forceWebSearch: true });
+
+  assert.equal(brainOnly.searchDecision.useWebSearch, false);
+  assert.equal(withWebSources.searchDecision.useWebSearch, true);
+  assert.ok(withWebSources.searchDecision.reasonCodes.includes("user_explicitly_asks"));
+  assert.equal(withWebSources.searchDecision.query, "Teach me how to choose a startup name.");
+});
+
 test("LearnRecipe makes the YC demo idea read like a useful thinking recipe", async () => {
   const output = await runLearnRecipe({
     rawIdea: ycDemoIdea,

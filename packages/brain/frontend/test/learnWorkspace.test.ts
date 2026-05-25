@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   LearnWorkspace,
   askPennyContextForStep,
+  isLearnSubmitShortcut,
   meaningMapItemsForLesson,
   visibleLearningPathSteps,
 } from "../src/components/LearnWorkspace";
@@ -70,6 +71,13 @@ test("LearnWorkspace first screen opens the Learn composer", () => {
   assert.doesNotMatch(markup, /Takeaway/);
   assert.doesNotMatch(markup, /Explain visual/);
   assert.doesNotMatch(markup, /NOTE/);
+});
+
+test("Learn composer submits on Command or Control Enter without stealing plain Enter", () => {
+  assert.equal(isLearnSubmitShortcut({ key: "Enter", metaKey: true, ctrlKey: false }), true);
+  assert.equal(isLearnSubmitShortcut({ key: "Enter", metaKey: false, ctrlKey: true }), true);
+  assert.equal(isLearnSubmitShortcut({ key: "Enter", metaKey: false, ctrlKey: false }), false);
+  assert.equal(isLearnSubmitShortcut({ key: "a", metaKey: true, ctrlKey: false }), false);
 });
 
 test("LearnWorkspace renders the Create Learn bridge with a Back to Create control", () => {

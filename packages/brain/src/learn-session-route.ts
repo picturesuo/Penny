@@ -50,6 +50,7 @@ export const LearnSessionRequestSchema = z
   .object({
     rawIdea: z.string().trim().max(4_000).optional().default(""),
     sourceMaterial: LearnSourceMaterialSchema.optional(),
+    searchWeb: z.boolean().optional().default(false),
     sessionId: UuidSchema.optional(),
     userId: z.string().trim().min(1).max(120).optional(),
     workspaceId: z.string().trim().min(1).max(120).optional(),
@@ -294,6 +295,7 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
                   }
                 : null,
               source: "learn_session",
+              searchWeb: input.searchWeb,
               searchDecision: brainSeedSearchDecision(seedInput),
             },
             scope: context,
@@ -316,6 +318,7 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
           seedPayload,
           nextMoves: learnSessionNextMoves(seedPayload, autopilot),
           sourceContext,
+          forceWebSearch: input.searchWeb,
         });
 
         await recordLearnRecipeTrace(db, persisted.brainRun.id, seed, recipeOutput);

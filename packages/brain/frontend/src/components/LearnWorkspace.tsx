@@ -19,6 +19,10 @@ import { askPenny as askPennyQuestion } from "../api/brainClient";
 import { truncateWords } from "../lib/text";
 import { AskPennyRenderedText } from "./AskPennyRenderedText";
 
+type LearnSeedOptions = {
+  searchWeb?: boolean;
+};
+
 interface LearnWorkspaceProps {
   selectedDocument: BrainDocumentSummary | null;
   documents: BrainDocumentSummary[];
@@ -29,7 +33,7 @@ interface LearnWorkspaceProps {
   isThinking: boolean;
   status: string;
   recents: BrainRecentIdea[];
-  onLearnSeed: (rawIdea: string) => Promise<void>;
+  onLearnSeed: (rawIdea: string, options?: LearnSeedOptions) => Promise<void>;
   onKeepRecent: (rawIdea: string) => Promise<void>;
   onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
   onBackToCreate?: () => void;
@@ -162,8 +166,7 @@ function LearnSessionView({
       const selectedText = window.getSelection()?.toString().trim() ?? "";
 
       const isAskPennyPasteShortcut =
-        ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") ||
-        (selectedText && (event.key === "Control" || event.key === "Meta"));
+        event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === "a";
 
       if (isAskPennyPasteShortcut) {
         if (isTextInput) {
@@ -383,6 +386,7 @@ function LearningPathSidebar({
   onAskPennyToggle: () => void;
 }) {
   const visibleSteps = visibleLearningPathSteps(steps, activeMainStepId);
+  const askShortcutLabel = learnAskShortcutLabel();
 
   return (
     <aside className="learn-path-sidebar" aria-label="Learning path">
@@ -393,7 +397,7 @@ function LearningPathSidebar({
         </div>
         <button type="button" className="learn-ask-toggle" onClick={onAskPennyToggle} aria-label="Toggle Ask Penny">
           <span>Ask</span>
-          <kbd>Ctrl+A</kbd>
+          <kbd>{askShortcutLabel}</kbd>
         </button>
       </div>
 
@@ -442,6 +446,18 @@ function LearningPathSidebar({
       </div>
     </aside>
   );
+}
+
+export function learnAskShortcutLabel(platform: string = browserPlatform()): "⌥+A" | "Alt+A" {
+  return /Mac|iPhone|iPad|iPod/i.test(platform) ? "⌥+A" : "Alt+A";
+}
+
+function browserPlatform(): string {
+  if (typeof navigator === "undefined") {
+    return "";
+  }
+
+  return navigator.platform || "";
 }
 
 export function visibleLearningPathSteps(steps: LearnPageData["steps"], activeMainStepId: string) {
@@ -2669,6 +2685,12 @@ function LearnIdeaDrop({
         placeholder="Paste the messy thought, decision, or question you want to make rigorous..."
         aria-describedby="learnIdeaDropStatus"
         onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (isLearnSubmitShortcut(event)) {
+            event.preventDefault();
+            void handleSave();
+          }
+        }}
       />
       <div className="idea-drop-footer">
         <button type="button" className="idea-drop-tool" disabled={disabled || !draft} onClick={() => setDraft("")}>
@@ -2732,10 +2754,11 @@ function LearnEntry({
   status: string;
   documents: BrainDocumentSummary[];
   recents: BrainRecentIdea[];
-  onLearnSeed: (rawIdea: string) => Promise<void>;
+  onLearnSeed: (rawIdea: string, options?: LearnSeedOptions) => Promise<void>;
   onKeepRecent: (rawIdea: string) => Promise<void>;
 }) {
   const previousItems = learnPreviousItems(documents, recents);
+  const [searchWeb, setSearchWeb] = useState(false);
 
   return (
     <section className={`learn-entry${disabled ? " is-learning" : ""}`} aria-label="Start a Learn session" aria-busy={disabled}>
@@ -2752,9 +2775,9 @@ function LearnEntry({
           disabled={disabled}
           status={status}
           recents={[]}
-          searchWeb={false}
-          onSearchWebChange={() => undefined}
-          onSave={(rawIdea) => onLearnSeed(rawIdea)}
+          searchWeb={searchWeb}
+          onSearchWebChange={setSearchWeb}
+          onSave={(rawIdea, options) => onLearnSeed(rawIdea, { searchWeb: options.searchWeb })}
           onKeep={onKeepRecent}
           primaryLabel="Build Learn path"
         />
@@ -2767,7 +2790,7 @@ function LearnEntry({
             <ol>
               {previousItems.slice(0, 5).map((item) => (
                 <li key={item.id}>
-                  <button type="button" disabled={disabled} onClick={() => void onLearnSeed(item.prompt)}>
+                  <button type="button" disabled={disabled} onClick={() => void onLearnSeed(item.prompt, { searchWeb })}>
                     <span>{item.kind}</span>
                     <strong>{item.title}</strong>
                     <small>{item.detail}</small>
@@ -2895,6 +2918,10 @@ function learnWebReason(text: string): string | null {
   }
 
   return null;
+}
+
+export function isLearnSubmitShortcut(event: { key: string; metaKey: boolean; ctrlKey: boolean }): boolean {
+  return event.key === "Enter" && (event.metaKey || event.ctrlKey);
 }
 
 function buildLearnSessionOutput(
