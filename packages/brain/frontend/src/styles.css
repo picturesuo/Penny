@@ -6365,7 +6365,7 @@
   }
 
   .learn-session-output {
-    --learn-path-width: clamp(280px, 18vw, 320px);
+    --learn-path-width: clamp(300px, 22vw, 380px);
     position: relative;
     display: grid;
     grid-template-columns: var(--learn-path-width) minmax(0, 1fr);
@@ -6395,7 +6395,7 @@
 
   .learn-path-middle {
     display: grid;
-    grid-template-rows: auto auto minmax(280px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) minmax(220px, 0.68fr);
     gap: 10px;
     min-height: 0;
     overflow: hidden;
@@ -6453,7 +6453,7 @@
     gap: 4px;
     margin: 0;
     padding: 0;
-    overflow: visible;
+    overflow: auto;
     list-style: none;
   }
 
@@ -6498,7 +6498,7 @@
 
   .learn-path-list ol {
     display: grid;
-    gap: 4px;
+    gap: 3px;
     margin: 3px 0 3px 28px;
     padding: 0;
     list-style: none;
@@ -6516,7 +6516,7 @@
     grid-template-columns: 28px minmax(0, 1fr);
     gap: 7px;
     min-width: 0;
-    padding: 0;
+    padding: 2px 0;
     color: inherit;
     font: inherit;
     line-height: inherit;
@@ -6566,7 +6566,7 @@
 
   .learn-thinking-graph-board {
     position: relative;
-    min-height: 280px;
+    min-height: 220px;
     overflow: hidden;
     border: 1px solid #111111;
     border-radius: 8px;
@@ -6583,7 +6583,7 @@
     grid-template-rows: auto auto 1fr;
     gap: 12px;
     height: 100%;
-    min-height: 280px;
+    min-height: 220px;
     padding: 14px 12px 12px;
   }
 
@@ -6841,23 +6841,23 @@
 
   .micro-lesson-slide {
     display: grid;
-    grid-template-rows: auto minmax(180px, 1fr) auto auto;
-    gap: 14px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 12px;
     min-width: 0;
     min-height: 0;
     height: 100%;
     border-left: 1px solid #111111;
     border-right: 1px solid #111111;
-    padding: 22px 26px;
+    padding: 20px 24px;
     background: #fbfaf6;
   }
 
   .micro-lesson-head {
     display: grid;
-    gap: 8px;
+    gap: 7px;
     min-width: 0;
     border-bottom: 2px solid #111111;
-    padding-bottom: 14px;
+    padding-bottom: 12px;
   }
 
   .micro-lesson-head span,
@@ -6874,14 +6874,26 @@
 
   .micro-lesson-head h1 {
     margin: 0;
-    overflow: hidden;
     color: #111111;
-    font-size: clamp(44px, 6vw, 88px);
+    font-size: 42px;
     font-weight: 500;
     letter-spacing: 0;
-    line-height: 0.95;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+
+  .micro-lesson-parent-title {
+    display: -webkit-box;
+    max-width: 76ch;
+    margin: 0;
+    overflow: hidden;
+    color: rgb(17 17 17 / 0.64);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.15;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .micro-lesson-focus {
@@ -6891,9 +6903,10 @@
     justify-items: start;
     min-width: 0;
     min-height: 0;
+    min-height: 104px;
     border: 1px solid #111111;
     background: #ffffff;
-    padding: clamp(18px, 3vw, 38px);
+    padding: 18px 20px;
     overflow: auto;
   }
 
@@ -6902,10 +6915,10 @@
     max-width: none;
     margin: 0;
     color: #111111;
-    font-size: clamp(20px, min(var(--micro-lesson-focus-font-size, 34px), 3.7vw), 42px);
+    font-size: var(--micro-lesson-focus-font-size, 22px);
     font-weight: 650;
     letter-spacing: 0;
-    line-height: 1.08;
+    line-height: 1.16;
     overflow-wrap: break-word;
     text-align: left;
     text-wrap: pretty;
@@ -6925,7 +6938,7 @@
 
   .ai-lesson-output {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 0.9fr));
     gap: 0;
     margin: 0;
     padding: 0;
@@ -6938,7 +6951,7 @@
     align-content: start;
     gap: 5px;
     min-width: 0;
-    min-height: 66px;
+    min-height: 80px;
     border-right: 1px solid rgb(17 17 17 / 0.24);
     padding: 9px 10px;
   }
@@ -6969,10 +6982,10 @@
     color: #111111;
     font-size: 13px;
     font-weight: 700;
-    line-height: 1.14;
+    line-height: 1.18;
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
   }
 
   .ai-lesson-output ol {
@@ -7838,8 +7851,8 @@
     justify-content: space-between;
     gap: 20px;
     border-top: 2px solid #111111;
-    margin-top: 14px;
-    padding-top: 14px;
+    margin-top: 12px;
+    padding-top: 12px;
   }
 
   .learn-bottom-nav button {
