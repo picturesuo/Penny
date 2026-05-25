@@ -1438,7 +1438,7 @@ export function CreateOptionBoard({
           return (
             <article
               key={option.id}
-              className={`create-option-card${selected ? " is-selected" : ""}${rejected ? " is-rejected" : ""}`}
+              className={`create-option-card${onRejectOption ? " has-reject-action" : ""}${selected ? " is-selected" : ""}${rejected ? " is-rejected" : ""}`}
               data-testid="create-option-card"
               data-create-lens={option.lens}
             >
@@ -1460,8 +1460,8 @@ export function CreateOptionBoard({
               <div className="create-option-judgment-state" aria-label={`${option.lens} judgment state`}>
                 <span>{rejected ? "Rejected" : selected ? "Selected" : "Choose"}</span>
               </div>
-              <div className="create-option-card-actions">
-                {onRejectOption ? (
+              {onRejectOption ? (
+                <div className="create-option-card-actions">
                   <button
                     type="button"
                     className="create-option-reject-button"
@@ -1473,8 +1473,8 @@ export function CreateOptionBoard({
                   >
                     <X size={14} />
                   </button>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </article>
           );
         })}
