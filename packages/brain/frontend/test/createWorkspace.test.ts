@@ -534,14 +534,16 @@ test("Create UI smoke renders real Gmail evidence in details and prompt artifact
   assert.doesNotMatch(markup, /Private raw Gmail body|rawBody|plainTextBody|credentialRef|accessToken|refreshToken/i);
 });
 
-test("CreateWorkspace exposes stable browser smoke selectors", () => {
+test("CreateWorkspace opens on the chat-like Create entry surface", () => {
   const markup = renderToStaticMarkup(createElement(CreateWorkspace, { data: null, status: "ready", isThinking: false }));
 
-  assert.match(markup, /data-testid="create-workspace"/);
-  assert.match(markup, /data-testid="create-brain-context"/);
-  assert.match(markup, /data-create-context="context-light"/);
-  assert.match(markup, /data-testid="create-option-board"/);
-  assert.match(markup, /data-testid="create-export-panel"/);
+  assert.match(markup, /data-testid="create-entry"/);
+  assert.match(markup, /What do you want to create/);
+  assert.match(markup, /Search or describe what you want to create/);
+  assert.match(markup, /Brain archive/);
+  assert.match(markup, /Recent research/);
+  assert.doesNotMatch(markup, /data-testid="create-option-board"/);
+  assert.doesNotMatch(markup, /data-testid="create-export-panel"/);
 });
 
 test("CreateWorkspace gives the Brain return control a Create-specific accessible name", () => {

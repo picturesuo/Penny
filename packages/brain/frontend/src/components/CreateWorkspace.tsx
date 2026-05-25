@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
+import { ArrowUp, BookOpen, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
 import { compareCreateProviders, createNext, exportCodingPrompt, submitCreateExportFeedback } from "../api/brainClient";
+import { truncateWords } from "../lib/text";
 import type {
   BrainData,
+  BrainRecentIdea,
   BrainMemoryProfileData,
   CandidateOption,
   CanvasNode,
@@ -34,6 +36,7 @@ interface CreateWorkspaceProps {
   onThinkingChange?: (isThinking: boolean) => void;
   onOpenBrain?: () => void;
   onLearnThis?: (node: CanvasNode) => void;
+  recents?: BrainRecentIdea[];
 }
 
 export const createLensOrder: CreateLens[] = ["Personal", "Practical", "Valuable", "Critical", "Weird"];
@@ -112,6 +115,7 @@ export function CreateWorkspace({
   onThinkingChange,
   onOpenBrain,
   onLearnThis,
+  recents = [],
 }: CreateWorkspaceProps) {
   const sourceText = initialSeedText?.trim() || data?.source?.rawText?.trim() || "";
   const [restoredDraft] = useState(() => readCreateWorkspaceDraft());
@@ -169,6 +173,7 @@ export function CreateWorkspace({
     verification,
     promptExport,
   });
+  const isCreateEntryMode = !optionSet && !artifact && !verification && !judgmentEvent && !promptExport;
 
   useEffect(() => {
     if (!sourceText || bootstrappedTextRef.current === sourceText) {
@@ -473,6 +478,84 @@ export function CreateWorkspace({
     }
 
     target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  if (isCreateEntryMode) {
+    return (
+      <main className="create-entry-shell" aria-label="Create start" data-testid="create-entry">
+        <aside className="create-entry-archive" aria-label="Create archive">
+          <div>
+            <span>Brain archive</span>
+            <strong>Recent research</strong>
+            <p>Press Enter on a saved thought to reopen it in Create.</p>
+          </div>
+          <ol>
+            {recents.length ? (
+              recents.slice(0, 7).map((recent) => (
+                <li key={recent.id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setDraftText(recent.rawIdea);
+                      void handleGenerateDirections(recent.rawIdea);
+                    }}
+                  >
+                    <span>Enter recent research</span>
+                    <strong>{truncateCreateEntryText(recent.rawIdea, 12)}</strong>
+                  </button>
+                </li>
+              ))
+            ) : (
+              <li className="is-empty">
+                <p>Saved creates and quick notes will collect here once Brain has something to reuse.</p>
+              </li>
+            )}
+          </ol>
+          {onOpenBrain ? (
+            <button type="button" className="check-ask-button" aria-label="Open Brain from Create" onClick={onOpenBrain}>
+              Open Brain
+            </button>
+          ) : null}
+        </aside>
+
+        <section className="create-entry-main" aria-label="Create search">
+          <div className="create-entry-brand">
+            <span>Create</span>
+            <h1>What do you want to create?</h1>
+            <p>Search your rough idea into five buildable directions.</p>
+          </div>
+          {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
+          <form
+            className="create-entry-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleGenerateDirections();
+            }}
+          >
+            <label className="sr-only" htmlFor="createEntryIdea">
+              Search or describe what to create
+            </label>
+            <textarea
+              id="createEntryIdea"
+              ref={seedRef}
+              value={draftText}
+              onChange={(event) => setDraftText(event.target.value)}
+              disabled={busy}
+              placeholder="Search or describe what you want to create..."
+              rows={1}
+            />
+            <button type="submit" disabled={busy || !draftText.trim()} aria-label="Start Create">
+              <ArrowUp size={18} />
+            </button>
+          </form>
+          <div className="create-entry-status" role="status">
+            <Sparkles size={14} />
+            <span>{displayStatus}</span>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -2492,6 +2575,10 @@ function uniqueById<T extends { id: string }>(values: T[]): T[] {
   }
 
   return result;
+}
+
+function truncateCreateEntryText(value: string, maxWords: number): string {
+  return clipDisplayText(truncateWords(value, maxWords), 120);
 }
 
 function createActiveStepIndex(input: {

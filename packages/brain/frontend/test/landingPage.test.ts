@@ -71,7 +71,7 @@ test("landing shortcut modifier label follows the browser platform", () => {
   assert.equal(landingShortcutModifierLabel("Linux x86_64"), "Alt");
 });
 
-test("landing page exposes direct Create and Brain first-run CTAs", () => {
+test("landing page keeps the bottom shortcuts as the only first-run chooser", () => {
   const markup = renderToStaticMarkup(
     createElement(LandingPage, {
       disabled: false,
@@ -82,13 +82,16 @@ test("landing page exposes direct Create and Brain first-run CTAs", () => {
     }),
   );
 
-  assert.match(markup, /Start with Create/);
-  assert.match(markup, /data-testid="landing-create-start"/);
-  assert.match(markup, /Start with your Brain/);
+  assert.doesNotMatch(markup, /Start with Create/);
+  assert.doesNotMatch(markup, /data-testid="landing-create-start"/);
+  assert.doesNotMatch(markup, /Start with your Brain/);
+  assert.match(markup, /Brain/);
+  assert.match(markup, /Create/);
+  assert.match(markup, /Learn/);
   assert.match(markup, /Alt|⌥/);
 });
 
-test("landing page exposes a small YC fixture fallback when fixture loader is wired", () => {
+test("landing page does not add a fixture CTA above the composer", () => {
   const markup = renderToStaticMarkup(
     createElement(LandingPage, {
       disabled: false,
@@ -100,8 +103,8 @@ test("landing page exposes a small YC fixture fallback when fixture loader is wi
     }),
   );
 
-  assert.match(markup, /Start Create/);
-  assert.match(markup, /data-testid="landing-yc-demo-fixture"/);
+  assert.doesNotMatch(markup, /Start Create/);
+  assert.doesNotMatch(markup, /data-testid="landing-yc-demo-fixture"/);
   assert.doesNotMatch(markup, /Build with Penny/);
 });
 

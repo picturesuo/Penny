@@ -301,34 +301,6 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <p>FOR YOUR THOUGHTS</p>
           </div>
 
-          <button
-            type="button"
-            className="landing-brain-start-button landing-create-start-button"
-            disabled={disabled}
-            data-testid="landing-create-start"
-            onClick={() => onModeSelect("Create")}
-          >
-            Start with Create
-          </button>
-
-          <button type="button" className="landing-brain-start-button" disabled={disabled} onClick={() => onModeSelect("Brain")}>
-            Start with your Brain
-          </button>
-
-          {onBuildWithPenny ? (
-            <button
-              type="button"
-              className="landing-brain-start-button landing-demo-fixture-button"
-              disabled={disabled}
-              data-testid="landing-yc-demo-fixture"
-              onClick={() => {
-                void onBuildWithPenny();
-              }}
-            >
-              Start Create
-            </button>
-          ) : null}
-
           <div className="landing-prompt-box" onClick={handlePromptBoxClick}>
             <form className="landing-composer" onSubmit={handleSubmit}>
               <label className="sr-only" htmlFor="landingIdea">

@@ -1076,6 +1076,7 @@ export function App() {
                   status={status}
                   isThinking={isThinking}
                   brainProfile={createBrainProfile}
+                  recents={recents}
                   initialSeedText={createInitialSeedText}
                   key={createWorkspaceRunId}
                   onInitialSeedConsumed={() => setCreateInitialSeedText(null)}
