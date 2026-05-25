@@ -607,8 +607,13 @@ export function BrainWorkspace({
           memoryNoticeAction={memoryNoticeAction}
           memoryReviewingId={memoryReviewingId}
           disabled={isThinking}
+          recents={recents}
+          archivedRecents={archivedRecents}
           onCreateDocument={onSeed}
           onSelectDocument={handleSelectDocument}
+          onSelectQuickNote={(recent) => setSelectedQuickNoteId(recent.id)}
+          onQuickNoteCreate={onQuickNoteCreate}
+          onQuickNoteAction={handleQuickNoteAction}
           onMemoryImport={handleMemoryImport}
           onMemoryDemoFixtureImport={handleMemoryDemoFixtureImport}
           onMemorySourceDelete={handleMemorySourceDelete}
@@ -2323,8 +2328,13 @@ function BrainDocumentsIndex({
   memoryNoticeAction,
   memoryReviewingId,
   disabled,
+  recents,
+  archivedRecents,
   onCreateDocument,
   onSelectDocument,
+  onSelectQuickNote,
+  onQuickNoteCreate,
+  onQuickNoteAction,
   onMemoryImport,
   onMemoryDemoFixtureImport,
   onMemorySourceDelete,
@@ -2342,8 +2352,15 @@ function BrainDocumentsIndex({
   memoryNoticeAction: BrainMemoryNoticeAction | null;
   memoryReviewingId: string | null;
   disabled: boolean;
+  recents: BrainRecentIdea[];
+  archivedRecents: BrainRecentIdea[];
   onCreateDocument: (rawIdea: string) => Promise<void>;
   onSelectDocument: (sessionId: string) => void;
+  onSelectQuickNote: (recent: BrainRecentIdea) => void;
+  onQuickNoteCreate?: ((rawIdea: string) => Promise<void>) | undefined;
+  onQuickNoteAction?:
+    | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
+    | undefined;
   onMemoryImport: (input: BrainImportInput) => Promise<void>;
   onMemoryDemoFixtureImport: () => Promise<void>;
   onMemorySourceDelete: (sourceId: string) => Promise<void>;
@@ -2358,7 +2375,10 @@ function BrainDocumentsIndex({
   const [seedText, setSeedText] = useState("");
   const seedInputRef = useRef<HTMLTextAreaElement | null>(null);
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const recentDocuments = useMemo(() => recentDocumentRows(documents), [documents]);
+  const createdDocuments = useMemo(() => documents.filter((document) => !isLearnDocument(document)), [documents]);
+  const learnDocuments = useMemo(() => documents.filter(isLearnDocument), [documents]);
+  const recentDocuments = useMemo(() => recentDocumentRows(createdDocuments), [createdDocuments]);
+  const recentLearnDocuments = useMemo(() => recentDocumentRows(learnDocuments), [learnDocuments]);
   const hasDocuments = documents.length > 0;
   const searchResults = useMemo(() => {
     if (!normalizedQuery) {
@@ -2368,6 +2388,10 @@ function BrainDocumentsIndex({
     return searchDocumentRows(documents, normalizedQuery);
   }, [documents, normalizedQuery]);
   const memoryFirstRunActive = (memoryProfile?.stats.sourceCount ?? 0) === 0;
+  const profileSections = memoryProfile ? memoryProfileSections(memoryProfile, memoryProfile.recentMemoryNodes ?? []) : [];
+  const thinkingHighlights = profileSections
+    .filter((section) => ["Common frustrations", "Preferred build style", "Repeated rejected directions", "Active projects"].includes(section.title))
+    .slice(0, 3);
   const memoryPanel = (
     <BrainMemoryPanel
       profile={memoryProfile}
@@ -2408,13 +2432,53 @@ function BrainDocumentsIndex({
 
   return (
     <section className="brain-library-panel" aria-label="Brain document library">
-      <div className="brain-library-head">
+      <div className="brain-bank-hero">
         <div>
-          <h1>Documents</h1>
+          <span className="eyebrow">Brain bank</span>
+          <h1>Your vault, notes, and thinking patterns</h1>
         </div>
+        <dl className="brain-bank-stats" aria-label="Brain inventory">
+          <div>
+            <dt>Vault</dt>
+            <dd>{createdDocuments.length}</dd>
+          </div>
+          <div>
+            <dt>Learn</dt>
+            <dd>{learnDocuments.length}</dd>
+          </div>
+          <div>
+            <dt>Notes</dt>
+            <dd>{recents.length}</dd>
+          </div>
+        </dl>
       </div>
+      <section className="brain-bank-top-grid" aria-label="Brain essentials">
+        <section className="brain-search-panel is-primary" aria-label="Search Brain">
+          <label htmlFor="brainDocumentSearch">
+            <Search size={18} aria-hidden="true" />
+            <span>Search Brain</span>
+          </label>
+          <input
+            id="brainDocumentSearch"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search documents, claims, notes, and saved thinking"
+            type="search"
+          />
+          <p>Search stays Penny-native: documents and claims first, with quick notes becoming Brain memory when you save them there.</p>
+        </section>
+        <BrainQuickNotesPanel
+          recents={recents}
+          archivedRecents={archivedRecents}
+          selectedQuickNoteId={null}
+          disabled={disabled}
+          onSelectQuickNote={onSelectQuickNote}
+          onQuickNoteCreate={onQuickNoteCreate}
+          onQuickNoteAction={onQuickNoteAction}
+        />
+      </section>
       <form className="brain-document-seed" onSubmit={handleCreateDocument}>
-        <label htmlFor="brainDocumentSeed">Start a document</label>
+        <label htmlFor="brainDocumentSeed">Create a brain document</label>
         <div className="brain-document-seed-row">
           <textarea
             id="brainDocumentSeed"
@@ -2422,7 +2486,7 @@ function BrainDocumentsIndex({
             value={seedText}
             onChange={(event) => setSeedText(event.target.value)}
             placeholder="Write the thought you want Penny to structure."
-            rows={3}
+            rows={2}
             disabled={disabled}
           />
           <button type="submit" className="primary-command" disabled={disabled || !seedText.trim()}>
@@ -2431,22 +2495,10 @@ function BrainDocumentsIndex({
           </button>
         </div>
       </form>
-      {memoryFirstRunActive ? memoryPanel : null}
-      {memoryFirstRunActive ? null : memoryPanel}
       {hasDocuments ? (
-        <section className="brain-search-panel" aria-label="Search through your thinking">
-          <label className="sr-only" htmlFor="brainDocumentSearch">
-            Search through your thinking
-          </label>
-          <input
-            id="brainDocumentSearch"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search through your thinking"
-            type="search"
-          />
-          <p>Search scans your documents and claims for matching keywords.</p>
-        </section>
+        <p className="brain-learn-transfer-note">
+          Later: a Brain document should be transportable into Learn mode so someone else can learn the way you are thinking about it.
+        </p>
       ) : null}
       {normalizedQuery ? (
         <section className="brain-search-results" aria-label="Search results">
@@ -2467,10 +2519,11 @@ function BrainDocumentsIndex({
             </article>
           )}
         </section>
-      ) : hasDocuments ? (
-        <section className="brain-recent-documents" aria-label="Most recent documents">
+      ) : (
+        <section className="brain-bank-doc-grid" aria-label="Brain vault and learn documents">
+          <section className="brain-recent-documents" aria-label="Created documents">
           <div className="brain-section-title">
-            <strong>Most recent docs</strong>
+            <strong>Created documents</strong>
             <span>{recentDocuments.length} shown</span>
           </div>
           {recentDocuments.length > 0 ? (
@@ -2486,7 +2539,143 @@ function BrainDocumentsIndex({
             </article>
           )}
         </section>
-      ) : null}
+          <section className="brain-recent-documents" aria-label="Learn documents">
+            <div className="brain-section-title">
+              <strong>Learn documents</strong>
+              <span>{recentLearnDocuments.length} shown</span>
+            </div>
+            {recentLearnDocuments.length > 0 ? (
+              <div className="document-log-table" aria-label="Learn documents">
+                {recentLearnDocuments.map((document) => (
+                  <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
+                ))}
+              </div>
+            ) : (
+              <article className="document-empty-state">
+                <strong>Lessons live here</strong>
+                <span>Concepts you turn into Learn sessions will be kept separate from created work.</span>
+              </article>
+            )}
+          </section>
+        </section>
+      )}
+      <section className="brain-thinking-analysis" aria-label="Thinking analysis">
+        <div className="brain-section-title">
+          <strong>Thinking analysis</strong>
+          <span>{memoryProfile?.stats.profileSignalCount ?? 0} signals</span>
+        </div>
+        {thinkingHighlights.length > 0 ? (
+          <div className="brain-thinking-analysis-grid">
+            {thinkingHighlights.map((section) => (
+              <article key={section.title} className="brain-thinking-card">
+                <strong>{section.title}</strong>
+                <ul>
+                  {section.items.slice(0, 3).map((item) => (
+                    <li key={item.id} title={item.summary}>
+                      {item.label}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <article className="document-empty-state">
+            <strong>Patterns appear after context</strong>
+            <span>Penny will summarize recurring interests, habits, and blind spots once the Brain has enough source-backed memory.</span>
+          </article>
+        )}
+      </section>
+      <details className="brain-memory-details" open={memoryFirstRunActive}>
+        <summary>
+          <Database size={15} aria-hidden="true" />
+          <span>Brain import and source controls</span>
+        </summary>
+        {memoryPanel}
+      </details>
+    </section>
+  );
+}
+
+function BrainQuickNotesPanel({
+  recents,
+  archivedRecents,
+  selectedQuickNoteId,
+  disabled,
+  onSelectQuickNote,
+  onQuickNoteCreate,
+  onQuickNoteAction,
+}: {
+  recents: BrainRecentIdea[];
+  archivedRecents: BrainRecentIdea[];
+  selectedQuickNoteId: string | null;
+  disabled: boolean;
+  onSelectQuickNote: (recent: BrainRecentIdea) => void;
+  onQuickNoteCreate?: ((rawIdea: string) => Promise<void>) | undefined;
+  onQuickNoteAction?:
+    | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
+    | undefined;
+}) {
+  const [quickNoteDraft, setQuickNoteDraft] = useState("");
+
+  async function handleQuickNoteCreate() {
+    const trimmedDraft = quickNoteDraft.trim();
+
+    if (!trimmedDraft || !onQuickNoteCreate || disabled) {
+      return;
+    }
+
+    await onQuickNoteCreate(trimmedDraft);
+    setQuickNoteDraft("");
+  }
+
+  return (
+    <section className="brain-quick-notes-panel" aria-label="Quick notes">
+      <div className="brain-section-title">
+        <strong>Quick notes</strong>
+        <span>{recents.length} active</span>
+      </div>
+      <form
+        className="quick-note-capture is-large"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleQuickNoteCreate();
+        }}
+      >
+        <textarea
+          value={quickNoteDraft}
+          onChange={(event) => setQuickNoteDraft(event.target.value)}
+          placeholder="Drop a note for later."
+          rows={4}
+          disabled={disabled}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              void handleQuickNoteCreate();
+            }
+          }}
+        />
+        <button type="submit" disabled={disabled || !quickNoteDraft.trim() || !onQuickNoteCreate} aria-label="Send quick note" title="Send quick note">
+          <Send size={16} aria-hidden="true" />
+        </button>
+      </form>
+      {recents.length > 0 ? (
+        <div className="brain-quick-list is-large">
+          {recents.slice(0, 5).map((recent) => (
+            <QuickNoteRow
+              key={recent.id}
+              recent={recent}
+              archived={false}
+              active={recent.id === selectedQuickNoteId}
+              onSelect={onSelectQuickNote}
+              onAction={onQuickNoteAction}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="brain-sidebar-muted">Notes you capture stay here until you build, learn, archive, or save them into Brain memory.</p>
+      )}
+      {archivedRecents.length > 0 ? <span className="brain-archived-note-count">{archivedRecents.length} archived notes available from the sidebar.</span> : null}
     </section>
   );
 }
@@ -4370,6 +4559,25 @@ interface SearchResult {
 
 function recentDocumentRows(documents: BrainDocumentSummary[]): BrainDocumentSummary[] {
   return [...documents].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, 18);
+}
+
+function isLearnDocument(document: BrainDocumentSummary): boolean {
+  const haystack = [
+    document.title,
+    document.description,
+    document.originalIdea,
+    document.mainClaim?.text,
+    document.latestArtifact?.kind,
+    document.latestArtifact?.title,
+    document.latestArtifact?.summary,
+    document.lastMove?.kind,
+    document.lastMove?.summary,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /\b(learn|lesson|teach|concept|learning|micro-lesson)\b/.test(haystack);
 }
 
 function searchDocumentRows(documents: BrainDocumentSummary[], query: string): SearchResult[] {
