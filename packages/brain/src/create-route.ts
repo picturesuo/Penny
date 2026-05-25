@@ -1467,7 +1467,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-personal", optionSeed),
       lens: "Personal",
-      title: `Make ${optionSubject} personal`,
+      title: `Anchor ${optionSubject} in real constraints`,
       oneLine: profile.hasMemory
         ? `Center the first loop on this remembered signal: ${profile.personalEvidence}.`
         : "Center the workflow on the rough idea and visibly mark that no durable Brain memory was used.",
@@ -1486,7 +1486,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-practical", optionSeed),
       lens: "Practical",
-      title: `Ship the smallest ${subject} loop`,
+      title: `Ship the first ${subject} loop`,
       oneLine: `Prioritize the first buildable path in the user's preferred style: ${profile.buildStyleEvidence}.`,
       rationale: `${contextPhrase} This is the safest wedge because it makes the core loop testable without waiting for broad memory ingestion or advanced models. Practical constraint: ${profile.buildStyleEvidence}.`,
       nextMove: `Implement the narrow route and UI state machine, then verify the ${profile.buildStyleAnchor} path manually and with tests.`,
@@ -1499,7 +1499,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-valuable", optionSeed),
       lens: "Valuable",
-      title: `Make ${optionSubject} valuable`,
+      title: `Name the buyer and payoff`,
       oneLine: `Shape the artifact around the decision that gets easier: ${profile.valueEvidence}.`,
       rationale: profile.hasMemory
         ? `${profile.groundedLine} Inferred move: translate that memory into a target user, external payoff, and acceptance tests that prove usefulness.`
@@ -1514,7 +1514,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-critical", optionSeed),
       lens: "Critical",
-      title: `Stress-test ${optionSubject}`,
+      title: `Stress-test the weak claims`,
       oneLine: profile.hasMemory
         ? `Pressure-test generic GPT-wrapper risk against the user's remembered rejection: ${profile.criticalEvidence}.`
         : "Pressure-test whether the idea is truly memory-native or just a GPT wrapper with nicer furniture.",
@@ -1529,7 +1529,7 @@ function buildOptionSet(input: {
     {
       id: stableId("create-option-weird", optionSeed),
       lens: "Weird",
-      title: `Make ${optionSubject} strange but buildable`,
+      title: `Find the strange but useful wedge`,
       oneLine: `Use the unusual but still useful edge in the context: ${profile.weirdEvidence}.`,
       rationale: profile.hasMemory
         ? `${profile.groundedLine} Inferred move: bend the artifact through that taste signal while still producing implementation requirements and tests.`
@@ -1715,6 +1715,7 @@ export function buildCreateOptionSystemPrompt(): string {
     "Do not invent Gmail, LinkedIn, WhatsApp, Slack, messages, OAuth, connector, global-training, hidden-memory, or external-source claims.",
     "Do not add broad new product modes. Keep Create focused on rough idea -> directions -> judgment -> artifact -> verification -> export.",
     "Preserve source grounding by naming grounded context separately from inferred moves.",
+    "Do not repeat vague user phrasing verbatim in titles. Turn it into a concrete product, buyer, loop, risk, or wedge.",
   ].join("\n");
 }
 
@@ -2880,7 +2881,7 @@ function subjectFromText(text: string): string {
     return /\bpenny\b/.test(lower) ? "Penny's YC ideation workbench" : "YC ideation workbench";
   }
 
-  const clean = titleFromText(text).replace(/[^\w\s-]/g, "").trim();
+  const clean = cleanCreateSubject(titleFromText(text));
   return clean.split(/\s+/).filter(Boolean).slice(0, 10).join(" ") || "this product";
 }
 
@@ -2896,6 +2897,17 @@ function titleFromText(text: string): string {
     .trim();
 
   return clipText(sentence || "Untitled Create project", 120);
+}
+
+function cleanCreateSubject(text: string): string {
+  return text
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(i|we)\s+(want|wanna|need|would like|am trying|are trying|plan|hope)\s+to\s+/i, "")
+    .replace(/^(create|build|make|start|launch|develop|design)\s+/i, "")
+    .replace(/^(a|an|the)\s+/i, "")
+    .trim();
 }
 
 function audienceFromText(text: string): string {
