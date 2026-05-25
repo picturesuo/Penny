@@ -148,7 +148,7 @@ export type LearnSessionV2Input = {
 };
 
 export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan {
-  const rawIdea = clipText(input.rawIdea, 220);
+  const rawIdea = clipText(learnTopicFromPrompt(input.rawIdea), 220);
   const keyInsight = clipText(input.keyInsight || input.rawIdea, 220);
   const assumptions = input.claims.filter((claim) => claim.kind === "assumption").map((claim) => claim.text);
   const questions = input.claims.filter((claim) => claim.kind === "question").map((claim) => claim.text);
@@ -160,10 +160,10 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
     : [
     group("group-1", "Understand the target", "An expert starts like a careful agent: identify the real goal, the usable end state, and the boundary of the work.", [
       subgroup("group-1-subgroup-1", "Name the end state", paragraph([
-        `Treat the prompt as a request to understand ${rawIdea}.`,
-        "The first move is not to answer everything; it is to name what mastery would let the learner do.",
+        `The target is ${rawIdea}.`,
+        "The first move is to name what mastery would let the learner do.",
         `For this idea, the usable goal is to explain why ${keyInsight} and what would make that explanation fail.`,
-      ]), [`End state: understand ${clipText(input.rawIdea, 120)}`, "Keep the goal actionable.", "Leave broad background outside the frame."], `A good end state turns "${clipText(input.rawIdea, 90)}" into "I can explain the central mechanism and test its weakest assumption."`, "Goal frame", "A simple frame with the prompt entering on the left, the end state in the center, and excluded background branching off to the side."),
+      ]), [`End state: understand ${clipText(rawIdea, 120)}`, "Keep the goal actionable.", "Leave broad background outside the frame."], `A good end state turns "${clipText(rawIdea, 90)}" into "I can explain the central mechanism and test its weakest assumption."`, "Goal frame", "A simple frame with the topic entering on the left, the end state in the center, and excluded background branching off to the side."),
       subgroup("group-1-subgroup-2", "Identify the main object", paragraph([
         "The central claim is the sentence the rest of the lesson must support, qualify, or reject.",
         `Here, use "${keyInsight}" as the first teachable claim.`,
@@ -681,13 +681,23 @@ function inferExpertRole(input: LearningPlanInput): string {
 }
 
 function goalFrom(rawIdea: string): string {
-  const compact = clipText(rawIdea, 180);
+  const compact = clipText(learnTopicFromPrompt(rawIdea), 180);
 
   if (/^i\s+(want|need|would like|am trying)/i.test(compact)) {
     return compact;
   }
 
   return `I want to understand how ${compact} works.`;
+}
+
+function learnTopicFromPrompt(rawIdea: string): string {
+  const compact = rawIdea.trim().replace(/\s+/g, " ");
+  const withoutLead = compact
+    .replace(/^(?:please\s+)?(?:can you\s+|could you\s+|would you\s+)?teach me (?:how to|about)\s+/i, "")
+    .replace(/^(?:please\s+)?(?:can you\s+|could you\s+|would you\s+)?explain\s+(?:how to|how|about)?\s*/i, "")
+    .replace(/^(?:i want to\s+)?(?:understand|learn)\s+(?:how to|about)?\s*/i, "");
+
+  return withoutLead.trim() || compact;
 }
 
 function paragraph(sentences: string[]): string {
