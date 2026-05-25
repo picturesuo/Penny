@@ -66,6 +66,18 @@ export type LearningPlanInput = {
   sourceContext?: LearningSourceContext | null;
 };
 
+type LearningBlueprint = {
+  id: "from_scratch_builder" | "first_principles_operator" | "source_cartographer" | "exam_coach" | "socratic_tutor";
+  title: string;
+  expertRole: string;
+  startMove: string;
+  primitiveMove: string;
+  practiceMove: string;
+  checkMove: string;
+  artifactMove: string;
+  visualFrame: string;
+};
+
 export type LearningSourceCluster = {
   id: string;
   title: string;
@@ -153,34 +165,35 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
   const assumptions = input.claims.filter((claim) => claim.kind === "assumption").map((claim) => claim.text);
   const questions = input.claims.filter((claim) => claim.kind === "question").map((claim) => claim.text);
   const concepts = input.learnCandidates.map((candidate) => candidate.term);
-  const expertRole = inferExpertRole(input);
+  const blueprint = learningBlueprintFor(input);
+  const expertRole = blueprint.expertRole;
   const sourceGroups = sourceContextGroups(input);
   const groups = sourceGroups.length
     ? sourceGroups
     : [
-    group("group-1", "Understand the target", "An expert starts like a careful agent: identify the real goal, the usable end state, and the boundary of the work.", [
+    group("group-1", "Understand the target", `Use the ${blueprint.title} lens first: identify the real goal, the smallest primitive, and the output the learner should be able to produce.`, [
       subgroup("group-1-subgroup-1", "Name the end state", paragraph([
         `The target is ${rawIdea}.`,
-        "The first move is to name what mastery would let the learner do.",
+        `The first move is to name what mastery would let the learner do. ${blueprint.startMove}`,
         `For this idea, the usable goal is to explain why ${keyInsight} and what would make that explanation fail.`,
-      ]), [`End state: understand ${clipText(rawIdea, 120)}`, "Keep the goal actionable.", "Leave broad background outside the frame."], `A good end state turns "${clipText(rawIdea, 90)}" into "I can explain the central mechanism and test its weakest assumption."`, "Goal frame", "A simple frame with the topic entering on the left, the end state in the center, and excluded background branching off to the side."),
+      ]), [`End state: understand ${clipText(rawIdea, 120)}`, blueprint.startMove, "Leave broad background outside the frame."], `A good end state turns "${clipText(rawIdea, 90)}" into "I can explain the central mechanism and test its weakest assumption."`, "Goal frame", `${blueprint.visualFrame}: the topic enters on the left, the end state sits in the center, and excluded background branches off to the side.`),
       subgroup("group-1-subgroup-2", "Identify the main object", paragraph([
         "The central claim is the sentence the rest of the lesson must support, qualify, or reject.",
         `Here, use "${keyInsight}" as the first teachable claim.`,
-        "Everything else becomes either evidence, assumption, example, or challenge.",
-      ]), ["Write the claim in one sentence.", "Mark which words need explanation.", "Keep side questions attached but secondary."], `The claim is not the whole prompt; it is the one sentence an expert can point at and say, "this is what we are learning."`, "Claim map", "A central claim node with smaller assumption, example, and challenge nodes connected around it."),
+        `Everything else becomes either evidence, assumption, example, or challenge. ${blueprint.primitiveMove}`,
+      ]), ["Write the claim in one sentence.", blueprint.primitiveMove, "Keep side questions attached but secondary."], `The claim is not the whole prompt; it is the one sentence an expert can point at and say, "this is what we are learning."`, "Claim map", "A central claim node with smaller assumption, example, and challenge nodes connected around it."),
       subgroup("group-1-subgroup-3", "Define done for this lesson", paragraph([
         "A strong lesson has edges.",
         "The boundary says which details are needed now and which details can wait until Check or Verify.",
-        "This prevents the page from becoming a survey and keeps each subsection small enough to teach in one paragraph.",
-      ]), ["Keep only details that change the claim.", "Defer facts that need external evidence.", "Split every extra idea into a later subgroup."], "If a detail does not explain, test, or apply the central claim, it belongs outside this page.", "Boundary sketch", "A boxed lesson area with relevant details inside and deferred questions parked outside the box."),
+        `This prevents the page from becoming a survey and keeps each subsection small enough to teach in one paragraph. ${blueprint.artifactMove}`,
+      ]), ["Keep only details that change the claim.", "Defer facts that need external evidence.", blueprint.artifactMove], "If a detail does not explain, test, or apply the central claim, it belongs outside this page.", "Boundary sketch", "A boxed lesson area with relevant details inside and deferred questions parked outside the box."),
     ]),
     group("group-2", "Break it into work chunks", "After the target is clear, an expert decomposes the work into the claims, assumptions, and questions that must be handled.", [
       subgroup("group-2-subgroup-1", "List the required pieces", paragraph([
         `The lesson depends on assumptions such as ${clipText(assumptions[0] ?? "the learner accepting the mechanism behind the claim", 160)}.`,
         "Naming hidden premises makes the topic inspectable.",
-        "The learner can now see which pieces are knowledge and which pieces are bets.",
-      ]), ["Turn each premise into a claim.", "Use plain language.", "Do not defend the premise yet."], `Hidden premise: "${clipText(assumptions[0] ?? keyInsight, 120)}" must hold before the main claim is strong.`, "Assumption stack", "A vertical stack where the central claim rests on two or three visible premises."),
+        `The learner can now see which pieces are knowledge and which pieces are bets. ${blueprint.primitiveMove}`,
+      ]), ["Turn each premise into a claim.", blueprint.primitiveMove, "Do not defend the premise yet."], `Hidden premise: "${clipText(assumptions[0] ?? keyInsight, 120)}" must hold before the main claim is strong.`, "Assumption stack", "A vertical stack where the central claim rests on two or three visible premises."),
       subgroup("group-2-subgroup-2", "Order the chunks", paragraph([
         "Not every assumption deserves equal attention.",
         `The expert points first at the premise most likely to change the lesson: ${clipText(assumptions[1] ?? assumptions[0] ?? keyInsight, 160)}.`,
@@ -195,26 +208,26 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
     group("group-3", "Work the chunks", "An expert then does the work in small, visible passes so each subgroup teaches one useful move.", [
       subgroup("group-3-subgroup-1", "Choose the first case", paragraph([
         "The example should be small, concrete, and close to the learner's prompt.",
-        `Use ${clipText(input.explorationPaths[0]?.title ?? concepts[0] ?? "the first concrete case", 100)} as the worked case.`,
+        `Use ${clipText(input.explorationPaths[0]?.title ?? concepts[0] ?? "the first concrete case", 100)} as the worked case. ${blueprint.practiceMove}`,
         "A small case lets one page show the whole move without overflowing.",
-      ]), ["Pick one case.", "Keep the inputs visible.", "Avoid adding new background."], `Example input: ${clipText(input.explorationPaths[0]?.prompt ?? input.rawIdea, 140)}`, "Example setup", "A before state showing the prompt, one case, and the specific question the example will answer."),
+      ]), ["Pick one case.", "Keep the inputs visible.", blueprint.practiceMove], `Example input: ${clipText(input.explorationPaths[0]?.prompt ?? input.rawIdea, 140)}`, "Example setup", "A before state showing the prompt, one case, and the specific question the example will answer."),
       subgroup("group-3-subgroup-2", "Do the expert move", paragraph([
         "Now the expert performs the move slowly.",
         "They show what changes when the claim is applied to the example, then name the reason for each change.",
-        "This turns the lesson from a statement into a procedure the learner can repeat.",
-      ]), ["Apply the claim to the case.", "Explain each transition.", "Stop before opening a second case."], `Apply the central claim to the case and ask: what would we expect to see if "${clipText(keyInsight, 100)}" is true?`, "Worked trace", "A three-column trace labeled input, expert move, and output."),
+        `This turns the lesson from a statement into a procedure the learner can repeat. ${blueprint.primitiveMove}`,
+      ]), ["Apply the claim to the case.", "Explain each transition.", blueprint.primitiveMove], `Apply the central claim to the case and ask: what would we expect to see if "${clipText(keyInsight, 100)}" is true?`, "Worked trace", "A three-column trace labeled input, expert move, and output."),
       subgroup("group-3-subgroup-3", "Capture the result", paragraph([
         "The output is the reusable thing the learner gets from the example.",
         "It might be a distinction, a test, a corrected claim, or a next question.",
-        "Naming it lets Penny save the learning as graph material instead of leaving it as prose.",
-      ]), ["State the result.", "Name the reusable pattern.", "Attach it to the original claim."], "Output: a claim, assumption, or question that can be checked later.", "Output card", "A single result card connected back to the original prompt and forward to the next challenge."),
+        `Naming it lets Penny save the learning as graph material instead of leaving it as prose. ${blueprint.artifactMove}`,
+      ]), ["State the result.", "Name the reusable pattern.", blueprint.artifactMove], "Output: a claim, assumption, or question that can be checked later.", "Output card", "A single result card connected back to the original prompt and forward to the next challenge."),
     ]),
     group("group-4", "Check the work", "An expert does not stop at completion; they tests the explanation against the strongest useful objection.", [
       subgroup("group-4-subgroup-1", "Find the failure point", paragraph([
         `Use the open question "${clipText(questions[0] ?? input.explorationPaths[0]?.prompt ?? "what would make this fail", 150)}" as the first challenge.`,
         "The strongest objection is not the harshest wording; it is the failure mode that would force the lesson to change.",
-        "This protects the learner from memorizing a brittle explanation.",
-      ]), ["Ask what would make the claim false.", "Prefer important objections.", "Avoid trivia."], "Challenge: if the load-bearing assumption fails, the central claim must be revised.", "Challenge loop", "A loop from claim to objection to evidence-needed to revision."),
+        `This protects the learner from memorizing a brittle explanation. ${blueprint.checkMove}`,
+      ]), ["Ask what would make the claim false.", blueprint.checkMove, "Avoid trivia."], "Challenge: if the load-bearing assumption fails, the central claim must be revised.", "Challenge loop", "A loop from claim to objection to evidence-needed to revision."),
       subgroup("group-4-subgroup-2", "Set the revision rule", paragraph([
         "The learner needs a revision rule before they look for evidence.",
         "That rule names what observation, source, counterexample, or user signal would change the claim.",
@@ -235,8 +248,8 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
       subgroup("group-5-subgroup-1", "Produce the final takeaway", paragraph([
         "A reusable lesson is shorter than the full explanation but more structured than a note.",
         `Save the pattern as: when learning ${clipText(concepts[0] ?? input.rawIdea, 100)}, frame the claim, expose assumptions, work one example, and challenge the weak point.`,
-        "This makes the learning available to Brain, Check, and Verify.",
-      ]), ["Compress the lesson.", "Keep the graph links.", "Preserve the weak point."], "Saved pattern: frame -> assumptions -> example -> challenge -> reusable claim.", "Pattern card", "A compact card with the reusable pattern and links to the claim and assumption it came from."),
+        `This makes the learning available to Brain, Check, and Verify. ${blueprint.artifactMove}`,
+      ]), ["Compress the lesson.", "Keep the graph links.", blueprint.artifactMove], "Saved pattern: frame -> assumptions -> example -> challenge -> reusable claim.", "Pattern card", "A compact card with the reusable pattern and links to the claim and assumption it came from."),
       subgroup("group-5-subgroup-2", "Decide the next action", paragraph([
         "The next question should continue the same graph instead of starting a generic chat.",
         `A good next question is: ${clipText(questions[0] ?? input.explorationPaths[0]?.prompt ?? "Which assumption should be checked first?", 180)}`,
@@ -662,22 +675,95 @@ function subgroup(
   };
 }
 
-function inferExpertRole(input: LearningPlanInput): string {
+export function learningBlueprintFor(input: LearningPlanInput): LearningBlueprint {
   const text = `${input.rawIdea} ${input.learnCandidates.map((candidate) => candidate.term).join(" ")}`.toLowerCase();
 
-  if (/\b(startup|founder|customer|pricing|revenue|market|sales|onboarding)\b/.test(text)) {
-    return "A startup strategy expert teaching the idea through claims, assumptions, examples, and decision tests.";
+  if (input.sourceContext) {
+    return {
+      id: "source_cartographer",
+      title: "source cartographer",
+      expertRole: "A source cartography expert teaching from source spans through maps, checks, and saved concept cards.",
+      startMove: "Start by naming what this source actually supports before adding outside context.",
+      primitiveMove: "Separate source claim, example, assumption, and evidence gap.",
+      practiceMove: "Work one source span into a local explanation and one use case.",
+      checkMove: "Ask what the source does not prove and mark the evidence gap.",
+      artifactMove: "Save the sourced takeaway as a concept card with its source range.",
+      visualFrame: "Source span -> concept map -> local example -> evidence gap -> saved concept",
+    };
   }
 
-  if (/\b(code|software|api|backend|frontend|algorithm|database|system)\b/.test(text)) {
-    return "A senior technical instructor teaching the system through concepts, traces, examples, and failure modes.";
+  if (/\b(ai engineering|from scratch|code|software|api|backend|frontend|algorithm|database|system|llm|rag|agent|prompt|python|typescript|rust|julia)\b/.test(text)) {
+    return {
+      id: "from_scratch_builder",
+      title: "from-scratch builder",
+      expertRole: "A from-scratch builder expert teaching through primitives, worked traces, small tests, and reusable artifacts.",
+      startMove: "Start with the smallest raw primitive instead of a framework, abstraction, or broad survey.",
+      primitiveMove: "Name the raw input, rule, and output before adding abstractions.",
+      practiceMove: "Work one tiny example end to end so the mechanism becomes inspectable.",
+      checkMove: "Run a local test or self-check that would fail if the idea is misunderstood.",
+      artifactMove: "Save a reusable artifact: a code sketch, rule, prompt, checklist, or concept card.",
+      visualFrame: "Primitive -> trace -> test -> artifact",
+    };
   }
 
-  if (/\bessay|writing|thesis|argument|research|source|evidence\b/.test(text)) {
-    return "A research and argumentation expert teaching the topic through claims, evidence, examples, and counterarguments.";
+  if (/\b(startup|founder|customer|pricing|revenue|market|sales|onboarding|strategy|yc|y combinator|elon|musk|first principles|principle)\b/.test(text)) {
+    return {
+      id: "first_principles_operator",
+      title: "first-principles operator",
+      expertRole:
+        "A first-principles operator expert teaching through constraints, inversion, mechanism, evidence, and decision tests without impersonating any public figure.",
+      startMove: "Start by reducing the topic to the constraint, mechanism, and decision it must change.",
+      primitiveMove: "Separate the physics of the situation from analogy, prestige, and secondhand labels.",
+      practiceMove: "Work one concrete decision case and force each claim to change an action.",
+      checkMove: "Use inversion: ask what would make the attractive answer false, too slow, or non-actionable.",
+      artifactMove: "Save the operator rule as a decision checklist with a failure trigger.",
+      visualFrame: "Constraint -> mechanism -> decision -> inversion -> rule",
+    };
   }
 
-  return "A field expert teaching the topic by turning it into a clear claim, inspectable assumptions, examples, and challenges.";
+  if (/\b(exam|quiz|test|flashcard|spaced repetition|practice|homework|grade|gmat|sat|math)\b/.test(text)) {
+    return {
+      id: "exam_coach",
+      title: "exam coach",
+      expertRole: "An exam coaching expert teaching through active recall, misconception repair, worked examples, and spaced checks.",
+      startMove: "Start by naming the exact skill the learner must retrieve without hints.",
+      primitiveMove: "Split the answer into rule, cue, move, and common trap.",
+      practiceMove: "Work one example, then ask the learner to reproduce the move from memory.",
+      checkMove: "Check the likely misconception before advancing.",
+      artifactMove: "Save a drill card with cue, answer, misconception, and next review target.",
+      visualFrame: "Cue -> rule -> worked move -> recall check -> drill card",
+    };
+  }
+
+  if (/\b(essay|writing|thesis|argument|research|source|evidence)\b/.test(text)) {
+    return {
+      id: "source_cartographer",
+      title: "source critic",
+      expertRole: "A source critic expert teaching the topic through claims, evidence, examples, counterarguments, and source limits.",
+      startMove: "Start by naming the claim the source can and cannot support.",
+      primitiveMove: "Separate claim, evidence, warrant, counterexample, and missing source.",
+      practiceMove: "Work one paragraph or example into a claim-evidence pair.",
+      checkMove: "Ask what evidence would weaken the claim or force a narrower thesis.",
+      artifactMove: "Save a claim card with supporting evidence and an evidence-needed edge.",
+      visualFrame: "Claim -> evidence -> warrant -> counterexample -> revised claim",
+    };
+  }
+
+  return {
+    id: "socratic_tutor",
+    title: "Socratic tutor",
+    expertRole: "A Socratic tutor expert teaching the topic through tiny explanations, teach-back, examples, and misconception checks.",
+    startMove: "Start by asking what the learner must be able to explain in one sentence.",
+    primitiveMove: "Split the idea into term, relation, example, and boundary.",
+    practiceMove: "Work one concrete example, then invite a short teach-back.",
+    checkMove: "Ask the smallest question that would reveal whether the learner has the idea or only the words.",
+    artifactMove: "Save the corrected explanation as a reusable concept card.",
+    visualFrame: "Term -> relation -> example -> teach-back -> concept card",
+  };
+}
+
+function inferExpertRole(input: LearningPlanInput): string {
+  return learningBlueprintFor(input).expertRole;
 }
 
 function goalFrom(rawIdea: string): string {
