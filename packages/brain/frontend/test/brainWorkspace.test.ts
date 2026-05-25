@@ -15,7 +15,7 @@ import {
 } from "../src/components/BrainWorkspace";
 import type { BrainDocumentsData, BrainMemoryProfileData, BrainRecentIdea } from "../src/types/brain";
 
-test("BrainWorkspace renders persisted quick notes as the first sidebar folder", () => {
+test("BrainWorkspace renders persisted quick notes in the vault page", () => {
   const markup = renderToStaticMarkup(
     createElement(BrainWorkspace, {
       documentsData: emptyDocumentsData(),
@@ -43,21 +43,19 @@ test("BrainWorkspace renders persisted quick notes as the first sidebar folder",
     }),
   );
 
-  const quickNotesIndex = markup.indexOf("Quick Notes");
+  const quickNotesIndex = markup.indexOf("Quick notes");
   const documentsIndex = markup.indexOf("Documents");
 
   assert.notEqual(quickNotesIndex, -1);
   assert.notEqual(documentsIndex, -1);
-  assert.ok(quickNotesIndex < documentsIndex);
   assert.match(markup, /Persist this note in Brain/);
   assert.doesNotMatch(markup, /No quick notes yet/);
   assert.doesNotMatch(markup, /Capture a quick note/);
-  assert.match(markup, /aria-label="Quick notes folder"/);
   assert.match(markup, /aria-label="Send quick note"/);
   assert.match(markup, /class="quick-note-open"/);
 });
 
-test("BrainWorkspace keeps the empty Brain view focused on starting and importing", () => {
+test("BrainWorkspace keeps the empty Brain view focused on the vault with page buttons", () => {
   const markup = renderToStaticMarkup(
     createElement(BrainWorkspace, {
       documentsData: noDocumentsData(),
@@ -86,14 +84,16 @@ test("BrainWorkspace keeps the empty Brain view focused on starting and importin
   );
 
   assert.match(markup, /Start a document/);
-  assert.match(markup, /Brain import/);
-  assert.match(markup, /Add context/);
-  assert.match(markup, /Import to Brain/);
+  assert.match(markup, /Brain pages/);
+  assert.match(markup, /Thinking analysis/);
+  assert.match(markup, /Import/);
+  assert.match(markup, /Your notes and previous work/);
+  assert.doesNotMatch(markup, /Add context/);
+  assert.doesNotMatch(markup, /Import to Brain/);
   assert.doesNotMatch(markup, /Google Workspace connector/);
   assert.doesNotMatch(markup, /Gmail not configured/);
   assert.doesNotMatch(markup, /Search email/);
   assert.doesNotMatch(markup, /Most recent docs/);
-  assert.doesNotMatch(markup, /Start with a thought and Penny will create the first record/);
 });
 
 test("BrainMemoryPanel renders imported sources, profile summary, and recent memory nodes", () => {
