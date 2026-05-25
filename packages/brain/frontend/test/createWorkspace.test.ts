@@ -35,6 +35,7 @@ test("CreateOptionBoard renders numbered direction rows without evidence clutter
       selectedOptionIds: [],
       busy: false,
       onToggleOption: () => undefined,
+      onRejectOption: () => undefined,
       onLearnThis: () => undefined,
     }),
   );
@@ -44,13 +45,14 @@ test("CreateOptionBoard renders numbered direction rows without evidence clutter
   assert.match(markup, /data-testid="create-option-card"/);
   assert.match(markup, /data-create-lens="Personal"/);
   assert.match(markup, /data-create-lens="Practical"/);
-  assert.match(markup, /data-testid="create-option-details-button"/);
+  assert.match(markup, /data-testid="create-option-reject-button"/);
+  assert.match(markup, /Reject direction 1/);
   assert.match(markup, /create-option-list/);
   assert.match(markup, /create-option-number">1/);
   assert.match(markup, /create-option-number">2/);
   assert.match(markup, /Choose/);
   assert.match(markup, /Advance through Personal/);
-  assert.match(markup, /Details/);
+  assert.doesNotMatch(markup, /Details/);
   assert.doesNotMatch(markup, /Past evidence|Taste|Context-light/);
   assert.doesNotMatch(markup, /Learn this/);
   assert.doesNotMatch(markup, /data-testid="create-option-learn-this-button"/);
