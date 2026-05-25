@@ -1,6 +1,54 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LearnSessionV2Schema, buildLearnSessionV2, type LearningPlan } from "./learn-plan.ts";
+import { LearnSessionV2Schema, buildExpertLearningPlan, buildLearnSessionV2, learningBlueprintFor, type LearningPlan } from "./learn-plan.ts";
+
+test("learningBlueprintFor chooses researched lenses for from-scratch and operator topics", () => {
+  const fromScratch = learningBlueprintFor({
+    rawIdea: "Teach me AI engineering from scratch.",
+    keyInsight: "AI engineering should be learned from primitives before frameworks.",
+    claims: [],
+    learnCandidates: [{ term: "AI engineering" }],
+    explorationPaths: [],
+    sourceContext: null,
+  });
+  const operator = learningBlueprintFor({
+    rawIdea: "Teach me how Elon Musk would use first principles to evaluate a startup pricing bet.",
+    keyInsight: "The bet should reduce to constraints, mechanisms, and decision tests.",
+    claims: [],
+    learnCandidates: [{ term: "first principles" }],
+    explorationPaths: [],
+    sourceContext: null,
+  });
+
+  assert.equal(fromScratch.id, "from_scratch_builder");
+  assert.match(fromScratch.visualFrame, /Primitive -> trace -> test -> artifact/);
+  assert.match(fromScratch.artifactMove, /reusable artifact/i);
+  assert.equal(operator.id, "first_principles_operator");
+  assert.match(operator.expertRole, /without impersonating any public figure/i);
+  assert.match(operator.checkMove, /inversion/i);
+});
+
+test("buildExpertLearningPlan carries the selected lens into compact lesson material", () => {
+  const plan = buildExpertLearningPlan({
+    rawIdea: "Teach me RAG from scratch.",
+    keyInsight: "RAG connects retrieval, context selection, and answer generation.",
+    claims: [
+      {
+        kind: "assumption",
+        text: "The learner needs to see the retrieval primitive before they use a framework.",
+      },
+    ],
+    learnCandidates: [{ term: "retrieval augmented generation" }],
+    explorationPaths: [{ title: "Tiny RAG trace", prompt: "Trace question -> chunk -> answer." }],
+    sourceContext: null,
+  });
+
+  assert.match(plan.expertRole, /from-scratch builder expert/i);
+  assert.match(plan.groups[0]?.purpose ?? "", /smallest primitive/i);
+  assert.match(plan.groups[0]?.subgroups[0]?.visualExample.description ?? "", /Primitive -> trace -> test -> artifact/);
+  assert.match(plan.groups[2]?.subgroups[0]?.teachingParagraph ?? "", /one tiny example/i);
+  assert.match(plan.groups[4]?.subgroups[0]?.keyMoves.join(" ") ?? "", /reusable artifact/i);
+});
 
 test("buildLearnSessionV2 splits long AI lesson paragraphs before local validation", () => {
   const plan: LearningPlan = {
