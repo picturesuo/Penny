@@ -1634,8 +1634,6 @@
   .create-verification-panel header span,
   .create-export-panel header span,
   .create-export-feedback-comment span,
-  .create-option-select-button > span,
-  .create-option-memory-meta span,
   .create-option-detail-drawer header span,
   .create-option-detail-drawer section > span,
   .create-artifact-sections article > span,
@@ -1816,16 +1814,15 @@
     background: rgb(149 111 42 / 0.08);
   }
 
-  .create-option-grid {
+  .create-option-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    gap: 12px;
+    gap: 8px;
   }
 
   .create-option-card {
     display: grid;
-    grid-template-rows: auto auto auto 1fr auto auto;
-    min-height: 100%;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: stretch;
     border: 1px solid rgb(17 17 17 / 0.12);
     border-radius: 7px;
     background: #fffdf7;
@@ -1842,17 +1839,17 @@
     background: rgb(17 17 17 / 0.035);
   }
 
-  .create-option-card.is-rejected .create-option-select-button,
-  .create-option-card.is-rejected > div:not(.create-option-card-actions):not(.create-option-judgment-state) {
+  .create-option-card.is-rejected .create-option-select-button {
     opacity: 0.78;
   }
 
   .create-option-select-button {
     display: grid;
-    gap: 8px;
-    min-height: 142px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
     border: 0;
-    padding: 12px;
+    padding: 12px 14px;
     color: #111111;
     background: transparent;
     text-align: left;
@@ -1882,84 +1879,63 @@
     line-height: 1.35;
   }
 
-  .create-option-select-button strong {
+  .create-option-number {
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(17 17 17 / 0.18);
+    border-radius: 999px;
+    color: #fffdf7;
+    background: #111111;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .create-option-card.is-selected .create-option-number {
+    background: #2f5c52;
+  }
+
+  .create-option-card.is-rejected .create-option-number {
+    color: #111111;
+    background: rgb(255 255 255 / 0.7);
+  }
+
+  .create-option-main-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .create-option-main-copy > span {
+    color: rgb(17 17 17 / 0.58);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .create-option-main-copy strong {
     font-size: 17px;
     line-height: 1.06;
   }
 
-  .create-option-select-button p,
-  .create-option-card > div:not(.create-option-memory-meta):not(.create-option-source-chips):not(.create-option-card-actions):not(.create-option-judgment-state) p,
-  .create-option-card > div:not(.create-option-memory-meta):not(.create-option-source-chips):not(.create-option-card-actions):not(.create-option-judgment-state) small {
+  .create-option-main-copy p {
     margin: 0;
     color: rgb(17 17 17 / 0.68);
     font-size: 12px;
     line-height: 1.28;
   }
 
-  .create-option-memory-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    border-top: 1px solid rgb(17 17 17 / 0.1);
-    padding: 9px 10px;
-    background: rgb(17 17 17 / 0.035);
-  }
-
-  .create-option-memory-meta span {
-    border: 1px solid rgb(17 17 17 / 0.12);
-    border-radius: 999px;
-    padding: 4px 7px;
-    background: rgb(255 255 255 / 0.62);
-    letter-spacing: 0;
-    text-transform: none;
-  }
-
-  .create-option-source-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    border-top: 1px solid rgb(17 17 17 / 0.08);
-    padding: 8px 10px;
-    background: rgb(255 255 255 / 0.38);
-  }
-
-  .create-option-source-chips:empty {
-    display: none;
-  }
-
-  .create-option-source-chips span {
-    max-width: 100%;
-    border: 1px solid rgb(142 79 34 / 0.2);
-    border-radius: 999px;
-    padding: 4px 7px;
-    color: #6b3f1c;
-    background: #fff7e6;
-    font-size: 11px;
-    font-weight: 800;
-    line-height: 1.1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .create-option-card > div:not(.create-option-memory-meta):not(.create-option-source-chips):not(.create-option-card-actions):not(.create-option-judgment-state) {
-    display: grid;
-    gap: 9px;
-    border-top: 1px solid rgb(17 17 17 / 0.1);
-    padding: 11px 12px 13px;
-  }
-
-  .create-option-card > div:not(.create-option-memory-meta):not(.create-option-source-chips):not(.create-option-card-actions):not(.create-option-judgment-state) small {
-    color: #2f5c52;
-    font-weight: 700;
-  }
-
   .create-option-judgment-state {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    border-top: 1px solid rgb(17 17 17 / 0.1);
-    padding: 8px 10px;
+    justify-content: center;
+    border-left: 1px solid rgb(17 17 17 / 0.1);
+    padding: 0 12px;
     background: rgb(17 17 17 / 0.025);
   }
 
@@ -1981,8 +1957,8 @@
 
   .create-option-card-actions {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
-    border-top: 1px solid rgb(17 17 17 / 0.1);
+    grid-template-columns: repeat(2, minmax(76px, auto));
+    border-left: 1px solid rgb(17 17 17 / 0.1);
   }
 
   .create-option-detail-button {
@@ -8701,10 +8677,6 @@
     border-right: 0;
   }
 
-  .create-option-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .create-output-grid {
     grid-template-columns: 1fr;
   }
@@ -8908,9 +8880,23 @@
     grid-template-columns: 1fr;
   }
 
-  .create-option-grid,
   .create-comparison-grid {
     grid-template-columns: 1fr;
+  }
+
+  .create-option-card {
+    grid-template-columns: 1fr;
+  }
+
+  .create-option-judgment-state,
+  .create-option-card-actions {
+    border-top: 1px solid rgb(17 17 17 / 0.1);
+    border-left: 0;
+  }
+
+  .create-option-judgment-state {
+    justify-content: flex-start;
+    padding: 8px 12px;
   }
 
   .create-option-claim-grounding {
