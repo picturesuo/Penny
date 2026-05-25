@@ -250,6 +250,7 @@ function LearnSessionView({
       <LearningPathSidebar
         steps={pageData.steps}
         goal={pageData.goal}
+        {...(pageData.mentorRole ? { mentorRole: pageData.mentorRole } : {})}
         activeMainStepId={activeMainStepId}
         activeSubstepId={activeSubstepId}
         progressPercent={currentProgressPercent}
@@ -336,6 +337,7 @@ type LearnLesson = {
 
 type LearnPageData = {
   goal: string;
+  mentorRole?: string;
   progressPercent: number;
   steps: Array<{
     id: string;
@@ -371,6 +373,7 @@ type CreateOptionLearnNode = CanvasNode & {
 function LearningPathSidebar({
   steps,
   goal,
+  mentorRole,
   activeMainStepId,
   activeSubstepId,
   progressPercent,
@@ -379,6 +382,7 @@ function LearningPathSidebar({
 }: {
   steps: LearnPageData["steps"];
   goal: string;
+  mentorRole?: string;
   activeMainStepId: string;
   activeSubstepId: string;
   progressPercent: number;
@@ -387,13 +391,14 @@ function LearningPathSidebar({
 }) {
   const visibleSteps = visibleLearningPathSteps(steps, activeMainStepId);
   const askShortcutLabel = learnAskShortcutLabel();
+  const pathSubtitle = mentorRole ? truncateWords(mentorRole, 9) : "Expert-designed order";
 
   return (
     <aside className="learn-path-sidebar" aria-label="Learning path">
       <div className="learn-path-head">
         <div className="learn-path-kicker">
           <span>LEARNING PATH</span>
-          <p>Expert-designed order</p>
+          <p>{pathSubtitle}</p>
         </div>
         <button type="button" className="learn-ask-toggle" onClick={onAskPennyToggle} aria-label="Toggle Ask Penny">
           <span>Ask</span>
@@ -1492,7 +1497,7 @@ function buildLearnPageData(
   }
 
   if (output.sessionV2) {
-    return buildLearnPageDataFromSessionV2(output.sessionV2);
+    return buildLearnPageDataFromSessionV2(output.sessionV2, output.learningPlan?.expertRole);
   }
 
   if (output.learningPlan) {
@@ -1826,9 +1831,9 @@ function createCreateBridgeLesson(input: {
   };
 }
 
-function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2): LearnPageData {
+function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2, mentorRole?: string): LearnPageData {
   const pageSteps = sessionV2.pages.map((page, index) => {
-    const lesson = learnLessonFromV2Page(page, sessionV2.pages.length);
+    const lesson = learnLessonFromV2Page(page, sessionV2.pages.length, sessionV2.goal, mentorRole);
 
     return {
       id: page.id,
@@ -1848,6 +1853,7 @@ function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2): LearnPageDa
 
   return {
     goal: sessionV2.goal,
+    ...(mentorRole ? { mentorRole } : {}),
     progressPercent: 0,
     steps,
     currentStep: steps[0]!.substeps[0]!.lesson,
@@ -1864,15 +1870,15 @@ function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2): LearnPageDa
   };
 }
 
-function learnLessonFromV2Page(page: LearnPageV2, totalLessons: number): LearnLesson {
+function learnLessonFromV2Page(page: LearnPageV2, totalLessons: number, sessionGoal: string, mentorRole?: string): LearnLesson {
   return {
     stepNumber: page.lessonNumber,
     totalSteps: totalLessons,
     substepNumber: 1,
     totalSubsteps: 1,
     title: page.title,
-    parentTitle: page.title,
-    learningGoal: page.title,
+    parentTitle: mentorRole ? truncateWords(mentorRole, 14) : page.title,
+    learningGoal: sessionGoal,
     shortExplanation: page.explanation,
     visual: page.visual,
     quickCheck: page.quickCheck,
