@@ -2282,7 +2282,7 @@ function sourceImportEvidenceLabel(kind: string): string {
 }
 
 export function isCreateComparisonDevMode(env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env): boolean {
-  return env?.DEV === true || env?.MODE === "test" || env?.VITE_PENNY_CREATE_COMPARE === "true";
+  return env?.VITE_PENNY_CREATE_COMPARE === "true";
 }
 
 function providerModeLabel(mode: CreateObservability["providerMode"]): string {
