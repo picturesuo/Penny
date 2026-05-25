@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive,
   BookOpen,
   CheckCircle2,
   CircleHelp,
@@ -218,16 +217,8 @@ interface BrainSidebarProps {
   sidebar: BrainSidebarData | null;
   documents: BrainDocumentSummary[];
   selectedSessionId: string | null;
-  selectedQuickNoteId: string | null;
-  recents?: BrainRecentIdea[];
-  archivedRecents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
-  onSelectQuickNote: (recent: BrainRecentIdea) => void;
   onNewDocument: () => void;
-  onQuickNoteCreate?: ((rawIdea: string) => Promise<void>) | undefined;
-  onQuickNoteAction?:
-    | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
-    | undefined;
 }
 
 export function BrainWorkspace({
@@ -567,14 +558,8 @@ export function BrainWorkspace({
         sidebar={documentsData?.sidebar ?? null}
         documents={documentsData?.documents ?? []}
         selectedSessionId={selectedDocument?.sessionId ?? null}
-        selectedQuickNoteId={selectedQuickNoteId}
-        recents={recents}
-        archivedRecents={archivedRecents}
         onSelectDocument={handleSelectDocument}
-        onSelectQuickNote={(recent) => setSelectedQuickNoteId(recent.id)}
         onNewDocument={handleNewDocument}
-        onQuickNoteCreate={onQuickNoteCreate}
-        onQuickNoteAction={handleQuickNoteAction}
       />
       {selectedQuickNote ? (
         <QuickNoteDocumentView
@@ -1838,17 +1823,10 @@ function BrainSidebar({
   sidebar,
   documents,
   selectedSessionId,
-  selectedQuickNoteId,
-  recents = [],
-  archivedRecents = [],
   onSelectDocument,
-  onSelectQuickNote,
   onNewDocument,
-  onQuickNoteCreate,
-  onQuickNoteAction,
 }: BrainSidebarProps) {
   const folders = sidebar?.folders ?? [];
-  const [searchQuery, setSearchQuery] = useState("");
   const [localFolders, setLocalFolders] = useState<BrainHierarchyFolder[]>([]);
   const [folderLabelOverrides, setFolderLabelOverrides] = useState<Record<string, string>>({});
   const [documentFolderOverrides, setDocumentFolderOverrides] = useState<Record<string, string>>({});
@@ -1860,29 +1838,10 @@ function BrainSidebar({
     localFolders[0]?.id ??
     null;
   const [openFolderId, setOpenFolderId] = useState<string | null>(selectedFolderId);
-  const [quickNoteDraft, setQuickNoteDraft] = useState("");
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const visibleFolders = useMemo(
     () => applyFolderLabelOverrides(mergeSidebarFolders(folders, localFolders, documentFolderOverrides), folderLabelOverrides),
     [folders, localFolders, documentFolderOverrides, folderLabelOverrides],
   );
-  const searchResults = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    if (!query) {
-      return [];
-    }
-
-    return documents
-      .filter((document) =>
-        [document.title, document.description, document.originalIdea, document.mainClaim?.text]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(query),
-      )
-      .slice(0, 6);
-  }, [documents, searchQuery]);
   const recentDocuments = useMemo(
     () => [...documents].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, 6),
     [documents],
@@ -1891,17 +1850,6 @@ function BrainSidebar({
   useEffect(() => {
     setOpenFolderId(selectedFolderId);
   }, [selectedFolderId]);
-
-  async function handleQuickNoteCreate() {
-    const trimmedDraft = quickNoteDraft.trim();
-
-    if (!trimmedDraft || !onQuickNoteCreate) {
-      return;
-    }
-
-    await onQuickNoteCreate(trimmedDraft);
-    setQuickNoteDraft("");
-  }
 
   function handleAddFolder() {
     const folderNumber = localFolders.length + 1;
@@ -1962,114 +1910,6 @@ function BrainSidebar({
 
   return (
     <aside className="brain-hierarchy-sidebar" aria-label="Brain sidebar">
-      <section className="brain-sidebar-search" aria-label="Search Brain">
-        <label htmlFor="brainSidebarSearch">
-          <Search size={15} aria-hidden="true" />
-          <span>Search Brain</span>
-        </label>
-        <input
-          id="brainSidebarSearch"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          type="search"
-          placeholder="Find a document or claim"
-        />
-        {searchResults.length > 0 ? (
-          <div className="brain-sidebar-search-results">
-            {searchResults.map((document) => (
-              <button
-                key={document.id}
-                type="button"
-                className="brain-sidebar-search-result"
-                onClick={() => onSelectDocument(document.sessionId)}
-              >
-                <FileText size={14} aria-hidden="true" />
-                <span title={document.title}>{truncateWords(document.title, 7)}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </section>
-      <section className="brain-sidebar-section" aria-label="Quick notes">
-        <div className="brain-tree" role="tree" aria-label="Quick notes folder">
-          <div className="brain-tree-folder" role="treeitem" aria-expanded="true">
-            <div className="brain-tree-row is-folder">
-              <Folder size={15} aria-hidden="true" />
-              <span>Quick Notes</span>
-              <small>{recents.length}</small>
-            </div>
-            <div className="brain-tree-children">
-              <form
-                className="quick-note-capture"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleQuickNoteCreate();
-                }}
-              >
-                <textarea
-                  value={quickNoteDraft}
-                  onChange={(event) => setQuickNoteDraft(event.target.value)}
-                  placeholder="Write a quick note."
-                  rows={2}
-                  onKeyDown={(event) => {
-                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                      event.preventDefault();
-                      void handleQuickNoteCreate();
-                    }
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={!quickNoteDraft.trim() || !onQuickNoteCreate}
-                  aria-label="Send quick note"
-                  title="Send quick note"
-                >
-                  <Send size={15} aria-hidden="true" />
-                </button>
-              </form>
-              {recents.length > 0 ? (
-                <div className="brain-quick-list">
-                  {recents.slice(0, 3).map((recent) => (
-                    <QuickNoteRow
-                      key={recent.id}
-                      recent={recent}
-                      archived={false}
-                      active={recent.id === selectedQuickNoteId}
-                      onSelect={onSelectQuickNote}
-                      onAction={onQuickNoteAction}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="brain-sidebar-muted">Quick notes start here.</p>
-              )}
-            </div>
-          </div>
-        </div>
-        {archivedRecents.length > 0 ? (
-          <div className="quick-note-archive">
-            <button type="button" className="quick-note-archive-toggle" onClick={() => setArchiveOpen((open) => !open)}>
-              <Archive size={14} aria-hidden="true" />
-              <span>Archive</span>
-              <small>{archivedRecents.length}</small>
-            </button>
-            {archiveOpen ? (
-              <div className="brain-quick-list">
-                {archivedRecents.slice(0, 6).map((recent) => (
-                  <QuickNoteRow
-                    key={recent.id}
-                    recent={recent}
-                    archived
-                    active={recent.id === selectedQuickNoteId}
-                    onSelect={onSelectQuickNote}
-                    onAction={onQuickNoteAction}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
       <section className="brain-sidebar-section" aria-label="Documents">
         <div className="brain-sidebar-section-head">
           <FileText size={15} aria-hidden="true" />
