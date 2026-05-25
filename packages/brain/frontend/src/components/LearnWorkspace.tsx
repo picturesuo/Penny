@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -2638,6 +2639,7 @@ function LearnIdeaDrop({
 }) {
   const [draft, setDraft] = useState("");
   const trimmedDraft = draft.trim();
+  const busyLabel = learnBusyLabel(status);
 
   async function handleSave() {
     if (!trimmedDraft) {
@@ -2658,7 +2660,7 @@ function LearnIdeaDrop({
   }
 
   return (
-    <section className="idea-drop" aria-label="Drop an idea entry">
+    <section className={`idea-drop${disabled ? " is-loading" : ""}`} aria-label="Drop an idea entry" aria-busy={disabled}>
       <label className="sr-only" htmlFor="learnIdeaDrop">Idea</label>
       <textarea
         id="learnIdeaDrop"
@@ -2686,12 +2688,19 @@ function LearnIdeaDrop({
             Keep in Recents
           </button>
           <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
-            {primaryLabel}
+            {disabled ? <Loader2 className="learn-command-icon is-spinning" aria-hidden="true" /> : <ArrowUp className="learn-command-icon" aria-hidden="true" />}
+            <span>{primaryLabel}</span>
           </button>
         </div>
       </div>
+      {disabled ? (
+        <div className="learn-loading-inline" role="status" aria-live="polite">
+          <Loader2 className="learn-loading-icon" aria-hidden="true" />
+          <strong>{busyLabel}</strong>
+          <span>{status || "Building Learn path"}</span>
+        </div>
+      ) : null}
       <LearnSourceIndicator behavior={learnSourceBehavior(trimmedDraft, searchWeb)} />
-      <LearnLoadout />
       <p id="learnIdeaDropStatus" className="sr-only">
         {status}
       </p>
@@ -2729,13 +2738,14 @@ function LearnEntry({
   const previousItems = learnPreviousItems(documents, recents);
 
   return (
-    <section className="learn-entry" aria-label="Start a Learn session">
+    <section className={`learn-entry${disabled ? " is-learning" : ""}`} aria-label="Start a Learn session" aria-busy={disabled}>
       <div className="learn-entry-lede">
-        <span>LEARN</span>
-        <div>
+        <div className="learn-entry-copy">
+          <span className="learn-entry-kicker">LEARN</span>
           <h1>Start from something Penny already knows.</h1>
           <p>Ask for a topic, or pick a previous thought and Penny will turn it into a tighter learning path.</p>
         </div>
+        {disabled ? <LearnLoadingState status={status} /> : null}
       </div>
       <div className="learn-entry-grid">
         <LearnIdeaDrop
@@ -2774,6 +2784,30 @@ function LearnEntry({
   );
 }
 
+function LearnLoadingState({ status }: { status: string }) {
+  const busyLabel = learnBusyLabel(status);
+
+  return (
+    <aside className="learn-loading-state" role="status" aria-live="polite" aria-label={status || "Building Learn path"}>
+      <div className="learn-loading-state-head">
+        <Loader2 className="learn-loading-icon" aria-hidden="true" />
+        <span>{busyLabel}</span>
+      </div>
+      <strong>{status || "Building Learn path"}</strong>
+      <p>Loading context, shaping the path, and preparing the first lesson.</p>
+      <div className="learn-loading-steps" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    </aside>
+  );
+}
+
+function learnBusyLabel(status: string): "Learning" | "Working" {
+  return /\blearn|learning|path\b/i.test(status) ? "Learning" : "Working";
+}
+
 function learnPreviousItems(documents: BrainDocumentSummary[], recents: BrainRecentIdea[]) {
   const documentItems = documents.slice(0, 4).map((document) => ({
     id: `doc-${document.sessionId}`,
@@ -2800,33 +2834,6 @@ function learnPromptFromDocument(document: BrainDocumentSummary): string {
     document.mainClaim?.text ? `Main claim: ${document.mainClaim.text}` : "",
     document.nextActions.length ? `Next actions: ${document.nextActions.slice(0, 3).join("; ")}` : "",
   ].filter(Boolean).join("\n");
-}
-
-function LearnLoadout() {
-  return (
-    <div className="learn-loadout" aria-label="Penny loadout">
-      <span>
-        <kbd>Ctrl</kbd>
-        <kbd>B</kbd>
-        <strong>Brain</strong>
-      </span>
-      <span>
-        <kbd>Ctrl</kbd>
-        <kbd>C</kbd>
-        <strong>Check</strong>
-      </span>
-      <span>
-        <kbd>Ctrl</kbd>
-        <kbd>L</kbd>
-        <strong>Learn</strong>
-      </span>
-      <span>
-        <kbd>Ctrl</kbd>
-        <kbd>Q</kbd>
-        <strong>Quick note</strong>
-      </span>
-    </div>
-  );
 }
 
 interface LearnSourceBehavior {
