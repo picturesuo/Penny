@@ -5,7 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   LearnWorkspace,
   askPennyContextForStep,
+  buildClarifiedLearnPrompt,
   isLearnSubmitShortcut,
+  learnClarificationQuestions,
   learnAskShortcutLabel,
   meaningMapItemsForLesson,
   visibleLearningPathSteps,
@@ -86,6 +88,27 @@ test("LearnWorkspace labels Ask Penny with platform-safe Alt or Option shortcut"
   assert.equal(learnAskShortcutLabel("Win32"), "Alt+A");
 });
 
+test("LearnWorkspace shows a clarification surface before building from vague input", () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      LearnWorkspace,
+      learnWorkspaceProps({
+        clarification: {
+          rawIdea: "asdf ??? thing thing",
+          questions: learnClarificationQuestions("asdf ??? thing thing"),
+          searchWeb: false,
+        },
+      }),
+    ),
+  );
+
+  assert.match(markup, /Make the Learn target concrete/);
+  assert.match(markup, /Original request/);
+  assert.match(markup, /asdf \?\?\? thing thing/);
+  assert.match(markup, /What exact thing, skill, decision, or source/);
+  assert.doesNotMatch(markup, /Start a Learn session/);
+});
+
 test("LearnWorkspace renders the Create Learn bridge with a Back to Create control", () => {
   const markup = renderToStaticMarkup(
     createElement(
@@ -114,9 +137,11 @@ test("LearnWorkspace renders the Create Learn bridge with a Back to Create contr
   assert.match(markup, /aria-current="step"/);
   assert.match(markup, /explicit judgment events are the things you deliberately do/i);
   assert.match(markup, /selecting cards, writing comments, and rating exports/i);
-  assert.match(markup, /data-testid="learn-understanding-tour"/);
+  assert.match(markup, /What it is/);
+  assert.match(markup, /Takeaway/);
   assert.match(markup, /Thinking graph/);
-  assert.match(markup, /data-testid="learn-meaning-map"/);
+  assert.doesNotMatch(markup, /data-testid="learn-understanding-tour"/);
+  assert.doesNotMatch(markup, /data-testid="learn-meaning-map"/);
 });
 
 test("LearnWorkspace lets Learn start from previous Brain material", () => {
@@ -384,13 +409,14 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.match(markup, /Name the failure signal/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
-  assert.match(markup, /Lesson cards/);
-  assert.match(markup, /Visual/);
-  assert.match(markup, /Tiny map/);
-  assert.match(markup, /Next: Move: Name the pricing goal/);
+  assert.match(markup, /What it is/);
+  assert.match(markup, /Takeaway/);
+  assert.doesNotMatch(markup, /Lesson cards/);
+  assert.doesNotMatch(markup, /Tiny map/);
+  assert.match(markup, /Next: Set the pricing boundary/);
 });
 
-test("LearnWorkspace splits backend V2 pages into digestible micro-steps", () => {
+test("LearnWorkspace renders backend V2 pages as one filled lesson each", () => {
   const markup = renderToStaticMarkup(
     createElement(LearnWorkspace, learnWorkspaceProps({
       data: {
@@ -422,6 +448,21 @@ test("LearnWorkspace splits backend V2 pages into digestible micro-steps", () =>
                 takeaway: "Multiplication is repeated equal grouping.",
                 sourceSpans: [{ sourceId: "source.raw_idea", label: "Source idea", text: "Teach me multiplication." }],
               },
+              {
+                id: "multiplication-arrays",
+                lessonNumber: 2,
+                title: "Arrays",
+                explanation: "An array shows multiplication as rows and columns.",
+                visual: {
+                  type: "diagram",
+                  title: "Array diagram",
+                  description: "Rows and columns make the count inspectable.",
+                  body: "3 rows -> 4 columns -> 12 total",
+                },
+                quickCheck: "How many objects are in 3 rows of 4?",
+                takeaway: "Arrays make equal groups visible.",
+                sourceSpans: [{ sourceId: "source.raw_idea", label: "Source idea", text: "Teach me multiplication." }],
+              },
             ],
           },
         },
@@ -430,16 +471,16 @@ test("LearnWorkspace splits backend V2 pages into digestible micro-steps", () =>
   );
 
   assert.match(markup, /Equal groups/);
-  assert.match(markup, /LESSON 1 \/ 3/);
-  assert.match(markup, /What it means/);
-  assert.match(markup, /Work the move/);
-  assert.match(markup, /Try the check/);
-  assert.match(markup, /1\.2/);
-  assert.match(markup, /1\.3/);
-  assert.match(markup, /Lesson cards/);
+  assert.match(markup, /LESSON 1 \/ 2/);
+  assert.match(markup, /What it is/);
+  assert.doesNotMatch(markup, /Work the move/);
+  assert.doesNotMatch(markup, /Try the check/);
+  assert.doesNotMatch(markup, /1\.2/);
+  assert.doesNotMatch(markup, /1\.3/);
+  assert.doesNotMatch(markup, /Lesson cards/);
   assert.match(markup, /Multiplication counts equal-size groups/);
-  assert.match(markup, /Tiny map/);
-  assert.match(markup, /Next: Work the move/);
+  assert.doesNotMatch(markup, /Tiny map/);
+  assert.match(markup, /Next: Arrays/);
 });
 
 test("LearnWorkspace prefers AI-generated V2 pages over planning scaffold", () => {
@@ -508,11 +549,25 @@ test("LearnWorkspace prefers AI-generated V2 pages over planning scaffold", () =
 
   assert.match(markup, /AI equal groups/);
   assert.match(markup, /The AI lesson says multiplication means counting equal groups/);
-  assert.match(markup, /What it means/);
-  assert.match(markup, /Work the move/);
+  assert.match(markup, /What it is/);
+  assert.doesNotMatch(markup, /Work the move/);
   assert.doesNotMatch(markup, /Name the end state/);
   assert.doesNotMatch(markup, /Planning definition/);
   assert.doesNotMatch(markup, /Planning visual/);
+});
+
+test("LearnWorkspace asks for clarification only when the Learn target is too vague or gibberish", () => {
+  assert.deepEqual(learnClarificationQuestions("Teach me AI engineering from scratch."), []);
+  assert.deepEqual(learnClarificationQuestions("YC"), []);
+
+  const questions = learnClarificationQuestions("asdf ??? thing thing");
+
+  assert.equal(questions.length, 3);
+  assert.match(questions[0] ?? "", /exact thing, skill, decision, or source/);
+  assert.match(
+    buildClarifiedLearnPrompt("asdf ??? thing thing", questions, "Teach me how YC evaluates early startup applications."),
+    /^I want to understand how YC evaluates early startup applications\.$/,
+  );
 });
 
 test("LearnWorkspace surfaces the backend teaching lens for generated lessons", () => {

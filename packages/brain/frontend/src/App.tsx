@@ -26,7 +26,7 @@ import { CodebaseBrainPanel } from "./components/CodebaseBrainPanel";
 import { clearCreateWorkspaceDraftStorage, CreateWorkspace } from "./components/CreateWorkspace";
 import { Header } from "./components/Header";
 import { LandingPage } from "./components/LandingPage";
-import { LearnWorkspace } from "./components/LearnWorkspace";
+import { LearnWorkspace, learnClarificationQuestions, type LearnClarificationPrompt } from "./components/LearnWorkspace";
 import { formatLabel, shortId } from "./lib/format";
 import type {
   AutopilotTickData,
@@ -63,6 +63,9 @@ type ChallengeResponseDraft =
 
 type BrainRelatedSearchState = BrainHybridSearchResponse["data"];
 type QuickNoteAction = "build" | "brain" | "check" | "learn" | "archive" | "restore";
+type LearnClarificationState = LearnClarificationPrompt & {
+  sourceMaterial?: LearnSourceMaterialInput;
+};
 type PersistedCreateWorkspaceBoot = {
   version: 1;
   updatedAt: number;
@@ -93,6 +96,7 @@ export function App() {
   const [focusedWorkStructureStepId, setFocusedWorkStructureStepId] = useState<string | null>(null);
   const [brainCanvasOpen, setBrainCanvasOpen] = useState(false);
   const [learnFocusNode, setLearnFocusNode] = useState<CanvasNode | null>(null);
+  const [learnClarification, setLearnClarification] = useState<LearnClarificationState | null>(null);
   const [relatedBrainSearch, setRelatedBrainSearch] = useState<BrainRelatedSearchState | null>(null);
   const [createInitialSeedText, setCreateInitialSeedText] = useState<string | null>(null);
   const [createBrainProfile, setCreateBrainProfile] = useState<BrainMemoryProfileData | null>(null);
@@ -231,7 +235,37 @@ export function App() {
     }
   }
 
-  async function handleLearnSeed(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput, searchWeb = false) {
+  async function handleLearnSeed(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput, searchWeb = false, skipClarification = false) {
+    const clarificationQuestions = skipClarification
+      ? []
+      : learnClarificationQuestions(rawIdea, sourceMaterial?.extractedText ?? "");
+
+    if (clarificationQuestions.length) {
+      setSelectedDocumentId(null);
+      setData(null);
+      setMoves([]);
+      setAutopilot(null);
+      setChallengeResponse(null);
+      setLatestArtifact(null);
+      setFocusedClaimId(null);
+      setFocusedWorkStructureStepId(null);
+      setBrainCanvasOpen(false);
+      setLearnFocusNode(null);
+      setRelatedBrainSearch(null);
+      setLandingVisible(false);
+      setActiveMode("Learn");
+      forgetActiveSession();
+      setLearnClarification({
+        rawIdea,
+        questions: clarificationQuestions,
+        searchWeb,
+        ...(sourceMaterial ? { sourceMaterial } : {}),
+      });
+      setStatus("Clarify Learn target");
+      return;
+    }
+
+    setLearnClarification(null);
     setIsThinking(true);
     setStatus("Building Learn path");
 
@@ -244,6 +278,7 @@ export function App() {
       setLatestArtifact(null);
       setBrainCanvasOpen(false);
       setLearnFocusNode(null);
+      setLearnClarification(null);
       setRelatedBrainSearch(null);
       setLandingVisible(false);
       setActiveMode("Learn");
@@ -326,6 +361,7 @@ export function App() {
     setFocusedClaimId(null);
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
+    setLearnClarification(null);
     setRelatedBrainSearch(null);
     setCreateInitialSeedText(null);
     setCreateBrainProfile(null);
@@ -342,6 +378,8 @@ export function App() {
 
     if (mode !== "Create") {
       setCreateBrainProfile(null);
+    } else {
+      setLearnClarification(null);
     }
   }
 
@@ -372,6 +410,7 @@ export function App() {
     setFocusedWorkStructureStepId(null);
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
+    setLearnClarification(null);
     setRelatedBrainSearch(null);
     const createSeedText = sourceMaterial?.extractedText || rawIdea;
     rememberCreateWorkspaceBoot({ seedText: createSeedText, brainProfile: null });
@@ -403,6 +442,7 @@ export function App() {
       setFocusedWorkStructureStepId(null);
       setBrainCanvasOpen(false);
       setLearnFocusNode(null);
+      setLearnClarification(null);
       setRelatedBrainSearch(null);
       clearCreateWorkspaceDraftStorage();
       const createSeedText = rawIdea.trim() || pennyYcCreatePrompt;
@@ -449,6 +489,7 @@ export function App() {
   async function handleLandingQuickNote(rawIdea: string) {
     setLandingVisible(false);
     setActiveMode("Learn");
+    setLearnClarification(null);
 
     if (rawIdea.trim()) {
       await handleKeepRecentIdea(rawIdea);
@@ -831,6 +872,7 @@ export function App() {
     setFocusedWorkStructureStepId(null);
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
+    setLearnClarification(null);
     setRelatedBrainSearch(null);
     setLandingVisible(true);
     setStatus("Ready");
@@ -930,6 +972,7 @@ export function App() {
           setFocusedWorkStructureStepId(null);
           setBrainCanvasOpen(false);
           setLearnFocusNode(null);
+          setLearnClarification(null);
           setRelatedBrainSearch(null);
           rememberCreateWorkspaceBoot({ seedText: recent.rawIdea, brainProfile: null });
           setCreateInitialSeedText(recent.rawIdea);
@@ -971,6 +1014,7 @@ export function App() {
     setFocusedWorkStructureStepId(null);
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
+    setLearnClarification(null);
     setRelatedBrainSearch(null);
     const createSeedText = createPromptFromBrainProfile(profile, focusMemory);
     rememberCreateWorkspaceBoot({ seedText: createSeedText, brainProfile: profile });
@@ -985,6 +1029,7 @@ export function App() {
 
   function handleLearnFromCreate(node: CanvasNode) {
     setLearnFocusNode(node);
+    setLearnClarification(null);
     rememberCreateWorkspaceView({ activeMode: "Learn", learnFocusNode: node });
     setActiveMode("Learn");
     setStatus("Learn opened from Create");
@@ -993,6 +1038,22 @@ export function App() {
   function handleBackToCreateFromLearn() {
     rememberCreateWorkspaceView({ activeMode: "Create", learnFocusNode });
     setActiveMode("Create");
+  }
+
+  async function handleClarifiedLearnSeed(rawIdea: string) {
+    const currentClarification = learnClarification;
+
+    await handleLearnSeed(
+      rawIdea,
+      currentClarification?.sourceMaterial,
+      currentClarification?.searchWeb ?? false,
+      true,
+    );
+  }
+
+  function handleCancelLearnClarification() {
+    setLearnClarification(null);
+    setStatus("Ready for Learn");
   }
 
   if (codebaseBrainPanelVisible) {
@@ -1037,7 +1098,10 @@ export function App() {
             isThinking={isThinking}
             status={status}
             recents={recents}
+            clarification={learnClarification}
             onLearnSeed={(rawIdea, options) => handleLearnSeed(rawIdea, undefined, options?.searchWeb ?? false)}
+            onClarificationSubmit={handleClarifiedLearnSeed}
+            onClarificationCancel={handleCancelLearnClarification}
             onKeepRecent={handleKeepRecentIdea}
             onSearchBrainRelated={handleBrainRelatedSearch}
             {...(shouldRenderCreateWorkspace ? { onBackToCreate: handleBackToCreateFromLearn } : {})}

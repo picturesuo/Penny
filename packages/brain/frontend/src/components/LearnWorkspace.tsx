@@ -23,6 +23,12 @@ type LearnSeedOptions = {
   searchWeb?: boolean;
 };
 
+export type LearnClarificationPrompt = {
+  rawIdea: string;
+  questions: string[];
+  searchWeb?: boolean;
+};
+
 interface LearnWorkspaceProps {
   selectedDocument: BrainDocumentSummary | null;
   documents: BrainDocumentSummary[];
@@ -33,7 +39,10 @@ interface LearnWorkspaceProps {
   isThinking: boolean;
   status: string;
   recents: BrainRecentIdea[];
+  clarification?: LearnClarificationPrompt | null;
   onLearnSeed: (rawIdea: string, options?: LearnSeedOptions) => Promise<void>;
+  onClarificationSubmit?: (rawIdea: string) => Promise<void>;
+  onClarificationCancel?: () => void;
   onKeepRecent: (rawIdea: string) => Promise<void>;
   onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
   onBackToCreate?: () => void;
@@ -49,7 +58,10 @@ export function LearnWorkspace({
   isThinking,
   status,
   recents,
+  clarification = null,
   onLearnSeed,
+  onClarificationSubmit,
+  onClarificationCancel,
   onKeepRecent,
   onSearchBrainRelated,
   onBackToCreate,
@@ -81,6 +93,14 @@ export function LearnWorkspace({
             focusNode={focusNode}
             disabled={isThinking}
             onSearchBrainRelated={onSearchBrainRelated}
+          />
+        ) : clarification ? (
+          <LearnClarificationCard
+            clarification={clarification}
+            disabled={isThinking}
+            status={status}
+            onSubmit={onClarificationSubmit ?? (async () => undefined)}
+            {...(onClarificationCancel ? { onCancel: onClarificationCancel } : {})}
           />
         ) : (
           <LearnEntry
@@ -240,11 +260,6 @@ function LearnSessionView({
     void onSearchBrainRelated(question, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
   }
 
-  function handleMeaningMapQuestion(question: string) {
-    setAskPennyOpen(true);
-    setAskPennySeed({ text: question, id: Date.now() });
-  }
-
   return (
     <section className="learn-session-output" aria-label="Learn session output">
       <LearningPathSidebar
@@ -266,7 +281,6 @@ function LearnSessionView({
         lessonPages={lessonPages}
         onPrevious={goToPreviousLesson}
         onNext={goToNextLesson}
-        onMeaningMapQuestion={handleMeaningMapQuestion}
       />
 
       <AskPennyDrawer
@@ -541,7 +555,6 @@ function LearnMainContent({
   lessonPages,
   onPrevious,
   onNext,
-  onMeaningMapQuestion,
 }: {
   pageData: LearnPageData;
   activeStepIndex: number;
@@ -550,7 +563,6 @@ function LearnMainContent({
   lessonPages: LearnLessonPage[];
   onPrevious: () => void;
   onNext: () => void;
-  onMeaningMapQuestion: (question: string) => void;
 }) {
   const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
   const activeSubstep = activeStep?.substeps.find((substep) => substep.id === activeSubstepId);
@@ -565,7 +577,6 @@ function LearnMainContent({
         lesson={currentStep}
         activeLessonIndex={activeLessonIndex}
         lessonCount={lessonPages.length}
-        onMeaningMapQuestion={onMeaningMapQuestion}
       />
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
@@ -590,16 +601,14 @@ export function MicroLessonSlide({
   lesson,
   activeLessonIndex,
   lessonCount,
-  onMeaningMapQuestion,
 }: {
   lesson: LearnLesson;
   activeLessonIndex: number;
   lessonCount: number;
-  onMeaningMapQuestion?: (question: string) => void;
 }) {
-  const displayExplanation = truncateWords(lesson.shortExplanation, 24);
-  const focusFit = microLessonFocusFit(displayExplanation);
   const parentTitle = lesson.parentTitle && lesson.parentTitle !== lesson.title ? lesson.parentTitle : lesson.learningGoal;
+  const teachingText = directAnswerForLesson(lesson);
+  const density = learnStepTextDensity(teachingText);
 
   return (
     <section className="micro-lesson-slide" aria-label={`Lesson ${activeLessonIndex + 1} of ${lessonCount}`}>
@@ -611,22 +620,16 @@ export function MicroLessonSlide({
         <h1>{lesson.title}</h1>
       </header>
 
-      <section className="micro-lesson-focus" aria-label="Lesson focus">
-        <p
-          data-focus-font-size={focusFit.fontSizePx}
-          data-focus-max-chars={focusFit.maxLineCharacters}
-          style={{
-            "--micro-lesson-focus-font-size": `${focusFit.fontSizePx}px`,
-            "--micro-lesson-focus-max-chars": `${focusFit.maxLineCharacters}ch`,
-          } as React.CSSProperties}
-        >
-          {displayExplanation}
-        </p>
+      <section className="micro-lesson-body" aria-label="Lesson body" data-density={density}>
+        <article className="learn-teaching-box" aria-label="Teaching">
+          <span>What it is</span>
+          <AskPennyRenderedText text={teachingText} />
+        </article>
+        <aside className="learn-takeaway-box" aria-label="Takeaway">
+          <span>Takeaway</span>
+          <p>{lesson.takeaway}</p>
+        </aside>
       </section>
-
-      <AiLessonOutput lesson={lesson} />
-
-      <LearnUnderstandingTour lesson={lesson} {...(onMeaningMapQuestion ? { onAskAboutItem: onMeaningMapQuestion } : {})} />
     </section>
   );
 }
@@ -1849,7 +1852,7 @@ function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2, mentorRole?:
       ],
     };
   });
-  const steps = withDigestibleSubstepsForThinSteps(pageSteps);
+  const steps = pageSteps.map(renumberStepSubsteps);
 
   return {
     goal: sessionV2.goal,
@@ -1961,7 +1964,7 @@ function buildLearnPageDataFromPlan(
       };
     }),
   }));
-  const steps = withDigestibleSubstepsForThinSteps(planSteps);
+  const steps = planSteps.map(renumberStepSubsteps);
 
   return {
     goal: plan.goal,
@@ -2813,6 +2816,85 @@ function LearnEntry({
   );
 }
 
+function LearnClarificationCard({
+  clarification,
+  disabled,
+  status,
+  onSubmit,
+  onCancel,
+}: {
+  clarification: LearnClarificationPrompt;
+  disabled: boolean;
+  status: string;
+  onSubmit: (rawIdea: string) => Promise<void>;
+  onCancel?: () => void;
+}) {
+  const [answer, setAnswer] = useState("");
+  const trimmedAnswer = answer.trim();
+  const busyLabel = learnBusyLabel(status);
+
+  async function handleSubmit() {
+    if (!trimmedAnswer || disabled) {
+      return;
+    }
+
+    await onSubmit(buildClarifiedLearnPrompt(clarification.rawIdea, clarification.questions, trimmedAnswer));
+  }
+
+  return (
+    <section className={`learn-entry learn-clarification${disabled ? " is-learning" : ""}`} aria-label="Clarify Learn target" aria-busy={disabled}>
+      <div className="learn-entry-lede">
+        <div className="learn-entry-copy">
+          <span className="learn-entry-kicker">Clarify</span>
+          <h1>Make the Learn target concrete.</h1>
+          <p>Penny needs one clear object, skill, or decision before it builds the path.</p>
+        </div>
+        {disabled ? <LearnLoadingState status={status} /> : null}
+      </div>
+
+      <div className="learn-clarification-card">
+        <div className="learn-clarification-original">
+          <span>Original request</span>
+          <p>{clarification.rawIdea}</p>
+        </div>
+
+        <ol className="learn-clarification-questions">
+          {clarification.questions.map((question) => (
+            <li key={question}>{question}</li>
+          ))}
+        </ol>
+
+        <label>
+          <span>Your answer</span>
+          <textarea
+            value={answer}
+            disabled={disabled}
+            rows={7}
+            placeholder="Answer the questions here. Command+Enter submits on Mac; Ctrl+Enter submits elsewhere."
+            onChange={(event) => setAnswer(event.target.value)}
+            onKeyDown={(event) => {
+              if (isLearnSubmitShortcut(event)) {
+                event.preventDefault();
+                void handleSubmit();
+              }
+            }}
+          />
+        </label>
+
+        <div className="learn-clarification-actions">
+          <button type="button" className="text-command" disabled={disabled} onClick={onCancel}>
+            Back
+          </button>
+          <button type="button" className="primary-command" disabled={disabled || !trimmedAnswer} onClick={handleSubmit}>
+            {disabled ? <Loader2 className="learn-command-icon is-spinning" aria-hidden="true" /> : <ArrowUp className="learn-command-icon" aria-hidden="true" />}
+            <span>{disabled ? busyLabel : "Build Learn path"}</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function LearnLoadingState({ status }: { status: string }) {
   const busyLabel = learnBusyLabel(status);
 
@@ -2928,6 +3010,89 @@ function learnWebReason(text: string): string | null {
 
 export function isLearnSubmitShortcut(event: { key: string; metaKey: boolean; ctrlKey: boolean }): boolean {
   return event.key === "Enter" && (event.metaKey || event.ctrlKey);
+}
+
+export function learnClarificationQuestions(rawIdea: string, supportingText = ""): string[] {
+  const target = normalizeLearnTarget(rawIdea);
+  const supportWords = wordsForLearnTarget(supportingText);
+  const words = wordsForLearnTarget(target);
+  const uniqueWords = new Set(words.map((word) => word.toLowerCase()));
+  const concreteSignals = words.filter((word) => /[a-z]/i.test(word) && !LEARN_GENERIC_WORDS.has(word.toLowerCase()));
+  const alphaRatio = alphaCharacterRatio(target);
+  const hasStrongSupport = supportWords.length >= 12;
+  const looksLikeKnownShortTopic = words.length === 1 && /^[a-z]{2,12}$/i.test(words[0] ?? "") && !LEARN_GENERIC_WORDS.has((words[0] ?? "").toLowerCase());
+  const repeatedTooMuch = words.length >= 5 && uniqueWords.size <= 2;
+  const genericOnly = words.length > 0 && concreteSignals.length === 0;
+  const gibberish =
+    !target ||
+    /(?:asdf|qwer|zxcv|lorem ipsum|\?{3,}|\.{4,})/i.test(target) ||
+    alphaRatio < 0.42 ||
+    words.some((word) => /[bcdfghjklmnpqrstvwxyz]{6,}/i.test(word)) ||
+    repeatedTooMuch;
+  const tooVague = !hasStrongSupport && !looksLikeKnownShortTopic && (words.length < 3 || genericOnly);
+
+  if (!gibberish && !tooVague) {
+    return [];
+  }
+
+  return [
+    "What exact thing, skill, decision, or source should this lesson teach?",
+    "What should you be able to do after the lesson?",
+    "What context should Penny use: Brain memory, pasted source, or web evidence?",
+  ];
+}
+
+export function buildClarifiedLearnPrompt(_rawIdea: string, _questions: string[], answer: string): string {
+  const trimmedAnswer = answer.trim();
+
+  return /^teach\s+me\b/i.test(trimmedAnswer) ? goalFrom(trimmedAnswer) : trimmedAnswer;
+}
+
+const LEARN_GENERIC_WORDS = new Set([
+  "a",
+  "about",
+  "and",
+  "do",
+  "explain",
+  "help",
+  "how",
+  "i",
+  "idk",
+  "it",
+  "learn",
+  "me",
+  "more",
+  "stuff",
+  "teach",
+  "that",
+  "the",
+  "thing",
+  "things",
+  "this",
+  "to",
+  "whatever",
+  "what",
+  "why",
+]);
+
+function normalizeLearnTarget(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function wordsForLearnTarget(value: string): string[] {
+  return value.match(/[a-z0-9][a-z0-9'-]*/gi) ?? [];
+}
+
+function alphaCharacterRatio(value: string): number {
+  const compact = value.replace(/\s+/g, "");
+
+  if (!compact) {
+    return 0;
+  }
+
+  const alphaCharacters = compact.match(/[a-z0-9]/gi)?.length ?? 0;
+
+  return alphaCharacters / compact.length;
 }
 
 function buildLearnSessionOutput(
