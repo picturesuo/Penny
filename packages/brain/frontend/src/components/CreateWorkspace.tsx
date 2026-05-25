@@ -483,47 +483,11 @@ export function CreateWorkspace({
   if (isCreateEntryMode) {
     return (
       <main className="create-entry-shell" aria-label="Create start" data-testid="create-entry">
-        <aside className="create-entry-archive" aria-label="Create archive">
-          <div>
-            <span>Brain archive</span>
-            <strong>Recent research</strong>
-            <p>Press Enter on a saved thought to reopen it in Create.</p>
-          </div>
-          <ol>
-            {recents.length ? (
-              recents.slice(0, 7).map((recent) => (
-                <li key={recent.id}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      setDraftText(recent.rawIdea);
-                      void handleGenerateDirections(recent.rawIdea);
-                    }}
-                  >
-                    <span>Enter recent research</span>
-                    <strong>{truncateCreateEntryText(recent.rawIdea, 12)}</strong>
-                  </button>
-                </li>
-              ))
-            ) : (
-              <li className="is-empty">
-                <p>Saved creates and quick notes will collect here once Brain has something to reuse.</p>
-              </li>
-            )}
-          </ol>
-          {onOpenBrain ? (
-            <button type="button" className="check-ask-button" aria-label="Open Brain from Create" onClick={onOpenBrain}>
-              Open Brain
-            </button>
-          ) : null}
-        </aside>
-
         <section className="create-entry-main" aria-label="Create search">
           <div className="create-entry-brand">
             <span>Create</span>
             <h1>What do you want to create?</h1>
-            <p>Search your rough idea into five buildable directions.</p>
+            <p>Penny turns a rough seed into five AI-shaped directions, then waits for your judgment.</p>
           </div>
           {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
           <form
@@ -559,43 +523,46 @@ export function CreateWorkspace({
   }
 
   return (
-    <main className="check-workspace-shell" aria-label="Create workspace" data-testid="create-workspace">
-      <CreatePathSidebar
-        activeIndex={activeStepIndex}
-        status={displayStatus}
-        canvasNodes={canvasNodes}
-        onOpenBrain={onOpenBrain}
-        onStepSelect={handleStepSelect}
-      />
-
+    <main className="check-workspace-shell create-workspace-shell" aria-label="Create workspace" data-testid="create-workspace">
       <section className="check-center-stage" aria-label="Penny Create flow">
         <article className="check-main-cycle create-workspace-card">
-          <header className="check-cycle-hero">
-            <span>CREATE KERNEL</span>
-            <h1>Five directions. One buildable Idea Spec.</h1>
-            <p>Use Brain context, keep judgment human, and export the shape when it is ready.</p>
-          </header>
-
-          {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
-
-          <CreateBrainOnboardingPanel profile={brainProfile ?? null} />
-          <CreateProviderStatusPanel observability={observability} />
-
-          <section ref={setCreateStepRef(0)} className="create-seed-panel" aria-label="Rough idea input">
-            <label>
-              <span>Rough idea</span>
+          <header className="create-workspace-topbar">
+            <div className="create-entry-brand">
+              <span>Create</span>
+              <h1>Choose a direction.</h1>
+              <p>Five options from the same seed. Select what feels true, reject what does not, and Penny will shape the spec.</p>
+            </div>
+            <form
+              className="create-entry-composer"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleGenerateDirections();
+              }}
+            >
+              <label className="sr-only" htmlFor="createWorkspaceIdea">
+                Create seed
+              </label>
               <textarea
+                id="createWorkspaceIdea"
                 ref={seedRef}
                 value={draftText}
                 onChange={(event) => setDraftText(event.target.value)}
-                placeholder="Sketch the product or feature you want Penny to turn into a buildable coding prompt."
+                disabled={busy}
+                placeholder="Describe what you want to create..."
+                rows={1}
               />
-            </label>
-            <button type="button" className="check-primary-button" onClick={() => void handleGenerateDirections()} disabled={busy}>
-              <Sparkles size={15} />
-              Show 5 directions
-            </button>
-          </section>
+              <button type="submit" disabled={busy || !draftText.trim()} aria-label="Regenerate Create directions">
+                <RefreshCcw size={17} />
+              </button>
+            </form>
+            <div className="create-entry-status" role="status">
+              <Sparkles size={14} />
+              <span>{providerModeLabel(observability?.providerMode ?? "deterministic")}</span>
+              <strong>{displayStatus}</strong>
+            </div>
+          </header>
+
+          {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
 
           <div ref={setCreateStepRef(1)} className="create-step-anchor" data-create-step="five-directions">
             <CreateOptionBoard
@@ -610,7 +577,6 @@ export function CreateWorkspace({
               onDetailOptionIdChange={setActiveDetailOptionId}
               onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
             />
-            <CreateEvidenceLedgerPanel options={options} selectedOptionIds={selectedOptionIds} rejectedOptionIds={rejectedOptionIds} />
           </div>
 
           <section ref={setCreateStepRef(2)} className="create-judgment-panel" aria-label="Create judgment">
