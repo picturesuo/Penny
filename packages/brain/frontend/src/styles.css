@@ -1821,7 +1821,7 @@
 
   .create-option-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) 82px 42px;
     align-items: stretch;
     border: 1px solid rgb(17 17 17 / 0.12);
     border-radius: 7px;
@@ -1935,7 +1935,7 @@
     align-items: center;
     justify-content: center;
     border-left: 1px solid rgb(17 17 17 / 0.1);
-    padding: 0 12px;
+    padding: 0 10px;
     background: rgb(17 17 17 / 0.025);
   }
 
@@ -1948,36 +1948,36 @@
   }
 
   .create-option-judgment-state span {
+    min-width: 58px;
     border: 1px solid rgb(17 17 17 / 0.14);
     border-radius: 999px;
-    padding: 5px 8px;
+    padding: 5px 7px;
     background: rgb(255 255 255 / 0.72);
+    font-size: 11px;
     letter-spacing: 0;
+    text-align: center;
   }
 
   .create-option-card-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(76px, auto));
+    grid-template-columns: 42px;
     border-left: 1px solid rgb(17 17 17 / 0.1);
   }
 
-  .create-option-detail-button {
+  .create-option-reject-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
     border: 0;
-    border-top: 0;
-    padding: 10px 12px;
+    padding: 0;
     color: #111111;
     background: rgb(255 255 255 / 0.58);
-    font-size: 12px;
-    font-weight: 800;
     line-height: 1;
   }
 
-  .create-option-card-actions .create-option-detail-button + .create-option-detail-button {
-    border-left: 1px solid rgb(17 17 17 / 0.1);
+  .create-option-card.is-rejected .create-option-reject-button {
+    color: #fffdf7;
+    background: #111111;
   }
 
   .create-option-detail-drawer {
@@ -2683,7 +2683,7 @@
   }
 
   .brain-sidebar-section-head {
-    grid-template-columns: 18px minmax(0, 1fr) auto;
+    grid-template-columns: 18px minmax(0, 1fr) 28px;
     gap: 8px;
     color: #111111;
   }
@@ -2703,20 +2703,30 @@
   }
 
   .brain-sidebar-add-doc {
-    display: inline-grid;
-    grid-template-columns: 14px auto;
-    gap: 5px;
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
     align-items: center;
+    justify-content: center;
     justify-self: end;
     border: 1px solid #cfcfcf;
     border-radius: 6px;
     background: #ffffff;
-    padding: 5px 7px;
+    padding: 0;
     color: #111111;
     font: inherit;
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
+  }
+
+  .brain-sidebar-add-doc span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .brain-sidebar-add-doc:hover {
