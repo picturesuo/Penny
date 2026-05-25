@@ -85,6 +85,8 @@ type PersistedCreateWorkspaceDraft = {
   optionSet: OptionSet | null;
   selectedOptionIds: string[];
   rejectedOptionIds?: string[];
+  engineOptOut?: boolean;
+  manualFocus?: string;
   userComment: string;
   artifact: CodingPromptArtifact | null;
   verification: VerificationSummary | null;
@@ -123,6 +125,8 @@ export function CreateWorkspace({
   const [optionSet, setOptionSet] = useState<OptionSet | null>(restoredDraft?.optionSet ?? null);
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredDraft?.selectedOptionIds ?? []);
   const [rejectedOptionIds, setRejectedOptionIds] = useState<string[]>(restoredDraft?.rejectedOptionIds ?? []);
+  const [engineOptOut, setEngineOptOut] = useState(restoredDraft?.engineOptOut ?? false);
+  const [manualFocus, setManualFocus] = useState(restoredDraft?.manualFocus ?? "");
   const [userComment, setUserComment] = useState(restoredDraft?.userComment ?? "");
   const [artifact, setArtifact] = useState<CodingPromptArtifact | null>(restoredDraft?.artifact ?? null);
   const [verification, setVerification] = useState<VerificationSummary | null>(restoredDraft?.verification ?? null);
@@ -152,7 +156,14 @@ export function CreateWorkspace({
     () => options.filter((option) => selectedOptionIds.includes(option.id)),
     [options, selectedOptionIds],
   );
-  const hasPendingJudgment = Boolean(selectedOptionIds.length || rejectedOptionIds.length || userComment.trim());
+  const effectiveUserComment = createEffectiveUserComment({ userComment, engineOptOut, manualFocus });
+  const rejectedOptions = useMemo(
+    () => options.filter((option) => rejectedOptionIds.includes(option.id)),
+    [options, rejectedOptionIds],
+  );
+  const hasPendingJudgment = Boolean(
+    selectedOptionIds.length || rejectedOptionIds.length || userComment.trim() || (engineOptOut && manualFocus.trim()),
+  );
   const canvasNodes = useMemo(
     () =>
       createCanvasNodes({
@@ -201,6 +212,8 @@ export function CreateWorkspace({
       optionSet,
       selectedOptionIds,
       rejectedOptionIds,
+      engineOptOut,
+      manualFocus,
       userComment,
       artifact,
       verification,
@@ -215,9 +228,11 @@ export function CreateWorkspace({
     activeDetailOptionId,
     artifact,
     draftText,
+    engineOptOut,
     judgmentEvent,
     createCanvas,
     localStatus,
+    manualFocus,
     observability,
     optionSet,
     promptExport,
@@ -268,6 +283,8 @@ export function CreateWorkspace({
       applyCreatePayload(payload.data);
       setSelectedOptionIds([]);
       setRejectedOptionIds([]);
+      setEngineOptOut(false);
+      setManualFocus("");
       setUserComment("");
       setJudgmentEvent(null);
       setProviderComparison(null);
@@ -291,8 +308,8 @@ export function CreateWorkspace({
       return;
     }
 
-    if (!selectedOptionIds.length && !rejectedOptionIds.length && !userComment.trim()) {
-      setStatus("Select, reject, or comment on at least one direction first");
+    if (!selectedOptionIds.length && !rejectedOptionIds.length && !effectiveUserComment.trim()) {
+      setStatus("Select, reject, answer, or opt out with a focus first");
       return;
     }
 
@@ -304,14 +321,14 @@ export function CreateWorkspace({
           brainProfile,
           optionSet,
           selectedOptionIds,
-          userComment: judgmentCommentWithRejected(userComment, rejectedOptionIds, options),
+          userComment: judgmentCommentWithRejected(effectiveUserComment, rejectedOptionIds, options),
           artifact,
         }),
       );
       applyCreatePayload(payload.data);
       setPromptExport(null);
       resetExportFeedback();
-      setStatus(payload.data.judgmentEvent ? "Judgment recorded; Idea Spec verified" : "Idea Spec verified");
+      setStatus(payload.data.judgmentEvent ? "Next Create prompt ready" : "Idea Spec verified");
     });
   }
 
@@ -525,12 +542,13 @@ export function CreateWorkspace({
   return (
     <main className="check-workspace-shell create-workspace-shell" aria-label="Create workspace" data-testid="create-workspace">
       <section className="check-center-stage" aria-label="Penny Create flow">
+        <div className="create-workspace-layout">
         <article className="check-main-cycle create-workspace-card">
-          <header className="create-workspace-topbar">
+          <header ref={setCreateStepRef(0)} className="create-workspace-topbar">
             <div className="create-entry-brand">
               <span>Create</span>
-              <h1>Choose a direction.</h1>
-              <p>Five options from the same seed. Select what feels true, reject what does not, and Penny will shape the spec.</p>
+              <h1>Build the fit tree.</h1>
+              <p>Penny pushes the next load-bearing problem, then waits for your answer before the Idea Spec changes.</p>
             </div>
             <form
               className="create-entry-composer"
@@ -579,6 +597,26 @@ export function CreateWorkspace({
             />
           </div>
 
+          <CreateInterrogationPanel
+            optionSet={optionSet}
+            options={options}
+            selectedOptions={selectedOptions}
+            rejectedOptions={rejectedOptions}
+            engineOptOut={engineOptOut}
+            manualFocus={manualFocus}
+            userAnswer={userComment}
+            artifact={artifact}
+            verification={verification}
+            busy={busy}
+            onEngineOptOutChange={setEngineOptOut}
+            onManualFocusChange={setManualFocus}
+            onUserAnswerChange={setUserComment}
+            onToggleOption={toggleOption}
+            onRejectOption={toggleRejectedOption}
+            onUpdateArtifact={() => void handleUpdateArtifact()}
+            onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
+          />
+
           <section ref={setCreateStepRef(2)} className="create-judgment-panel" aria-label="Create judgment">
             <header>
               <span>Judgment</span>
@@ -586,27 +624,12 @@ export function CreateWorkspace({
             </header>
             <CreateJudgmentNextPlace
               selectedOptions={selectedOptions}
-              rejectedOptions={options.filter((option) => rejectedOptionIds.includes(option.id))}
-              userComment={userComment}
+              rejectedOptions={rejectedOptions}
+              userComment={effectiveUserComment}
               nextBestMove={optionSet?.nextBestMove ?? null}
               artifact={artifact}
               promptExport={promptExport}
             />
-            <label>
-              <span>Comment</span>
-              <textarea
-                value={userComment}
-                onChange={(event) => setUserComment(event.target.value)}
-                placeholder="Tell Penny what to keep, combine, cut, or sharpen."
-              />
-            </label>
-            <div className="create-action-row">
-              <button type="button" className="check-primary-button" onClick={() => void handleUpdateArtifact()} disabled={busy || !optionSet}>
-                <CheckCircle2 size={15} />
-                Update Idea Spec
-              </button>
-              {judgmentEvent ? <span>Judgment recorded</span> : null}
-            </div>
           </section>
 
           <CreateLearnBridgePanel artifact={artifact} onLearnThis={onLearnThis} />
@@ -619,8 +642,8 @@ export function CreateWorkspace({
             <CreateArtifactPanel
               artifact={artifact}
               selectedOptions={selectedOptions}
-              rejectedOptions={options.filter((option) => rejectedOptionIds.includes(option.id))}
-              userComment={userComment}
+              rejectedOptions={rejectedOptions}
+              userComment={effectiveUserComment}
             />
             <div ref={setCreateStepRef(4)} className="create-step-anchor" data-create-step="verification">
               <CreateVerificationPanel verification={verification} />
@@ -661,9 +684,437 @@ export function CreateWorkspace({
             />
           </section>
         </article>
+        <CreateFitTreeRail
+          activeIndex={activeStepIndex}
+          status={displayStatus}
+          optionSet={optionSet}
+          selectedOptions={selectedOptions}
+          rejectedOptions={rejectedOptions}
+          userComment={effectiveUserComment}
+          artifact={artifact}
+          verification={verification}
+          promptExport={promptExport}
+          engineOptOut={engineOptOut}
+          manualFocus={manualFocus}
+          canvasNodes={canvasNodes}
+          onOpenBrain={onOpenBrain}
+          onStepSelect={handleStepSelect}
+        />
+        </div>
       </section>
     </main>
   );
+}
+
+export function CreateInterrogationPanel({
+  optionSet,
+  options,
+  selectedOptions,
+  rejectedOptions,
+  engineOptOut,
+  manualFocus,
+  userAnswer,
+  artifact,
+  verification,
+  busy,
+  onEngineOptOutChange,
+  onManualFocusChange,
+  onUserAnswerChange,
+  onToggleOption,
+  onRejectOption,
+  onUpdateArtifact,
+  onLearnThis,
+}: {
+  optionSet: OptionSet | null;
+  options: CandidateOption[];
+  selectedOptions: CandidateOption[];
+  rejectedOptions: CandidateOption[];
+  engineOptOut: boolean;
+  manualFocus: string;
+  userAnswer: string;
+  artifact: CodingPromptArtifact | null;
+  verification: VerificationSummary | null;
+  busy: boolean;
+  onEngineOptOutChange: (optedOut: boolean) => void;
+  onManualFocusChange: (focus: string) => void;
+  onUserAnswerChange: (answer: string) => void;
+  onToggleOption: (optionId: string) => void;
+  onRejectOption: (optionId: string) => void;
+  onUpdateArtifact: () => void;
+  onLearnThis?: ((option: CandidateOption) => void) | undefined;
+}) {
+  if (!optionSet) {
+    return null;
+  }
+
+  const promptTurn = createPromptTurn({
+    optionSet,
+    options,
+    selectedOptions,
+    rejectedOptions,
+    engineOptOut,
+    manualFocus,
+    artifact,
+    verification,
+  });
+
+  return (
+    <section className="create-interrogation-panel" aria-label="Create prompt turn" data-testid="create-interrogation-panel">
+      <header>
+        <div>
+          <span>{engineOptOut ? "Manual focus" : "Backend push"}</span>
+          <strong>{promptTurn.title}</strong>
+        </div>
+        <button
+          type="button"
+          className={engineOptOut ? "is-active" : ""}
+          onClick={() => onEngineOptOutChange(!engineOptOut)}
+          aria-pressed={engineOptOut}
+          disabled={busy}
+        >
+          {engineOptOut ? "Use Penny push" : "Opt out"}
+        </button>
+      </header>
+
+      {engineOptOut ? (
+        <label className="create-manual-focus-field">
+          <span>Immediate focus</span>
+          <input
+            value={manualFocus}
+            onChange={(event) => onManualFocusChange(event.target.value)}
+            placeholder="Name what needs attention right now."
+            disabled={busy}
+          />
+        </label>
+      ) : null}
+
+      <div className="create-current-question">
+        <span>Prompt</span>
+        <p>{promptTurn.question}</p>
+        <small>{promptTurn.reason}</small>
+      </div>
+
+      <div className="create-answer-option-grid" aria-label="Five prompt options">
+        {promptTurn.choices.map((choice, index) => {
+          const selected = selectedOptions.some((option) => option.id === choice.option.id);
+          const rejected = rejectedOptions.some((option) => option.id === choice.option.id);
+
+          return (
+            <article
+              key={choice.option.id}
+              className={`${selected ? "is-selected" : ""}${rejected ? " is-rejected" : ""}`}
+              onContextMenu={(event) => {
+                if (!onLearnThis) {
+                  return;
+                }
+
+                event.preventDefault();
+                onLearnThis(choice.option);
+              }}
+            >
+              <button
+                type="button"
+                className="create-answer-option-main"
+                aria-pressed={selected}
+                onClick={(event) => {
+                  if (onLearnThis && (event.metaKey || event.altKey)) {
+                    onLearnThis(choice.option);
+                    return;
+                  }
+
+                  onToggleOption(choice.option.id);
+                }}
+                disabled={busy}
+              >
+                <span>{index + 1}</span>
+                <strong>{choice.title}</strong>
+                <p>{choice.body}</p>
+              </button>
+              <div className="create-answer-option-actions">
+                {onLearnThis ? (
+                  <button
+                    type="button"
+                    aria-label={`Learn direction ${index + 1}: ${choice.option.title}`}
+                    title="Learn direction"
+                    onClick={() => onLearnThis(choice.option)}
+                    disabled={busy}
+                  >
+                    <BookOpen size={14} />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label={`${rejected ? "Unreject" : "Reject"} prompt option ${index + 1}: ${choice.option.title}`}
+                  aria-pressed={rejected}
+                  onClick={() => onRejectOption(choice.option.id)}
+                  disabled={busy}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <label className="create-answer-field">
+        <span>Your answer / changes</span>
+        <textarea
+          value={userAnswer}
+          onChange={(event) => onUserAnswerChange(event.target.value)}
+          placeholder="Answer the prompt, combine options, or rewrite the direction."
+          disabled={busy}
+        />
+      </label>
+      <div className="create-action-row">
+        <button type="button" className="check-primary-button" onClick={onUpdateArtifact} disabled={busy}>
+          <CheckCircle2 size={15} />
+          Answer and update tree
+        </button>
+        <span>{promptTurn.readiness}</span>
+      </div>
+    </section>
+  );
+}
+
+type CreatePromptTurn = {
+  title: string;
+  question: string;
+  reason: string;
+  readiness: string;
+  choices: Array<{
+    option: CandidateOption;
+    title: string;
+    body: string;
+  }>;
+};
+
+function createPromptTurn(input: {
+  optionSet: OptionSet;
+  options: CandidateOption[];
+  selectedOptions: CandidateOption[];
+  rejectedOptions: CandidateOption[];
+  engineOptOut: boolean;
+  manualFocus: string;
+  artifact: CodingPromptArtifact | null;
+  verification: VerificationSummary | null;
+}): CreatePromptTurn {
+  const selectedLabel = input.selectedOptions.map((option) => option.lens).join(" + ");
+  const primaryOption = input.selectedOptions[0] ?? optionMatchingNextMove(input.options, input.optionSet.nextBestMove) ?? input.options[0];
+  const weakChecks = input.verification?.checks.filter((check) => check.status !== "pass") ?? [];
+  const firstWeakCheck = weakChecks[0] ?? null;
+  const title = input.engineOptOut
+    ? input.manualFocus.trim() || "Work the live problem"
+    : selectedLabel
+      ? `Interrogate ${selectedLabel}`
+      : input.optionSet.nextBestMove.title;
+  const question = input.engineOptOut
+    ? `What should this Idea Spec solve before Penny returns to ${input.optionSet.nextBestMove.title}?`
+    : firstWeakCheck
+      ? `${firstWeakCheck.label}: what answer would make this safe enough to lock into the outline?`
+      : primaryOption
+        ? `What has to be true for "${primaryOption.title}" to become the next locked branch of the Idea Spec?`
+        : input.optionSet.nextBestMove.action;
+  const reason = input.engineOptOut
+    ? "Manual focus is recorded as explicit judgment; Penny can resume the backend push after this turn."
+    : input.optionSet.nextBestMove.whyItMatters;
+  const readiness = createPromptTurnReadiness(input.artifact, input.verification, input.selectedOptions.length, Boolean(input.manualFocus.trim()));
+  const choices = input.options.map((option) => ({
+    option,
+    title: `${option.lens}: ${option.title}`,
+    body: promptChoiceBody(option, input.selectedOptions.some((selected) => selected.id === option.id)),
+  }));
+
+  return { title, question, reason, readiness, choices };
+}
+
+function createPromptTurnReadiness(
+  artifact: CodingPromptArtifact | null,
+  verification: VerificationSummary | null,
+  selectedCount: number,
+  hasManualFocus: boolean,
+): string {
+  if (verification?.verdict === "ready" && artifact && artifact.version >= 3) {
+    return "Tree is dense enough to export.";
+  }
+
+  if (verification?.verdict === "ready" && artifact) {
+    return "Outline is usable; one more turn can sharpen it.";
+  }
+
+  if (selectedCount || hasManualFocus) {
+    return "Ready to record this turn.";
+  }
+
+  return "Choose an option, answer, or opt out.";
+}
+
+function promptChoiceBody(option: CandidateOption, selected: boolean): string {
+  const prefix = selected ? "Selected branch." : "Possible branch.";
+
+  return `${prefix} ${option.nextMove}`;
+}
+
+function optionMatchingNextMove(options: CandidateOption[], nextBestMove: NextBestMove): CandidateOption | null {
+  const lensMatch = options.find((option) => nextBestMove.title.toLowerCase().includes(option.lens.toLowerCase()));
+
+  return lensMatch ?? null;
+}
+
+export function CreateFitTreeRail({
+  activeIndex,
+  status,
+  optionSet,
+  selectedOptions,
+  rejectedOptions,
+  userComment,
+  artifact,
+  verification,
+  promptExport,
+  engineOptOut,
+  manualFocus,
+  canvasNodes,
+  onOpenBrain,
+  onStepSelect,
+}: {
+  activeIndex: number;
+  status: string;
+  optionSet: OptionSet | null;
+  selectedOptions: CandidateOption[];
+  rejectedOptions: CandidateOption[];
+  userComment: string;
+  artifact: CodingPromptArtifact | null;
+  verification: VerificationSummary | null;
+  promptExport: PromptExport | null;
+  engineOptOut: boolean;
+  manualFocus: string;
+  canvasNodes: CreateCanvasNode[];
+  onOpenBrain?: (() => void) | undefined;
+  onStepSelect?: ((index: number) => void) | undefined;
+}) {
+  const outlineSections = artifact ? ycArtifactOutline(artifact).slice(0, 8) : [];
+  const readiness = createFitTreeReadiness({ artifact, verification, promptExport });
+  const selectedLabel = selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "No locked branch yet";
+  const rejectedLabel = rejectedOptions.length ? rejectedOptions.map((option) => option.lens).join(" + ") : "No rejected branch yet";
+  const focusLabel = engineOptOut && manualFocus.trim() ? manualFocus.trim() : optionSet?.nextBestMove.title ?? "Waiting for first prompt";
+
+  return (
+    <aside className="create-fit-tree-rail" aria-label="Create fit tree" data-testid="create-fit-tree-rail">
+      <header>
+        <div>
+          <span>Live fit tree</span>
+          <strong>{readiness}</strong>
+        </div>
+        {onOpenBrain ? (
+          <button type="button" onClick={onOpenBrain}>
+            Brain
+          </button>
+        ) : null}
+      </header>
+
+      <ol className="create-fit-tree-steps">
+        {createPathSteps.map((step, index) => {
+          const active = index === activeIndex;
+
+          return (
+            <li key={step} className={active ? "is-active" : ""}>
+              <button type="button" aria-current={active ? "step" : undefined} onClick={() => onStepSelect?.(index)}>
+                <span>{index + 1}</span>
+                <strong>{step}</strong>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+
+      <section className="create-fit-tree-focus">
+        <span>{engineOptOut ? "Opt-out focus" : "Engine focus"}</span>
+        <strong>{focusLabel}</strong>
+        <p>{optionSet?.nextBestMove.action ?? "Generate directions to start the backend progress engine."}</p>
+      </section>
+
+      <dl className="create-fit-tree-judgment">
+        <div>
+          <dt>Selected</dt>
+          <dd>{selectedLabel}</dd>
+        </div>
+        <div>
+          <dt>Rejected</dt>
+          <dd>{rejectedLabel}</dd>
+        </div>
+        <div>
+          <dt>Answer</dt>
+          <dd>{userComment.trim() ? clipDisplayText(userComment, 90) : "No answer recorded yet"}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{status}</dd>
+        </div>
+      </dl>
+
+      <section className="create-fit-tree-outline" aria-label="Idea Spec outline rail">
+        <div>
+          <span>Outline</span>
+          <strong>{artifact ? `v${artifact.version} with ${artifact.sections.length} sections` : "Waiting for Idea Spec"}</strong>
+        </div>
+        {outlineSections.length ? (
+          <ol>
+            {outlineSections.map((section) => (
+              <li key={section.title} className={section.status === "updated" ? "is-updated" : ""}>
+                <strong>{section.title}</strong>
+                <p>{artifactOutlinePreview(section.body)}</p>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>Choose a direction to start filling the structure.</p>
+        )}
+      </section>
+
+      <section className="create-fit-tree-canvas" aria-label="Create canvas rail">
+        <div>
+          <span>Canvas</span>
+          <strong>Current graph slice</strong>
+        </div>
+        <ol>
+          {canvasNodes.map((node) => (
+            <li key={node.id}>
+              <strong>{node.label}</strong>
+              <p>{node.detail}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </aside>
+  );
+}
+
+function createFitTreeReadiness({
+  artifact,
+  verification,
+  promptExport,
+}: {
+  artifact: CodingPromptArtifact | null;
+  verification: VerificationSummary | null;
+  promptExport: PromptExport | null;
+}): string {
+  if (promptExport) {
+    return "Ready for Codex";
+  }
+
+  if (artifact && verification?.verdict === "ready" && artifact.version >= 3) {
+    return "Fit tree locked";
+  }
+
+  if (artifact && verification?.verdict === "ready") {
+    return "Detailed outline forming";
+  }
+
+  if (artifact) {
+    return "Interrogation in progress";
+  }
+
+  return "Seed ready";
 }
 
 export function CreatePromptExportActions({
@@ -1150,6 +1601,8 @@ function persistCreateWorkspaceDraft(draft: PersistedCreateWorkspaceDraft): void
     draft.draftText.trim() ||
     draft.optionSet ||
     draft.selectedOptionIds.length ||
+    draft.engineOptOut ||
+    draft.manualFocus?.trim() ||
     draft.userComment.trim() ||
     draft.artifact ||
     draft.createCanvas ||
@@ -1175,6 +1628,8 @@ function isCreateWorkspaceDraft(value: unknown): value is PersistedCreateWorkspa
     value.selectedOptionIds.every((optionId) => typeof optionId === "string") &&
     (value.rejectedOptionIds === undefined ||
       (Array.isArray(value.rejectedOptionIds) && value.rejectedOptionIds.every((optionId) => typeof optionId === "string"))) &&
+    (value.engineOptOut === undefined || typeof value.engineOptOut === "boolean") &&
+    (value.manualFocus === undefined || typeof value.manualFocus === "string") &&
     typeof value.userComment === "string" &&
     (value.optionSet === null || isRecord(value.optionSet)) &&
     (value.artifact === null || isRecord(value.artifact)) &&
@@ -1438,16 +1893,31 @@ export function CreateOptionBoard({
           return (
             <article
               key={option.id}
-              className={`create-option-card${onRejectOption ? " has-reject-action" : ""}${selected ? " is-selected" : ""}${rejected ? " is-rejected" : ""}`}
+              className={`create-option-card${onRejectOption || onLearnThis ? " has-reject-action" : ""}${onRejectOption && onLearnThis ? " has-two-actions" : ""}${selected ? " is-selected" : ""}${rejected ? " is-rejected" : ""}`}
               data-testid="create-option-card"
               data-create-lens={option.lens}
+              onContextMenu={(event) => {
+                if (!onLearnThis) {
+                  return;
+                }
+
+                event.preventDefault();
+                onLearnThis(option);
+              }}
             >
               <button
                 type="button"
                 className="create-option-select-button"
                 aria-pressed={selected}
                 aria-label={`${selected ? "Unselect" : "Select"} direction ${index + 1}: ${option.title}`}
-                onClick={() => onToggleOption(option.id)}
+                onClick={(event) => {
+                  if (onLearnThis && (event.metaKey || event.altKey)) {
+                    onLearnThis(option);
+                    return;
+                  }
+
+                  onToggleOption(option.id);
+                }}
                 disabled={busy}
               >
                 <span className="create-option-number">{index + 1}</span>
@@ -1460,8 +1930,21 @@ export function CreateOptionBoard({
               <div className="create-option-judgment-state" aria-label={`${option.lens} judgment state`}>
                 <span>{rejected ? "Rejected" : selected ? "Selected" : "Choose"}</span>
               </div>
-              {onRejectOption ? (
+              {onRejectOption || onLearnThis ? (
                 <div className="create-option-card-actions">
+                  {onLearnThis ? (
+                    <button
+                      type="button"
+                      className="create-option-learn-button"
+                      aria-label={`Learn direction ${index + 1}: ${option.title}`}
+                      title="Learn direction"
+                      onClick={() => onLearnThis(option)}
+                      disabled={busy}
+                    >
+                      <BookOpen size={14} />
+                    </button>
+                  ) : null}
+                  {onRejectOption ? (
                   <button
                     type="button"
                     className="create-option-reject-button"
@@ -1473,6 +1956,7 @@ export function CreateOptionBoard({
                   >
                     <X size={14} />
                   </button>
+                  ) : null}
                 </div>
               ) : null}
             </article>
@@ -2490,6 +2974,20 @@ function judgmentCommentWithRejected(comment: string, rejectedOptionIds: string[
   }
 
   return [cleanComment, `Rejected directions: ${rejectedLenses.join(", ")}.`].filter(Boolean).join("\n\n");
+}
+
+function createEffectiveUserComment({
+  userComment,
+  engineOptOut,
+  manualFocus,
+}: {
+  userComment: string;
+  engineOptOut: boolean;
+  manualFocus: string;
+}): string {
+  const focus = engineOptOut && manualFocus.trim() ? `Opt-out focus: ${manualFocus.trim()}.` : "";
+
+  return [focus, userComment.trim()].filter(Boolean).join("\n\n");
 }
 
 function uniqueById<T extends { id: string }>(values: T[]): T[] {
