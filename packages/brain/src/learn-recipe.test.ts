@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LearnRecipeOutputSchema, runLearnRecipe } from "./learn-recipe.ts";
+import { LearnRecipeOutputSchema, buildLearningPlanPrompt, buildLearningPlanSystemPrompt, runLearnRecipe } from "./learn-recipe.ts";
+
+test("Learn plan prompts preserve researched learning lenses and public-figure guardrails", () => {
+  const system = buildLearningPlanSystemPrompt();
+  const prompt = buildLearningPlanPrompt({
+    rawIdea: "Teach me AI engineering from scratch like a first-principles operator.",
+    keyInsight: "The learner needs primitives, traces, tests, and an artifact.",
+    claims: [{ kind: "concept", text: "AI engineering is learned from primitives." }],
+    learnCandidates: [{ term: "AI engineering" }],
+    explorationPaths: [{ title: "Tiny agent loop", prompt: "Trace prompt -> model -> tool -> observation." }],
+    sourceContext: null,
+  });
+
+  assert.match(system, /primitive -> trace -> test -> artifact/i);
+  assert.match(system, /do not impersonate/i);
+  assert.match(prompt, /learningBlueprint/);
+  assert.match(prompt, /from-scratch builder/);
+  assert.match(prompt, /public mental model or principles/i);
+});
 
 test("LearnRecipe structures recipe steps and keeps web search hidden behind SearchDecisionService", async () => {
   const output = await runLearnRecipe({
