@@ -368,12 +368,13 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.match(markup, /Name the failure signal/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
-  assert.match(markup, /AI lesson output/);
+  assert.match(markup, /Lesson cards/);
   assert.match(markup, /Visual/);
-  assert.match(markup, /Pricing value map/);
+  assert.match(markup, /Tiny map/);
+  assert.match(markup, /Next: Move: Name the pricing goal/);
 });
 
-test("LearnWorkspace keeps backend V2 pages as single visible steps", () => {
+test("LearnWorkspace splits backend V2 pages into digestible micro-steps", () => {
   const markup = renderToStaticMarkup(
     createElement(LearnWorkspace, learnWorkspaceProps({
       data: {
@@ -413,15 +414,16 @@ test("LearnWorkspace keeps backend V2 pages as single visible steps", () => {
   );
 
   assert.match(markup, /Equal groups/);
-  assert.match(markup, /LESSON 1 \/ 1/);
-  assert.match(markup, /AI lesson output/);
-  assert.match(markup, /Groups diagram/);
-  assert.match(markup, /What is 3 groups of 4/);
-  assert.match(markup, /Multiplication is repeated equal grouping/);
-  assert.doesNotMatch(markup, /1\.2/);
-  assert.doesNotMatch(markup, /1\.3/);
-  assert.doesNotMatch(markup, /Work an example/);
-  assert.doesNotMatch(markup, /Check understanding/);
+  assert.match(markup, /LESSON 1 \/ 3/);
+  assert.match(markup, /What it means/);
+  assert.match(markup, /Work the move/);
+  assert.match(markup, /Try the check/);
+  assert.match(markup, /1\.2/);
+  assert.match(markup, /1\.3/);
+  assert.match(markup, /Lesson cards/);
+  assert.match(markup, /Multiplication counts equal-size groups/);
+  assert.match(markup, /Tiny map/);
+  assert.match(markup, /Next: Work the move/);
 });
 
 test("LearnWorkspace prefers AI-generated V2 pages over planning scaffold", () => {
@@ -490,7 +492,8 @@ test("LearnWorkspace prefers AI-generated V2 pages over planning scaffold", () =
 
   assert.match(markup, /AI equal groups/);
   assert.match(markup, /The AI lesson says multiplication means counting equal groups/);
-  assert.match(markup, /AI grouping diagram/);
+  assert.match(markup, /What it means/);
+  assert.match(markup, /Work the move/);
   assert.doesNotMatch(markup, /Name the end state/);
   assert.doesNotMatch(markup, /Planning definition/);
   assert.doesNotMatch(markup, /Planning visual/);
