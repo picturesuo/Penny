@@ -12,6 +12,8 @@ import {
   CreateComparisonPanel,
   CreateEvidenceLedgerPanel,
   CreateExportFeedbackPanel,
+  CreateFitTreeRail,
+  CreateInterrogationPanel,
   CreateJudgmentNextPlace,
   CreateLearnBridgePanel,
   CreateOptionBoard,
@@ -354,6 +356,81 @@ test("CreateLearnBridgePanel exposes the Brain Ranker lesson and focus node", ()
   assert.equal(node.refs?.artifactId, artifact.id);
   assert.match(node.summary ?? "", /Personal \+ Valuable \+ Critical/);
   assert.match(node.summary ?? "", /explicit selections, comments, and export feedback/);
+});
+
+test("CreateInterrogationPanel renders backend push, manual opt-out, answer box, and Learn controls", () => {
+  const optionSet = createOptionSet("deterministic");
+  const artifact = createComparisonArm("deterministic", optionSet.options).artifact;
+  const markup = renderToStaticMarkup(
+    createElement(CreateInterrogationPanel, {
+      optionSet,
+      options: optionSet.options,
+      selectedOptions: [memoryGroundedOption()],
+      rejectedOptions: [contextLightOption()],
+      engineOptOut: true,
+      manualFocus: "Decide the stack before architecture",
+      userAnswer: "I need to compare boring React versus a server-rendered stack.",
+      artifact,
+      verification: null,
+      busy: false,
+      onEngineOptOutChange: () => undefined,
+      onManualFocusChange: () => undefined,
+      onUserAnswerChange: () => undefined,
+      onToggleOption: () => undefined,
+      onRejectOption: () => undefined,
+      onUpdateArtifact: () => undefined,
+      onLearnThis: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /data-testid="create-interrogation-panel"/);
+  assert.match(markup, /Manual focus/);
+  assert.match(markup, /Decide the stack before architecture/);
+  assert.match(markup, /Five prompt options/);
+  assert.match(markup, /Personal: Make Create use remembered founder taste/);
+  assert.match(markup, /Your answer \/ changes/);
+  assert.match(markup, /I need to compare boring React versus a server-rendered stack/);
+  assert.match(markup, /Answer and update tree/);
+  assert.match(markup, /aria-label="Learn direction 1:/);
+});
+
+test("CreateFitTreeRail renders the live outline, engine focus, judgment, and canvas slice", () => {
+  const arm = createComparisonArm("deterministic", createOptionSet("deterministic").options);
+  const markup = renderToStaticMarkup(
+    createElement(CreateFitTreeRail, {
+      activeIndex: 3,
+      status: "Next Create prompt ready",
+      optionSet: arm.optionSet,
+      selectedOptions: [memoryGroundedOption()],
+      rejectedOptions: [contextLightOption()],
+      userComment: "Opt-out focus: choose stack.\n\nFavor boring tools.",
+      artifact: arm.artifact,
+      verification: arm.verification,
+      promptExport: arm.promptExport,
+      engineOptOut: false,
+      manualFocus: "",
+      canvasNodes: [
+        {
+          id: "create",
+          label: "Create",
+          detail: "Selected Personal",
+          edgeToNext: "explains",
+        },
+      ],
+      onOpenBrain: () => undefined,
+      onStepSelect: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /data-testid="create-fit-tree-rail"/);
+  assert.match(markup, /Live fit tree/);
+  assert.match(markup, /Ready for Codex/);
+  assert.match(markup, /Engine focus/);
+  assert.match(markup, /Selected<\/dt><dd>Personal/);
+  assert.match(markup, /Rejected<\/dt><dd>Practical/);
+  assert.match(markup, /Outline/);
+  assert.match(markup, /Canvas/);
+  assert.match(markup, /Selected Personal/);
 });
 
 test("Create UI smoke covers Brain state, five options, evidence, verification, and export feedback", () => {
