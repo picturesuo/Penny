@@ -575,8 +575,9 @@ export function MicroLessonSlide({
   lessonCount: number;
   onMeaningMapQuestion?: (question: string) => void;
 }) {
-  const displayExplanation = truncateWords(lesson.shortExplanation, 26);
+  const displayExplanation = truncateWords(lesson.shortExplanation, 24);
   const focusFit = microLessonFocusFit(displayExplanation);
+  const parentTitle = lesson.parentTitle && lesson.parentTitle !== lesson.title ? lesson.parentTitle : lesson.learningGoal;
 
   return (
     <section className="micro-lesson-slide" aria-label={`Lesson ${activeLessonIndex + 1} of ${lessonCount}`}>
@@ -584,6 +585,7 @@ export function MicroLessonSlide({
         <span>
           LESSON {activeLessonIndex + 1} / {lessonCount}
         </span>
+        <p className="micro-lesson-parent-title">{parentTitle}</p>
         <h1>{lesson.title}</h1>
       </header>
 
@@ -609,7 +611,7 @@ export function MicroLessonSlide({
 
 function AiLessonOutput({ lesson }: { lesson: LearnLesson }) {
   return (
-    <section className="ai-lesson-output" aria-label="AI lesson output">
+    <section className="ai-lesson-output" aria-label="Lesson cards">
       <article>
         <span>Visual</span>
         <strong>{lesson.visual.title}</strong>
@@ -715,17 +717,17 @@ function meaningMapSourceLabel(label: string | undefined): string {
 export function microLessonFocusFit(text: string) {
   const characterCount = text.replace(/\s+/g, " ").trim().length;
   const maxLineCharacters =
-    characterCount > 360 ? 68 :
-    characterCount > 240 ? 58 :
+    characterCount > 300 ? 64 :
+    characterCount > 220 ? 56 :
     characterCount > 150 ? 48 :
     characterCount > 90 ? 40 :
-    32;
+    34;
   const fontSizePx =
-    maxLineCharacters >= 68 ? 20 :
-    maxLineCharacters >= 58 ? 23 :
-    maxLineCharacters >= 48 ? 28 :
-    maxLineCharacters >= 40 ? 34 :
-    44;
+    maxLineCharacters >= 64 ? 18 :
+    maxLineCharacters >= 56 ? 20 :
+    maxLineCharacters >= 48 ? 22 :
+    maxLineCharacters >= 40 ? 24 :
+    26;
 
   return {
     characterCount,
@@ -1808,7 +1810,7 @@ function createCreateBridgeLesson(input: {
 }
 
 function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2): LearnPageData {
-  const steps = sessionV2.pages.map((page, index) => {
+  const pageSteps = sessionV2.pages.map((page, index) => {
     const lesson = learnLessonFromV2Page(page, sessionV2.pages.length);
 
     return {
@@ -1825,6 +1827,7 @@ function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2): LearnPageDa
       ],
     };
   });
+  const steps = withDigestibleSubstepsForThinSteps(pageSteps);
 
   return {
     goal: sessionV2.goal,
@@ -1881,7 +1884,7 @@ function buildLearnPageDataFromPlan(
   output: LearnSessionOutput,
 ): LearnPageData {
   const totalSteps = plan.groups.length;
-  const steps = plan.groups.map((group, stepIndex) => ({
+  const planSteps = plan.groups.map((group, stepIndex) => ({
     id: group.id,
     title: group.title,
     expanded: stepIndex === 0,
@@ -1935,6 +1938,7 @@ function buildLearnPageDataFromPlan(
       };
     }),
   }));
+  const steps = withDigestibleSubstepsForThinSteps(planSteps);
 
   return {
     goal: plan.goal,
@@ -1951,6 +1955,207 @@ function buildLearnPageDataFromPlan(
       placeholder: "Ask about this subgroup...",
     },
   };
+}
+
+function withDigestibleSubstepsForThinSteps(steps: LearnPageData["steps"]): LearnPageData["steps"] {
+  return steps.map((step) => {
+    if (step.substeps.length >= 3) {
+      return renumberStepSubsteps(step);
+    }
+
+    const includeBaseTitle = step.substeps.length > 1;
+    const expandedSubsteps = step.substeps.flatMap((substep) => digestibleSubstepsFromLesson(substep, includeBaseTitle));
+
+    return renumberStepSubsteps({
+      ...step,
+      substeps: expandedSubsteps,
+    });
+  });
+}
+
+function renumberStepSubsteps(step: LearnPageData["steps"][number]): LearnPageData["steps"][number] {
+  const totalSubsteps = step.substeps.length;
+
+  return {
+    ...step,
+    substeps: step.substeps.map((substep, index) => {
+      const previousSubstep = step.substeps[index - 1];
+      const nextSubstep = step.substeps[index + 1];
+
+      return {
+        ...substep,
+        isActive: index === 0 && step.expanded,
+        lesson: {
+          ...substep.lesson,
+          substepNumber: index + 1,
+          totalSubsteps,
+          ...(previousSubstep ? { previousStepTitle: previousSubstep.title } : {}),
+          nextStepTitle: nextSubstep?.title ?? substep.lesson.nextStepTitle,
+        },
+      };
+    }),
+  };
+}
+
+function digestibleSubstepsFromLesson(
+  substep: LearnPageData["steps"][number]["substeps"][number],
+  includeBaseTitle: boolean,
+): LearnPageData["steps"][number]["substeps"] {
+  const lesson = substep.lesson;
+  const baseTitle = truncateWords(lesson.title, 5);
+  const stages = digestibleStagesForLesson(lesson);
+
+  return stages.map((stage, index) => {
+    const title = includeBaseTitle ? `${stage.sidebarLabel}: ${baseTitle}` : stage.title;
+
+    return {
+      id: `${substep.id}-micro-${index + 1}`,
+      title,
+      isActive: substep.isActive && index === 0,
+      lesson: {
+        ...lesson,
+        title,
+        parentTitle: lesson.title,
+        learningGoal: stage.learningGoal,
+        shortExplanation: stage.shortExplanation,
+        visual: stage.visual,
+        quickCheck: stage.quickCheck,
+        takeaway: stage.takeaway,
+        teachingSections: stage.teachingSections,
+        coreIdea: {
+          ...lesson.coreIdea,
+          bullets: stage.bullets,
+        },
+        example: {
+          ...lesson.example,
+          description: stage.exampleDescription,
+          lines: stage.exampleLines,
+        },
+      },
+    };
+  });
+}
+
+function digestibleStagesForLesson(lesson: LearnLesson): Array<{
+  sidebarLabel: string;
+  title: string;
+  learningGoal: string;
+  shortExplanation: string;
+  visual: LearnPageV2["visual"];
+  quickCheck: string;
+  takeaway: string;
+  teachingSections: LearnLesson["teachingSections"];
+  bullets: string[];
+  exampleDescription: string;
+  exampleLines: string[];
+}> {
+  const meaning = compactLessonText(
+    firstText(lesson.shortExplanation, lesson.teachingSections[0]?.body, lesson.learningGoal),
+    "Name the small idea this page is trying to make clear.",
+    28,
+  );
+  const workedMove = compactLessonText(
+    firstText(lesson.example.lines[0], lesson.example.description, lesson.visual.description, lesson.shortExplanation),
+    "Watch one example move from input to result.",
+    30,
+  );
+  const check = compactLessonText(lesson.quickCheck, "Check whether the move makes sense on one tiny case.", 28);
+  const takeaway = compactLessonText(lesson.takeaway, "Keep the reusable result and move on with a smaller burden.", 24);
+  const meaningBullets = uniqueNonEmpty([meaning, ...lesson.coreIdea.bullets]).slice(0, 4);
+  const moveBullets = uniqueNonEmpty([workedMove, ...lesson.example.lines, ...lesson.coreIdea.bullets]).slice(0, 4);
+  const checkBullets = uniqueNonEmpty([check, takeaway, ...lesson.misconceptions]).slice(0, 3);
+
+  return [
+    {
+      sidebarLabel: "Meaning",
+      title: "What it means",
+      learningGoal: meaning,
+      shortExplanation: meaning,
+      visual: digestibleConceptVisual("Tiny map", "Only the idea, the move, and the use stay on this screen.", meaningBullets),
+      quickCheck: `Say the idea in one short sentence: ${truncateWords(meaning, 14)}`,
+      takeaway: meaning,
+      teachingSections: [
+        { title: "Meaning", body: ensureCompactBody(meaning) },
+        { title: "One move", body: ensureCompactBody(lesson.coreIdea.bullets[0] ?? meaning) },
+        { title: "Boundary", body: ensureCompactBody(lesson.misconceptions[0] ?? "Do not open the whole topic yet.") },
+      ],
+      bullets: meaningBullets,
+      exampleDescription: "The concept reduced to the smallest useful map.",
+      exampleLines: meaningBullets,
+    },
+    {
+      sidebarLabel: "Move",
+      title: "Work the move",
+      learningGoal: workedMove,
+      shortExplanation: workedMove,
+      visual: {
+        ...lesson.visual,
+        description: compactLessonText(lesson.visual.description, workedMove, 24),
+      },
+      quickCheck: lesson.quickCheck,
+      takeaway,
+      teachingSections: [
+        { title: "Input", body: ensureCompactBody(lesson.example.lines[0] ?? lesson.visual.body) },
+        { title: "Move", body: ensureCompactBody(lesson.coreIdea.bullets[0] ?? workedMove) },
+        { title: "Result", body: ensureCompactBody(takeaway) },
+      ],
+      bullets: moveBullets,
+      exampleDescription: lesson.example.description,
+      exampleLines: moveBullets,
+    },
+    {
+      sidebarLabel: "Check",
+      title: "Try the check",
+      learningGoal: check,
+      shortExplanation: check,
+      visual: digestibleConceptVisual("Check loop", "A quick attempt, a result, and one mistake to avoid.", checkBullets),
+      quickCheck: check,
+      takeaway,
+      teachingSections: [
+        { title: "Try", body: ensureCompactBody(check) },
+        { title: "Keep", body: ensureCompactBody(takeaway) },
+        { title: "Avoid", body: ensureCompactBody(lesson.misconceptions[0] ?? "Do not mistake recognition for understanding.") },
+      ],
+      bullets: checkBullets,
+      exampleDescription: "The smallest check that proves whether the move stuck.",
+      exampleLines: checkBullets,
+    },
+  ];
+}
+
+function digestibleConceptVisual(title: string, description: string, bullets: string[]): LearnPageV2["visual"] {
+  const labels = ["Idea", "Move", "Check", "Keep"];
+  const items = bullets.slice(0, 4).map((text, index) => ({ label: labels[index] ?? `Step ${index + 1}`, text }));
+
+  return {
+    type: "concept_map",
+    title,
+    description,
+    body: items.map((item) => item.text).join(" -> "),
+    ...(items.length ? { items } : {}),
+  };
+}
+
+function compactLessonText(value: string, fallback: string, maxWords: number): string {
+  const compact = firstSentence(value).replace(/\s+/g, " ").trim();
+  return truncateWords(compact || fallback, maxWords);
+}
+
+function firstSentence(value: string): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  const match = compact.match(/^.*?[.!?](?:\s|$)/);
+
+  return (match?.[0] ?? compact).trim();
+}
+
+function ensureCompactBody(value: string): string {
+  const compact = truncateWords(value, 32);
+
+  if (compact.length >= 40) {
+    return compact;
+  }
+
+  return `${compact} Keep it tied to this one screen.`;
 }
 
 function flattenLessonPages(steps: LearnPageData["steps"]): LearnLessonPage[] {
