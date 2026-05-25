@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, BookOpen, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
+import { ArrowUp, BookOpen, CheckCircle2, ChevronDown, ChevronRight, Copy, Download, RefreshCcw, Sparkles, X } from "lucide-react";
 import { compareCreateProviders, createNext, exportCodingPrompt, submitCreateExportFeedback } from "../api/brainClient";
 import { truncateWords } from "../lib/text";
 import type {
@@ -1461,26 +1461,17 @@ export function CreateOptionBoard({
                 <span>{rejected ? "Rejected" : selected ? "Selected" : "Choose"}</span>
               </div>
               <div className="create-option-card-actions">
-                <button
-                  type="button"
-                  className="create-option-detail-button"
-                  onClick={() => setDetailOption(option.id)}
-                  data-testid="create-option-details-button"
-                >
-                  <Info size={14} />
-                  Details
-                </button>
                 {onRejectOption ? (
                   <button
                     type="button"
-                    className="create-option-detail-button"
+                    className="create-option-reject-button"
                     aria-pressed={rejected}
+                    aria-label={`${rejected ? "Unreject" : "Reject"} direction ${index + 1}: ${option.title}`}
                     onClick={() => onRejectOption(option.id)}
                     disabled={busy}
                     data-testid="create-option-reject-button"
                   >
                     <X size={14} />
-                    Reject
                   </button>
                 ) : null}
               </div>
