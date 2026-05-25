@@ -600,9 +600,54 @@ export function MicroLessonSlide({
         </p>
       </section>
 
+      <LessonPartsStrip lesson={lesson} />
+
       <LearnUnderstandingTour lesson={lesson} {...(onMeaningMapQuestion ? { onAskAboutItem: onMeaningMapQuestion } : {})} />
     </section>
   );
+}
+
+function LessonPartsStrip({ lesson }: { lesson: LearnLesson }) {
+  const parts = lessonPartsForDisplay(lesson);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="lesson-parts-strip" aria-label="Main lesson parts">
+      <ol>
+        {parts.map((part, index) => (
+          <li key={`${part.title}-${index}`}>
+            <span>{part.title}</span>
+            <strong>{part.body}</strong>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function lessonPartsForDisplay(lesson: LearnLesson): Array<{ title: string; body: string }> {
+  const teachingParts = lesson.teachingSections
+    .filter((section) => section.title.trim() && section.body.trim())
+    .slice(0, 3)
+    .map((section) => ({
+      title: section.title,
+      body: truncateWords(section.body, 12),
+    }));
+
+  if (teachingParts.length > 0) {
+    return teachingParts;
+  }
+
+  return lesson.coreIdea.bullets
+    .filter((bullet) => bullet.trim())
+    .slice(0, 3)
+    .map((bullet, index) => ({
+      title: `Part ${index + 1}`,
+      body: truncateWords(bullet, 12),
+    }));
 }
 
 export function LearnUnderstandingTour({

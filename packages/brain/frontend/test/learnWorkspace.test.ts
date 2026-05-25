@@ -358,10 +358,11 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.doesNotMatch(markup, /What twist changes the answer/);
   assert.doesNotMatch(markup, /What would a strong answer look like/);
   assert.doesNotMatch(markup, /What would a weak answer look like/);
-  assert.doesNotMatch(markup, /Definition/);
+  assert.match(markup, /Name the buyer/);
+  assert.match(markup, /Name the value unit/);
+  assert.match(markup, /Name the failure signal/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
-  assert.doesNotMatch(markup, /Name the buyer/);
   assert.doesNotMatch(markup, /Pricing value map/);
   assert.doesNotMatch(markup, /Your turn/);
   assert.doesNotMatch(markup, /Takeaway/);
