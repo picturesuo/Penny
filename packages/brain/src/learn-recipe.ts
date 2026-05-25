@@ -10,6 +10,7 @@ import {
   LearningPlanSchema,
   buildExpertLearningPlan,
   buildLearnSessionV2,
+  learningBlueprintFor,
   type LearningSourceContext,
 } from "./learn-plan.ts";
 
@@ -471,6 +472,10 @@ export function buildLearningPlanSystemPrompt(): string {
     "Use the user's exact topic as the subject matter and teach it directly.",
     "Each subgroup is one low-cognitive-load screen: concise, expert, concrete, and checked before moving on.",
     "Favor short meaning -> worked move -> check progressions over long explanations.",
+    "For technical topics, teach from raw primitives before frameworks: primitive -> trace -> test -> artifact.",
+    "For source-backed topics, keep source honesty visible: source span -> map -> teach -> use -> evidence gap.",
+    "For conceptual topics, use Socratic teach-back and misconception repair rather than passive exposition.",
+    "If the user asks to learn like a famous person or operator, translate that into public principles, constraints, inversion, and checks; do not impersonate the person's private voice.",
     "Do not mention Anthropic, chat, prompts, system messages, or instructions.",
     "Return only valid JSON. Do not wrap it in markdown.",
   ].join("\n");
@@ -495,12 +500,16 @@ export function buildLearningPlanPrompt(input: LearningPlanInputForProvider): st
     "- Teach the topic itself. Do not say what an expert would do; do it.",
     "- Make the first lesson immediately useful for the user's raw request.",
     "- Use concrete examples and checks specific to the topic.",
+    "- Pick a learning lens from the input blueprint and make it visible in expertRole.",
+    "- Prefer a diagnostic start, then primitive, worked trace, active recall, misconception, and saved artifact.",
+    "- If a public figure is mentioned, teach the public mental model or principles, not an imitation.",
     "- Split difficult ideas into many tiny subgroups; the learner should be able to press Enter through one digestible move at a time.",
     "- Keep every field short enough for a compact UI.",
     "",
     `Input JSON: ${JSON.stringify({
       rawIdea: clipText(input.rawIdea, 500),
       keyInsight: clipText(input.keyInsight, 500),
+      learningBlueprint: learningBlueprintFor(input),
       claims: input.claims.slice(0, 6).map((claim) => ({ ...claim, text: clipText(claim.text, 260) })),
       learnCandidates: input.learnCandidates.slice(0, 5),
       explorationPaths: input.explorationPaths.slice(0, 5).map((path) => ({
@@ -529,6 +538,8 @@ export function buildAnthropicLearningDraftPrompt(input: LearningPlanInputForPro
     "- For math or concrete procedures, work the user's actual numbers or example.",
     "- Keep each teachingParagraph under 120 words.",
     "- Make each lesson small enough to expand into meaning, worked move, and check screens.",
+    "- Use the learningBlueprint to choose the expert lens and output artifact.",
+    "- For public figures/operators, use public principles and decision tests without imitating their private voice.",
     "- Return only JSON. No markdown.",
     "",
     `Input JSON: ${JSON.stringify(compactLearningPlanInput(input))}`,
@@ -539,6 +550,7 @@ function compactLearningPlanInput(input: LearningPlanInputForProvider) {
   return {
     rawIdea: clipText(input.rawIdea, 500),
     keyInsight: clipText(input.keyInsight, 500),
+    learningBlueprint: learningBlueprintFor(input),
     claims: input.claims.slice(0, 6).map((claim) => ({ ...claim, text: clipText(claim.text, 260) })),
     learnCandidates: input.learnCandidates.slice(0, 5),
     explorationPaths: input.explorationPaths.slice(0, 5).map((path) => ({
