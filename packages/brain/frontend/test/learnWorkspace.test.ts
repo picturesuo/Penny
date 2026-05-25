@@ -515,6 +515,51 @@ test("LearnWorkspace prefers AI-generated V2 pages over planning scaffold", () =
   assert.doesNotMatch(markup, /Planning visual/);
 });
 
+test("LearnWorkspace surfaces the backend teaching lens for generated lessons", () => {
+  const markup = renderToStaticMarkup(
+    createElement(LearnWorkspace, learnWorkspaceProps({
+      data: {
+        source: { kind: "raw_idea", rawText: "Teach me AI engineering from scratch." },
+        learn: {
+          learningPlan: {
+            expertRole: "A from-scratch builder expert teaching through primitives, worked traces, small tests, and reusable artifacts.",
+            goal: "Understand prompt traces from scratch.",
+            paragraphFit: "one_subgroup_per_page",
+            groups: [],
+          },
+          sessionV2: {
+            version: "learn_session_v2",
+            goal: "Understand prompt traces from scratch.",
+            sourceOfTruth: "ai_generated_learn_pages_validated_locally",
+            visualTypes: ["diagram"],
+            pages: [
+              {
+                id: "prompt-trace",
+                lessonNumber: 1,
+                title: "Trace the primitive",
+                explanation: "A prompt trace starts with the raw input, then follows the model call, tool result, and checked output.",
+                visual: {
+                  type: "diagram",
+                  title: "Primitive trace",
+                  description: "Raw prompt, model call, tool result, and checked output.",
+                  body: "prompt -> model -> tool -> checked output",
+                },
+                quickCheck: "Name the raw input and checked output before adding a framework.",
+                takeaway: "From-scratch learning starts with a visible primitive trace.",
+                sourceSpans: [{ sourceId: "source.raw_idea", label: "Source idea", text: "Teach me AI engineering from scratch." }],
+              },
+            ],
+          },
+        },
+      },
+    })),
+  );
+
+  assert.match(markup, /from-scratch builder expert teaching/);
+  assert.match(markup, /Trace the primitive/);
+  assert.match(markup, /Understand prompt traces from scratch/);
+});
+
 test("LearnWorkspace exposes the whole learning path around the active step", () => {
   const steps = Array.from({ length: 8 }, (_, index) => ({
     id: `step-${index + 1}`,
