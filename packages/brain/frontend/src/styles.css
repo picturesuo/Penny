@@ -1821,12 +1821,16 @@
 
   .create-option-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 82px 42px;
+    grid-template-columns: minmax(0, 1fr) 82px;
     align-items: stretch;
     border: 1px solid rgb(17 17 17 / 0.12);
     border-radius: 7px;
     background: #fffdf7;
     overflow: hidden;
+  }
+
+  .create-option-card.has-reject-action {
+    grid-template-columns: minmax(0, 1fr) 82px 42px;
   }
 
   .create-option-card.is-selected {
