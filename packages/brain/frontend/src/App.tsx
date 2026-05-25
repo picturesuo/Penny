@@ -1029,6 +1029,7 @@ export function App() {
             {activeMode === "Learn" ? (
           <LearnWorkspace
             selectedDocument={selectedDocument}
+            documents={documentsData?.documents ?? []}
             data={data}
             autopilot={autopilot}
             focusedClaimId={focusedClaimId}

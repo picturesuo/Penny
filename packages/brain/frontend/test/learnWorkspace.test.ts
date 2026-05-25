@@ -15,9 +15,13 @@ test("LearnWorkspace first screen opens the Learn composer", () => {
   );
 
   assert.match(markup, /Start a Learn session/);
+  assert.match(markup, /Start from something Penny already knows/);
   assert.match(markup, /Build Learn path/);
-  assert.match(markup, /Drop any topic, source excerpt, decision, or question/);
+  assert.match(markup, /pick a previous thought/);
   assert.match(markup, /Paste the messy thought, decision, or question/);
+  assert.match(markup, /Ready for Brain/);
+  assert.match(markup, /Previous/);
+  assert.match(markup, /No previous thoughts yet/);
   assert.doesNotMatch(markup, /Name the program/);
   assert.doesNotMatch(markup, /YC is not just an investor logo/);
   assert.doesNotMatch(markup, /Current lesson context is loaded/);
@@ -55,7 +59,7 @@ test("LearnWorkspace first screen opens the Learn composer", () => {
   assert.doesNotMatch(markup, /What shall we think through/);
   assert.doesNotMatch(markup, /Save to Brain/);
   assert.doesNotMatch(markup, /Have I thought about this before/);
-  assert.doesNotMatch(markup, /USED YOUR BRAIN/);
+  assert.doesNotMatch(markup, /Used your Brain/);
   assert.doesNotMatch(markup, /Can you explain this in simpler terms/);
   assert.doesNotMatch(markup, /Give me another example/);
   assert.doesNotMatch(markup, /Search\/Settings|Settings|Makes Cents|MAKES CENTS/);
@@ -97,6 +101,41 @@ test("LearnWorkspace renders the Create Learn bridge with a Back to Create contr
   assert.match(markup, /data-testid="learn-understanding-tour"/);
   assert.match(markup, /Thinking graph/);
   assert.match(markup, /data-testid="learn-meaning-map"/);
+});
+
+test("LearnWorkspace lets Learn start from previous Brain material", () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      LearnWorkspace,
+      learnWorkspaceProps({
+        documents: [
+          {
+            id: "doc-pricing",
+            sessionId: "session-pricing",
+            title: "Pricing strategy",
+            description: "Figure out whether founders pay for sharper decisions.",
+            status: "open",
+            originalIdea: "Should Penny charge founders for decision support?",
+            mainClaim: null,
+            strongestOptions: [],
+            rejectedOptions: [],
+            todoLaterIdeas: [],
+            finalRecommendations: [],
+            nextActions: ["Check willingness to pay"],
+            counts: { claims: 1, edges: 0, moves: 1, artifacts: 0, versions: 1 },
+            latestArtifact: null,
+            lastMove: null,
+            createdAt: "2026-05-24T00:00:00.000Z",
+            updatedAt: "2026-05-24T00:00:00.000Z",
+          },
+        ],
+      }),
+    ),
+  );
+
+  assert.match(markup, /Learn from your Brain/);
+  assert.match(markup, /Pricing strategy/);
+  assert.match(markup, /Figure out whether founders pay/);
 });
 
 test("LearnWorkspace renders a Create option Learn bridge with option-specific choices", () => {
@@ -328,6 +367,53 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.doesNotMatch(markup, /Takeaway/);
 });
 
+test("LearnWorkspace keeps backend V2 pages as single visible steps", () => {
+  const markup = renderToStaticMarkup(
+    createElement(LearnWorkspace, learnWorkspaceProps({
+      data: {
+        source: { kind: "raw_idea", rawText: "Teach me multiplication." },
+        learn: {
+          sessionV2: {
+            version: "learn_session_v2",
+            goal: "Understand multiplication.",
+            sourceOfTruth: "ai_generated_learn_pages_validated_locally",
+            visualTypes: ["diagram"],
+            pages: [
+              {
+                id: "multiplication-groups",
+                lessonNumber: 1,
+                title: "Equal groups",
+                explanation: "Multiplication counts equal-size groups.",
+                visual: {
+                  type: "diagram",
+                  title: "Groups diagram",
+                  description: "Three groups with four dots each.",
+                  body: "3 groups -> 4 in each -> 12 total",
+                  items: [
+                    { label: "Groups", text: "3 groups" },
+                    { label: "Size", text: "4 in each" },
+                    { label: "Total", text: "12 total" },
+                  ],
+                },
+                quickCheck: "What is 3 groups of 4?",
+                takeaway: "Multiplication is repeated equal grouping.",
+                sourceSpans: [{ sourceId: "source.raw_idea", label: "Source idea", text: "Teach me multiplication." }],
+              },
+            ],
+          },
+        },
+      },
+    })),
+  );
+
+  assert.match(markup, /Equal groups/);
+  assert.match(markup, /LESSON 1 \/ 1/);
+  assert.doesNotMatch(markup, /1\.2/);
+  assert.doesNotMatch(markup, /1\.3/);
+  assert.doesNotMatch(markup, /Work an example/);
+  assert.doesNotMatch(markup, /Check understanding/);
+});
+
 test("LearnWorkspace exposes the whole learning path around the active step", () => {
   const steps = Array.from({ length: 8 }, (_, index) => ({
     id: `step-${index + 1}`,
@@ -404,6 +490,7 @@ function learnWorkspaceProps(overrides: Record<string, unknown> = {}) {
   return {
     documentsData: null,
     selectedDocument: null,
+    documents: [],
     data: null,
     autopilot: null,
     recents: [],

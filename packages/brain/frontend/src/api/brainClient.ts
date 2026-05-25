@@ -114,10 +114,37 @@ export type LearnSourceMaterialInput = {
 };
 
 export async function createLearnSession(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput): Promise<LearnSessionResponse> {
-  const response = await fetch("/api/learn/session", {
+  const body = JSON.stringify({ rawIdea, ...(sourceMaterial ? { sourceMaterial } : {}), autopilot: { limit: 6 } });
+  let response: Response;
+
+  try {
+    response = await fetch("/api/learn/session", {
+      method: "POST",
+      headers: requestHeaders(),
+      body,
+    });
+  } catch {
+    return createLearnSessionViaApiOrigin(body);
+  }
+
+  if (response.status === 502 || response.status === 503 || response.status === 504) {
+    return createLearnSessionViaApiOrigin(body);
+  }
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/learn/session failed with ${response.status}.`));
+  }
+
+  return payload as LearnSessionResponse;
+}
+
+async function createLearnSessionViaApiOrigin(body: string): Promise<LearnSessionResponse> {
+  const response = await fetch(`${askPennyApiOrigin()}/api/learn/session`, {
     method: "POST",
     headers: requestHeaders(),
-    body: JSON.stringify({ rawIdea, ...(sourceMaterial ? { sourceMaterial } : {}), autopilot: { limit: 6 } }),
+    body,
   });
 
   const payload = await readJson(response);

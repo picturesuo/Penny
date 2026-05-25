@@ -20,6 +20,7 @@ import { AskPennyRenderedText } from "./AskPennyRenderedText";
 
 interface LearnWorkspaceProps {
   selectedDocument: BrainDocumentSummary | null;
+  documents: BrainDocumentSummary[];
   data: BrainData | null;
   autopilot: AutopilotTickData | null;
   focusedClaimId: string | null;
@@ -35,6 +36,7 @@ interface LearnWorkspaceProps {
 
 export function LearnWorkspace({
   selectedDocument,
+  documents,
   data,
   autopilot,
   focusedClaimId,
@@ -79,6 +81,7 @@ export function LearnWorkspace({
           <LearnEntry
             disabled={isThinking}
             status={status}
+            documents={documents}
             recents={recents}
             onLearnSeed={onLearnSeed}
             onKeepRecent={onKeepRecent}
@@ -1470,12 +1473,12 @@ function buildLearnPageData(
     return buildCreateOptionLearnPageData(focusNode);
   }
 
-  if (output.sessionV2) {
-    return buildLearnPageDataFromSessionV2(output.sessionV2);
-  }
-
   if (output.learningPlan) {
     return buildLearnPageDataFromPlan(output.learningPlan, sourceText, output);
+  }
+
+  if (output.sessionV2) {
+    return buildLearnPageDataFromSessionV2(output.sessionV2);
   }
 
   const goal = goalFrom(output.coreIdea);
@@ -2507,34 +2510,92 @@ function LearnIdeaDrop({
 function LearnEntry({
   disabled,
   status,
+  documents,
   recents,
   onLearnSeed,
   onKeepRecent,
 }: {
   disabled: boolean;
   status: string;
+  documents: BrainDocumentSummary[];
   recents: BrainRecentIdea[];
   onLearnSeed: (rawIdea: string) => Promise<void>;
   onKeepRecent: (rawIdea: string) => Promise<void>;
 }) {
+  const previousItems = learnPreviousItems(documents, recents);
+
   return (
     <section className="learn-entry" aria-label="Start a Learn session">
-      <div className="learn-entry-masthead">
+      <div className="learn-entry-lede">
         <span>LEARN</span>
-        <p>Drop any topic, source excerpt, decision, or question. Penny turns it into a sequenced path, then keeps Ask Penny beside the path.</p>
+        <div>
+          <h1>Start from something Penny already knows.</h1>
+          <p>Ask for a topic, or pick a previous thought and Penny will turn it into a tighter learning path.</p>
+        </div>
       </div>
-      <LearnIdeaDrop
-        disabled={disabled}
-        status={status}
-        recents={recents}
-        searchWeb={false}
-        onSearchWebChange={() => undefined}
-        onSave={(rawIdea) => onLearnSeed(rawIdea)}
-        onKeep={onKeepRecent}
-        primaryLabel="Build Learn path"
-      />
+      <div className="learn-entry-grid">
+        <LearnIdeaDrop
+          disabled={disabled}
+          status={status}
+          recents={[]}
+          searchWeb={false}
+          onSearchWebChange={() => undefined}
+          onSave={(rawIdea) => onLearnSeed(rawIdea)}
+          onKeep={onKeepRecent}
+          primaryLabel="Build Learn path"
+        />
+        <section className="learn-previous-panel" aria-label="Previous Brain material">
+          <header>
+            <span>Previous</span>
+            <strong>{previousItems.length ? "Learn from your Brain" : "No previous thoughts yet"}</strong>
+          </header>
+          {previousItems.length ? (
+            <ol>
+              {previousItems.slice(0, 5).map((item) => (
+                <li key={item.id}>
+                  <button type="button" disabled={disabled} onClick={() => void onLearnSeed(item.prompt)}>
+                    <span>{item.kind}</span>
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>Save a Brain thought or quick note, then Learn can turn it into a path from here.</p>
+          )}
+        </section>
+      </div>
     </section>
   );
+}
+
+function learnPreviousItems(documents: BrainDocumentSummary[], recents: BrainRecentIdea[]) {
+  const documentItems = documents.slice(0, 4).map((document) => ({
+    id: `doc-${document.sessionId}`,
+    kind: "Brain doc",
+    title: document.title,
+    detail: document.description || document.mainClaim?.text || document.originalIdea || "Saved thinking graph",
+    prompt: learnPromptFromDocument(document),
+  }));
+  const recentItems = recents.slice(0, 3).map((recent) => ({
+    id: `recent-${recent.id}`,
+    kind: "Recent",
+    title: truncateWords(recent.rawIdea, 10),
+    detail: "Quick note waiting to become a learning path",
+    prompt: recent.rawIdea,
+  }));
+
+  return [...documentItems, ...recentItems];
+}
+
+function learnPromptFromDocument(document: BrainDocumentSummary): string {
+  return [
+    `Teach me the important parts of this previous Penny thought: ${document.title}.`,
+    document.originalIdea ? `Original thought: ${document.originalIdea}` : "",
+    document.mainClaim?.text ? `Main claim: ${document.mainClaim.text}` : "",
+    document.nextActions.length ? `Next actions: ${document.nextActions.slice(0, 3).join("; ")}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function LearnLoadout() {
@@ -2566,7 +2627,7 @@ function LearnLoadout() {
 
 interface LearnSourceBehavior {
   usedWeb: boolean;
-  label: "Used your Brain" | "Used web because";
+  label: "Ready for Brain" | "Used your Brain" | "Used web because";
   detail: string;
 }
 
@@ -2580,6 +2641,14 @@ function LearnSourceIndicator({ behavior }: { behavior: LearnSourceBehavior }) {
 }
 
 function learnSourceBehavior(text: string, searchWebRequested: boolean): LearnSourceBehavior {
+  if (!text.trim()) {
+    return {
+      usedWeb: false,
+      label: "Ready for Brain",
+      detail: "Penny will use saved context after you give it a topic or previous thought.",
+    };
+  }
+
   if (searchWebRequested) {
     return {
       usedWeb: true,

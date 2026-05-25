@@ -116,6 +116,36 @@ test("frontend brain client sends source material for Learn file drops", async (
   }
 });
 
+test("frontend brain client retries Learn sessions against the API origin when the proxy is down", async () => {
+  const calls: FetchCall[] = [];
+  const sessionId = uuidAt(102);
+  const restoreFetch = mockFetch(calls, [
+    new Response(JSON.stringify({ error: { message: "Bad gateway" } }), {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    }),
+    jsonResponse({
+      session: { id: sessionId, status: "active" },
+      source: { kind: "raw_idea", rawText: "Teach me positioning." },
+      ideaMap: { claims: [], edges: [], keyInsight: "Positioning needs a buyer and contrast." },
+      explorationPaths: [],
+      firstChallenge: null,
+      learn: { learningPlan: { expertRole: "A positioning teacher.", goal: "Learn positioning.", paragraphFit: "one_subgroup_per_page", groups: [] } },
+      autopilot: thinkingModeState(sessionId),
+    }),
+  ]);
+
+  try {
+    const response = await createLearnSession("Teach me positioning.");
+
+    assert.equal(calls[0]?.url, "/api/learn/session");
+    assert.equal(calls[1]?.url, "http://localhost:3000/api/learn/session");
+    assert.equal(response.data.session?.id, sessionId);
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("frontend brain client uses Create next and coding prompt export routes", async () => {
   const sessionId = uuidAt(101);
   const optionSetId = "create-options-test";
