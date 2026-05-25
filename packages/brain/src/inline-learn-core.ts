@@ -489,12 +489,12 @@ export function createDefaultInlineLearnProvider(
 }
 
 export function createDefaultAskPennyProvider(env: Record<string, string | undefined> = process.env): AskPennyProvider {
-  if (env.XAI_API_KEY?.trim()) {
-    return createXaiAskPennyProvider(env);
-  }
-
   if (env.ANTHROPIC_API_KEY?.trim()) {
     return createAnthropicAskPennyProvider(env);
+  }
+
+  if (env.XAI_API_KEY?.trim()) {
+    return createXaiAskPennyProvider(env);
   }
 
   return createHeuristicAskPennyProvider();

@@ -411,8 +411,8 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
   assert.ok(genericPayload.data.answer.length < 700);
 });
 
-test("Ask Penny provider selection prefers cheap xAI then Claude then heuristic", () => {
-  assert.equal(createDefaultAskPennyProvider({ ANTHROPIC_API_KEY: "claude", XAI_API_KEY: "xai" }).name, "xai");
+test("Ask Penny provider selection prefers Claude then xAI then heuristic", () => {
+  assert.equal(createDefaultAskPennyProvider({ ANTHROPIC_API_KEY: "claude", XAI_API_KEY: "xai" }).name, "anthropic");
   assert.equal(createDefaultAskPennyProvider({ XAI_API_KEY: "xai" }).name, "xai");
   assert.equal(createDefaultAskPennyProvider({ ANTHROPIC_API_KEY: "claude" }).name, "anthropic");
   assert.equal(createDefaultAskPennyProvider({}).name, "heuristic");
