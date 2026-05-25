@@ -27,7 +27,7 @@ import {
 } from "../src/components/CreateWorkspace";
 import type { BrainMemoryProfileData, CandidateOption, CreateProviderComparisonResponse } from "../src/types/brain";
 
-test("CreateOptionBoard shows memory and source grounding counts on option cards", () => {
+test("CreateOptionBoard renders numbered direction rows without evidence clutter", () => {
   const markup = renderToStaticMarkup(
     createElement(CreateOptionBoard, {
       options: [memoryGroundedOption(), contextLightOption()],
@@ -45,15 +45,15 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   assert.match(markup, /data-create-lens="Personal"/);
   assert.match(markup, /data-create-lens="Practical"/);
   assert.match(markup, /data-testid="create-option-details-button"/);
+  assert.match(markup, /create-option-list/);
+  assert.match(markup, /create-option-number">1/);
+  assert.match(markup, /create-option-number">2/);
+  assert.match(markup, /Choose/);
   assert.match(markup, /Advance through Personal/);
-  assert.match(markup, /Past evidence 2/);
-  assert.match(markup, /Taste 1/);
-  assert.match(markup, /Past evidence 0/);
-  assert.match(markup, /Taste 0/);
-  assert.match(markup, /Context-light/);
   assert.match(markup, /Details/);
-  assert.match(markup, /Learn this/);
-  assert.match(markup, /data-testid="create-option-learn-this-button"/);
+  assert.doesNotMatch(markup, /Past evidence|Taste|Context-light/);
+  assert.doesNotMatch(markup, /Learn this/);
+  assert.doesNotMatch(markup, /data-testid="create-option-learn-this-button"/);
   assert.doesNotMatch(markup, /intentMatch|buildability|novelty|rawScores/i);
 });
 
