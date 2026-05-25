@@ -540,13 +540,14 @@ test("CreateWorkspace opens on the chat-like Create entry surface", () => {
   assert.match(markup, /data-testid="create-entry"/);
   assert.match(markup, /What do you want to create/);
   assert.match(markup, /Search or describe what you want to create/);
-  assert.match(markup, /Brain archive/);
-  assert.match(markup, /Recent research/);
+  assert.match(markup, /Penny turns a rough seed into five AI-shaped directions/);
+  assert.doesNotMatch(markup, /Brain archive/);
+  assert.doesNotMatch(markup, /Recent research/);
   assert.doesNotMatch(markup, /data-testid="create-option-board"/);
   assert.doesNotMatch(markup, /data-testid="create-export-panel"/);
 });
 
-test("CreateWorkspace gives the Brain return control a Create-specific accessible name", () => {
+test("CreateWorkspace keeps the Create entry free of sidebar return controls", () => {
   const markup = renderToStaticMarkup(
     createElement(CreateWorkspace, {
       data: null,
@@ -556,7 +557,8 @@ test("CreateWorkspace gives the Brain return control a Create-specific accessibl
     }),
   );
 
-  assert.match(markup, /aria-label="Open Brain from Create"/);
+  assert.doesNotMatch(markup, /aria-label="Open Brain from Create"/);
+  assert.doesNotMatch(markup, /Open Brain/);
 });
 
 test("isCreateComparisonDevMode only exposes comparison in dev, test, or explicit flag", () => {
