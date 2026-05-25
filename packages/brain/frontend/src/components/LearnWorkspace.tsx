@@ -25,6 +25,10 @@ interface LearnWorkspaceProps {
   focusedClaimId: string | null;
   focusNode: CanvasNode | null;
   isThinking: boolean;
+  status: string;
+  recents: BrainRecentIdea[];
+  onLearnSeed: (rawIdea: string) => Promise<void>;
+  onKeepRecent: (rawIdea: string) => Promise<void>;
   onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
   onBackToCreate?: () => void;
 }
@@ -36,31 +40,50 @@ export function LearnWorkspace({
   focusedClaimId,
   focusNode,
   isThinking,
+  status,
+  recents,
+  onLearnSeed,
+  onKeepRecent,
   onSearchBrainRelated,
   onBackToCreate,
 }: LearnWorkspaceProps) {
   const output = useMemo(
-    () => buildLearnSessionOutput(data, selectedDocument, autopilot) ?? defaultLearnSessionOutput(),
+    () => buildLearnSessionOutput(data, selectedDocument, autopilot),
     [data, selectedDocument, autopilot],
   );
-  const sourceText = data?.source?.rawText ?? selectedDocument?.originalIdea ?? output?.coreIdea ?? "";
+  const effectiveOutput =
+    output ??
+    (focusNode && (isCreateLearnBridgeNode(focusNode) || isCreateOptionLearnNode(focusNode))
+      ? defaultLearnSessionOutput()
+      : null);
+  const sourceText = data?.source?.rawText ?? selectedDocument?.originalIdea ?? effectiveOutput?.coreIdea ?? "";
 
   return (
-    <main className="learn-workspace" aria-label="Learn">
+    <main className={`learn-workspace${effectiveOutput ? "" : " is-entry-mode"}`} aria-label="Learn">
       <section className="learn-main">
         {onBackToCreate ? (
           <button type="button" className="learn-back-to-create" data-testid="learn-back-to-create" onClick={onBackToCreate}>
             Back to Create
           </button>
         ) : null}
-        <LearnSessionView
-          output={output}
-          sourceText={sourceText}
-          focusedClaimId={focusedClaimId}
-          focusNode={focusNode}
-          disabled={isThinking}
-          onSearchBrainRelated={onSearchBrainRelated}
-        />
+        {effectiveOutput ? (
+          <LearnSessionView
+            output={effectiveOutput}
+            sourceText={sourceText}
+            focusedClaimId={focusedClaimId}
+            focusNode={focusNode}
+            disabled={isThinking}
+            onSearchBrainRelated={onSearchBrainRelated}
+          />
+        ) : (
+          <LearnEntry
+            disabled={isThinking}
+            status={status}
+            recents={recents}
+            onLearnSeed={onLearnSeed}
+            onKeepRecent={onKeepRecent}
+          />
+        )}
       </section>
     </main>
   );
@@ -1242,6 +1265,10 @@ export function AskPennyDrawer({
         localContext,
         ...(quickAction ? { quickAction } : {}),
         activeLesson: activeLessonPayload,
+        chatHistory: messages
+          .filter((message): message is AskPennyMessage & { role: "user" | "penny" } => message.role === "user" || message.role === "penny")
+          .slice(-6)
+          .map((message) => ({ role: message.role, text: message.text })),
       });
 
       setMessages((current) => [
@@ -1404,11 +1431,15 @@ export function askPennyContextForStep(
   const categoryLessons = category?.substeps.map((substep) => substep.lesson) ?? [activeLesson];
   const categoryMoves = categoryLessons.flatMap((lesson) => lesson.coreIdea.bullets);
   const categoryExamples = categoryLessons.map((lesson) => `${lesson.title}: ${lesson.example.lines.join(" ")}`);
+  const learningPath = pageData.steps
+    .map((step, index) => `${index + 1}. ${step.title}: ${step.substeps.map((substep) => substep.title).join(" -> ")}`)
+    .join("\n");
 
   return [
     `Goal: ${pageData.goal}`,
     `Current category: ${category?.title ?? activeLesson.parentTitle}`,
     `Current step: ${activeLesson.title}`,
+    `Learning path:\n${learningPath}`,
     `Active lesson explanation: ${activeLesson.shortExplanation}`,
     `Active lesson visual: ${activeLesson.visual.type} - ${activeLesson.visual.title} - ${activeLesson.visual.description} - ${activeLesson.visual.body}`,
     `Active lesson quick check: ${activeLesson.quickCheck}`,
@@ -1422,7 +1453,7 @@ export function askPennyContextForStep(
   ]
     .filter(Boolean)
     .join("\n\n")
-    .slice(0, 2_000);
+    .slice(0, 3_600);
 }
 
 function buildLearnPageData(
@@ -2387,6 +2418,7 @@ function LearnIdeaDrop({
   onSearchWebChange,
   onSave,
   onKeep,
+  primaryLabel = "Save to Brain",
 }: {
   disabled: boolean;
   status: string;
@@ -2395,6 +2427,7 @@ function LearnIdeaDrop({
   onSearchWebChange: (searchWeb: boolean) => void;
   onSave: (rawIdea: string, options: { searchWeb: boolean }) => Promise<void>;
   onKeep: (rawIdea: string) => Promise<void>;
+  primaryLabel?: string;
 }) {
   const [draft, setDraft] = useState("");
   const trimmedDraft = draft.trim();
@@ -2446,7 +2479,7 @@ function LearnIdeaDrop({
             Keep in Recents
           </button>
           <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
-            Save to Brain
+            {primaryLabel}
           </button>
         </div>
       </div>
@@ -2467,6 +2500,39 @@ function LearnIdeaDrop({
           </div>
         </div>
       ) : null}
+    </section>
+  );
+}
+
+function LearnEntry({
+  disabled,
+  status,
+  recents,
+  onLearnSeed,
+  onKeepRecent,
+}: {
+  disabled: boolean;
+  status: string;
+  recents: BrainRecentIdea[];
+  onLearnSeed: (rawIdea: string) => Promise<void>;
+  onKeepRecent: (rawIdea: string) => Promise<void>;
+}) {
+  return (
+    <section className="learn-entry" aria-label="Start a Learn session">
+      <div className="learn-entry-masthead">
+        <span>LEARN</span>
+        <p>Drop any topic, source excerpt, decision, or question. Penny turns it into a sequenced path, then keeps Ask Penny beside the path.</p>
+      </div>
+      <LearnIdeaDrop
+        disabled={disabled}
+        status={status}
+        recents={recents}
+        searchWeb={false}
+        onSearchWebChange={() => undefined}
+        onSave={(rawIdea) => onLearnSeed(rawIdea)}
+        onKeep={onKeepRecent}
+        primaryLabel="Build Learn path"
+      />
     </section>
   );
 }

@@ -1210,11 +1210,12 @@ export async function askPenny(input: {
   localContext: string;
   quickAction?: "explain_visual" | "another_example" | "make_simpler" | "quiz_me" | "connect_previous";
   activeLesson?: AskPennyActiveLessonInput;
+  chatHistory?: Array<{ role: "user" | "penny"; text: string }>;
 }): Promise<AskPennyResponse> {
   let response: Response;
 
   try {
-    response = await fetch("/brain/learn/ask", {
+    response = await fetch("/api/learn/ask", {
       method: "POST",
       headers: requestHeaders(),
       body: JSON.stringify(input),
@@ -1244,8 +1245,9 @@ async function askPennyViaApiOrigin(input: {
   localContext: string;
   quickAction?: "explain_visual" | "another_example" | "make_simpler" | "quiz_me" | "connect_previous";
   activeLesson?: AskPennyActiveLessonInput;
+  chatHistory?: Array<{ role: "user" | "penny"; text: string }>;
 }): Promise<AskPennyResponse> {
-  const response = await fetch(`${askPennyApiOrigin()}/brain/learn/ask`, {
+  const response = await fetch(`${askPennyApiOrigin()}/api/learn/ask`, {
     method: "POST",
     headers: requestHeaders(),
     body: JSON.stringify(input),

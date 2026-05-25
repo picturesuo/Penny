@@ -125,6 +125,17 @@ export const AskPennyRequestSchema = z
       })
       .strict()
       .optional(),
+    chatHistory: z
+      .array(
+        z
+          .object({
+            role: z.enum(["user", "penny"]),
+            text: z.string().trim().min(1).max(1_000),
+          })
+          .strict(),
+      )
+      .max(8)
+      .optional(),
   })
   .strict();
 
@@ -679,7 +690,7 @@ export function buildAskPennySystemPrompt(): string {
     "Personalize the answer to the exact entities, variables, numbers, wording, and constraints in the user's question.",
     "Never answer with a generic template when the question contains a specific expression, claim, example, or situation.",
     "Use the current step and local lesson context only when it helps the answer.",
-    "The request may include an active micro-lesson with visual, quick check, takeaway, and source spans. Treat that as the current lesson context.",
+    "The request may include an active micro-lesson with visual, quick check, takeaway, source spans, learning path, and chat history. Treat those as the current lesson context.",
     "If quickAction is present, answer that action directly: explain_visual, another_example, make_simpler, quiz_me, or connect_previous.",
     "If the user asks a simple factual, arithmetic, or conversational question, answer it plainly before adding any lesson-specific note.",
     "Give the next useful step when the question is vague or conversational.",
@@ -694,6 +705,9 @@ export function buildAskPennyPrompt(input: AskPennyRequest): string {
   return [
     `Current step: ${input.currentStepTitle}`,
     `Local lesson context: ${input.localContext}`,
+    input.chatHistory?.length
+      ? `Recent chat:\n${input.chatHistory.map((message) => `${message.role}: ${message.text}`).join("\n")}`
+      : "",
     input.quickAction ? `Quick action: ${input.quickAction}` : "",
     input.activeLesson ? `Active micro-lesson JSON: ${JSON.stringify(input.activeLesson)}` : "",
     `Question: ${input.question}`,
@@ -1150,6 +1164,12 @@ function heuristicAskPennyAnswer(input: AskPennyRequest): string {
     return technicalAnswer;
   }
 
+  const pathAnswer = learningPathAskPennyAnswer(input);
+
+  if (pathAnswer) {
+    return pathAnswer;
+  }
+
   const shapedAnswer = shapedAskPennyAnswer(input);
 
   if (shapedAnswer) {
@@ -1166,6 +1186,46 @@ function heuristicAskPennyAnswer(input: AskPennyRequest): string {
     `For this lesson, that sentence should stay focused on: ${focus}.`,
     "If the sentence still feels vague, add one specific example or source you could inspect next.",
   ].join("\n\n");
+}
+
+function learningPathAskPennyAnswer(input: AskPennyRequest): string | null {
+  if (!/\b(full )?(learning )?path\b|\bbuild toward\b|\bwhere (is|does) this going\b/i.test(input.question)) {
+    return null;
+  }
+
+  const path = extractLearningPath(input.localContext);
+
+  if (path.length === 0) {
+    return null;
+  }
+
+  const first = path[0];
+  const middle = path[Math.floor(path.length / 2)];
+  const last = path[path.length - 1];
+  const current = clipText(input.currentStepTitle, 120);
+
+  return [
+    `The path is moving from orientation to use. It starts with "${first}", so you know what the topic is supposed to let you do before you collect details.`,
+    middle && middle !== first && middle !== last
+      ? `The middle work is "${middle}", where you turn the idea into pieces you can apply and check.`
+      : `The middle work turns the idea into pieces you can apply and check.`,
+    `It ends near "${last}", which means the lesson should leave you with a reusable takeaway or next question. Right now, "${current}" is the opening frame for that sequence.`,
+  ].join("\n\n");
+}
+
+function extractLearningPath(localContext: string): string[] {
+  const match = /Learning path:\s*([\s\S]*?)(?:\n\n[A-Z][^:\n]{1,80}:|$)/.exec(localContext);
+  const rawPath = match?.[1]?.trim();
+
+  if (!rawPath) {
+    return [];
+  }
+
+  return rawPath
+    .split("\n")
+    .map((line) => line.replace(/^\d+\.\s*/, "").replace(/:\s*/g, ": ").trim())
+    .filter(Boolean)
+    .slice(0, 24);
 }
 
 function askPennyQuickActionAnswer(input: AskPennyRequest): string | null {

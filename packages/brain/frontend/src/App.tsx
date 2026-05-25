@@ -1034,6 +1034,10 @@ export function App() {
             focusedClaimId={focusedClaimId}
             focusNode={learnFocusNode}
             isThinking={isThinking}
+            status={status}
+            recents={recents}
+            onLearnSeed={handleLearnSeed}
+            onKeepRecent={handleKeepRecentIdea}
             onSearchBrainRelated={handleBrainRelatedSearch}
             {...(shouldRenderCreateWorkspace ? { onBackToCreate: handleBackToCreateFromLearn } : {})}
           />

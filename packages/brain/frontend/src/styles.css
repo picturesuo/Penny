@@ -140,32 +140,6 @@
     background: rgb(46 46 46 / 0.32);
   }
 
-  .landing-brain-start-button {
-    width: fit-content;
-    margin-bottom: 14px;
-    border: 1px solid #111111;
-    border-radius: 999px;
-    background: #eff7d2;
-    padding: 10px 14px;
-    color: #111111;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 850;
-    line-height: 1;
-    text-transform: uppercase;
-    box-shadow: 3px 3px 0 #111111;
-  }
-
-  .landing-brain-start-button:disabled {
-    opacity: 0.45;
-  }
-
-  .landing-demo-fixture-button {
-    margin-bottom: 8px;
-    background: #fffdf7;
-    box-shadow: 2px 2px 0 #111111;
-  }
-
   .landing-prompt-box {
     position: relative;
     display: grid;
@@ -5874,6 +5848,33 @@
     margin-top: -28px;
   }
 
+  .learn-entry-masthead {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    border-top: 2px solid #111111;
+    border-bottom: 1px solid #111111;
+    padding: 14px 0 12px;
+    text-align: center;
+  }
+
+  .learn-entry-masthead span {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(42px, 7vw, 78px);
+    font-weight: 700;
+    line-height: 0.9;
+    letter-spacing: 0;
+  }
+
+  .learn-entry-masthead p {
+    width: min(680px, 100%);
+    margin: 0 auto;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.25;
+  }
+
   .learn-entry h1,
   .learn-emotional-moment h1 {
     margin: 8px 0 0;
@@ -7817,9 +7818,9 @@
     min-height: 114px;
     resize: vertical;
     border: 1px solid #c8c8c8;
-    border-radius: 28px 28px 12px 12px;
-    padding: 28px 34px 12px;
-    background: #f6f6f3;
+    border-radius: 4px;
+    padding: 18px 20px 12px;
+    background: #fbfaf6;
     color: #111111;
     font: inherit;
     font-size: 24px;
@@ -7838,9 +7839,9 @@
     margin-top: -10px;
     border: 1px solid #c8c8c8;
     border-top: 0;
-    border-radius: 0 0 28px 28px;
+    border-radius: 0 0 4px 4px;
     padding: 12px 16px 16px;
-    background: #f6f6f3;
+    background: #fbfaf6;
   }
 
   .idea-drop-actions {

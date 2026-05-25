@@ -1011,7 +1011,7 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       return;
     }
 
-    if (url.pathname === "/brain/learn/ask") {
+    if (url.pathname === "/brain/learn/ask" || url.pathname === "/api/learn/ask") {
       await writeWebResponse(outgoing, await handleAskPennyRequest(request));
       return;
     }

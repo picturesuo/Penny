@@ -4,6 +4,7 @@ import { z } from "zod";
 import { CandidateBrainObjectSchema, type CandidateBrainObject } from "./candidate-brain-object.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns } from "./db/schema.ts";
+import { rememberDevPersistedBrainSeed } from "./dev-brain-store.ts";
 import { createBrainRepository } from "./domain/repository.ts";
 import type { EntityId } from "./domain/types.ts";
 import { runLearnRecipe, type LearnRecipeOutput } from "./learn-recipe.ts";
@@ -300,8 +301,11 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
           },
         });
         const seed = await generateSeed(seedInput, { provider, brainRunId: prelude.brainRun.id });
-        const persisted = await persistSeedFn(seed, { ...dbOption(db), prelude });
-        const seedPayload = buildBrainSeedUiPayload(seed, persisted, context);
+      const persisted = await persistSeedFn(seed, { ...dbOption(db), prelude });
+      if (localFallback) {
+        rememberDevPersistedBrainSeed(persisted);
+      }
+      const seedPayload = buildBrainSeedUiPayload(seed, persisted, context);
         const autopilot = await tickAutopilot({
           sessionId: persisted.session.id,
           resume: input.autopilot.resume,

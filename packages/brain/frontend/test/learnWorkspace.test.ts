@@ -9,24 +9,20 @@ import {
   visibleLearningPathSteps,
 } from "../src/components/LearnWorkspace";
 
-test("LearnWorkspace first screen opens directly to the lesson view", () => {
+test("LearnWorkspace first screen opens the Learn composer", () => {
   const markup = renderToStaticMarkup(
     createElement(LearnWorkspace, learnWorkspaceProps()),
   );
 
-  assert.match(markup, /Name the program/);
-  assert.match(markup, /YC is not just an investor logo/);
-  assert.match(markup, /Ask Penny/);
-  assert.match(markup, /Current lesson context is loaded/);
-  assert.match(markup, /LEARNING PATH/);
-  assert.match(markup, /LESSON 1 \/ 15/);
-  assert.match(markup, /Explain this/);
-  assert.match(markup, /Give another example/);
-  assert.match(markup, /Make simpler/);
-  assert.match(markup, /Quiz me/);
-  assert.match(markup, /Connect to previous/);
-  assert.match(markup, /Esc/);
-  assert.match(markup, /Enter/);
+  assert.match(markup, /Start a Learn session/);
+  assert.match(markup, /Build Learn path/);
+  assert.match(markup, /Drop any topic, source excerpt, decision, or question/);
+  assert.match(markup, /Paste the messy thought, decision, or question/);
+  assert.doesNotMatch(markup, /Name the program/);
+  assert.doesNotMatch(markup, /YC is not just an investor logo/);
+  assert.doesNotMatch(markup, /Current lesson context is loaded/);
+  assert.doesNotMatch(markup, /LEARNING PATH/);
+  assert.doesNotMatch(markup, /LESSON 1 \/ 15/);
   assert.doesNotMatch(markup, /penny@learn:~\$/);
   assert.doesNotMatch(markup, /Enter forward \/ Esc back/);
   assert.doesNotMatch(markup, /STRUCTURE/);
@@ -47,20 +43,10 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.doesNotMatch(markup, /WRITE THIS DOWN/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /EXAMPLE/);
-  assert.match(markup, /Thinking graph/);
-  assert.match(markup, /data-testid="learn-understanding-tour"/);
-  assert.match(markup, /data-testid="learn-meaning-map"/);
-  assert.match(markup, /Meaning map/);
-  assert.match(markup, /Source/);
-  assert.match(markup, /Map/);
-  assert.match(markup, /Teach/);
-  assert.match(markup, /Use/);
-  assert.match(markup, /Check/);
-  assert.match(markup, /aria-label="Ask about Source:/);
-  assert.match(markup, /aria-label="Ask about Map:/);
-  assert.match(markup, /aria-label="Ask about Teach:/);
-  assert.match(markup, /aria-label="Ask about Use:/);
-  assert.match(markup, /aria-label="Ask about Check:/);
+  assert.doesNotMatch(markup, /Thinking graph/);
+  assert.doesNotMatch(markup, /data-testid="learn-understanding-tour"/);
+  assert.doesNotMatch(markup, /data-testid="learn-meaning-map"/);
+  assert.doesNotMatch(markup, /aria-label="Ask about Source:/);
   assert.doesNotMatch(markup, /Grounding/);
   assert.doesNotMatch(markup, /What changes/);
   assert.doesNotMatch(markup, /Can you use it/);
@@ -426,6 +412,7 @@ function learnWorkspaceProps(overrides: Record<string, unknown> = {}) {
     relatedBrainSearch: null,
     status: "Ready",
     isThinking: false,
+    async onLearnSeed() {},
     async onSeed() {},
     async onKeepRecent() {},
     onSelectDocument() {},

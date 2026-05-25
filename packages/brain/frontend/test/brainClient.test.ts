@@ -470,7 +470,7 @@ test("frontend Ask Penny sends active micro-lesson quick action context", async 
     });
 
     assert.equal(response.data.answer, "The visual compares signal with noise.");
-    assert.equal(calls[0]?.url, "/brain/learn/ask");
+    assert.equal(calls[0]?.url, "/api/learn/ask");
     assert.deepEqual(calls[0]?.body, {
       question: "Explain this visual.",
       quickAction: "explain_visual",
@@ -660,7 +660,7 @@ test("frontend Ask Penny still uses the live API when it responds", async () => 
       localContext: "Goal: understand the current lesson.",
     });
 
-    assert.equal(calls[0]?.url, "/brain/learn/ask");
+    assert.equal(calls[0]?.url, "/api/learn/ask");
     assert.equal(calls[0]?.method, "POST");
     assert.deepEqual(calls[0]?.body, {
       question: "what does this mean?",
@@ -693,8 +693,8 @@ test("frontend Ask Penny retries the API origin before using the local fallback"
         "Goal: Understand what YC does and whether its batch application is primarily evaluating investors, ideas, or people.",
     });
 
-    assert.equal(calls[0]?.url, "/brain/learn/ask");
-    assert.equal(calls[1]?.url, "http://localhost:3000/brain/learn/ask");
+    assert.equal(calls[0]?.url, "/api/learn/ask");
+    assert.equal(calls[1]?.url, "http://localhost:3000/api/learn/ask");
     assert.equal(response.data.provider, "xai");
     assert.equal(response.data.model, "grok-test");
     assert.match(response.data.answer, /multiplies by itself/);
