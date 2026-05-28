@@ -52,6 +52,8 @@ test("CreateOptionBoard renders numbered direction rows without evidence clutter
   assert.match(markup, /create-option-list/);
   assert.match(markup, /create-option-number">1/);
   assert.match(markup, /create-option-number">2/);
+  assert.match(markup, /aria-keyshortcuts="1"/);
+  assert.match(markup, /aria-keyshortcuts="2"/);
   assert.match(markup, /Choose/);
   assert.match(markup, /Advance through Personal/);
   assert.doesNotMatch(markup, /Details/);

@@ -1981,13 +1981,14 @@
 
   .create-option-list {
     display: grid;
-    gap: 8px;
+    gap: 12px;
   }
 
   .create-option-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 82px;
+    grid-template-columns: minmax(0, 1fr) 96px;
     align-items: stretch;
+    min-height: 116px;
     border: 1px solid rgb(17 17 17 / 0.12);
     border-radius: 7px;
     background: #fffdf7;
@@ -1995,11 +1996,11 @@
   }
 
   .create-option-card.has-reject-action {
-    grid-template-columns: minmax(0, 1fr) 82px 42px;
+    grid-template-columns: minmax(0, 1fr) 96px 52px;
   }
 
   .create-option-card.has-two-actions {
-    grid-template-columns: minmax(0, 1fr) 82px 84px;
+    grid-template-columns: minmax(0, 1fr) 96px 104px;
   }
 
   .create-option-card.is-selected {
@@ -2018,14 +2019,16 @@
 
   .create-option-select-button {
     display: grid;
-    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-columns: 58px minmax(0, 1fr);
     align-items: center;
-    gap: 12px;
+    gap: 18px;
     border: 0;
-    padding: 12px 14px;
+    min-height: 114px;
+    padding: 20px 22px;
     color: #111111;
     background: transparent;
     text-align: left;
+    cursor: pointer;
   }
 
   .create-option-card.is-selected .create-option-select-button {
@@ -2054,15 +2057,15 @@
 
   .create-option-number {
     display: inline-flex;
-    width: 34px;
-    height: 34px;
+    width: 58px;
+    height: 58px;
     align-items: center;
     justify-content: center;
     border: 1px solid rgb(17 17 17 / 0.18);
     border-radius: 999px;
     color: #fffdf7;
     background: #111111;
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 900;
     line-height: 1;
   }
@@ -2078,13 +2081,13 @@
 
   .create-option-main-copy {
     display: grid;
-    gap: 4px;
+    gap: 7px;
     min-width: 0;
   }
 
   .create-option-main-copy > span {
     color: rgb(17 17 17 / 0.58);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 900;
     letter-spacing: 0.14em;
     line-height: 1;
@@ -2092,15 +2095,15 @@
   }
 
   .create-option-main-copy strong {
-    font-size: 17px;
-    line-height: 1.06;
+    font-size: 25px;
+    line-height: 1.04;
   }
 
   .create-option-main-copy p {
     margin: 0;
     color: rgb(17 17 17 / 0.68);
-    font-size: 12px;
-    line-height: 1.28;
+    font-size: 15px;
+    line-height: 1.34;
   }
 
   .create-option-judgment-state {
@@ -2108,7 +2111,7 @@
     align-items: center;
     justify-content: center;
     border-left: 1px solid rgb(17 17 17 / 0.1);
-    padding: 0 10px;
+    padding: 0 12px;
     background: rgb(17 17 17 / 0.025);
   }
 
@@ -2133,7 +2136,7 @@
 
   .create-option-card-actions {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
     border-left: 1px solid rgb(17 17 17 / 0.1);
   }
 
@@ -2146,6 +2149,7 @@
     padding: 0;
     color: #111111;
     background: rgb(255 255 255 / 0.58);
+    cursor: pointer;
     line-height: 1;
   }
 

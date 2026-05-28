@@ -1862,6 +1862,35 @@ export function CreateOptionBoard({
   }
 
   useEffect(() => {
+    if (!options.length) {
+      return;
+    }
+
+    function handleOptionShortcut(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      if (isTextEntryTarget(event.target)) {
+        return;
+      }
+
+      const optionIndex = Number(event.key) - 1;
+      const option = Number.isInteger(optionIndex) ? options[optionIndex] : undefined;
+
+      if (!option || optionIndex < 0 || optionIndex > 4 || busy) {
+        return;
+      }
+
+      event.preventDefault();
+      onToggleOption(option.id);
+    }
+
+    window.addEventListener("keydown", handleOptionShortcut);
+    return () => window.removeEventListener("keydown", handleOptionShortcut);
+  }, [busy, onToggleOption, options]);
+
+  useEffect(() => {
     if (!options.length || (currentDetailOptionId && !options.some((option) => option.id === currentDetailOptionId))) {
       setDetailOption(null);
     }
@@ -1909,6 +1938,7 @@ export function CreateOptionBoard({
                 type="button"
                 className="create-option-select-button"
                 aria-pressed={selected}
+                aria-keyshortcuts={`${index + 1}`}
                 aria-label={`${selected ? "Unselect" : "Select"} direction ${index + 1}: ${option.title}`}
                 onClick={(event) => {
                   if (onLearnThis && (event.metaKey || event.altKey)) {
@@ -1982,6 +2012,14 @@ export function CreateOptionBoard({
       ) : null}
     </section>
   );
+}
+
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
 type CreateEvidenceLedgerRow = {
