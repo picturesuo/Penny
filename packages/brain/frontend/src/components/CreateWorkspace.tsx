@@ -145,7 +145,6 @@ export function CreateWorkspace({
   const [localStatus, setLocalStatus] = useState(restoredDraft?.localStatus ?? "Create ready");
   const [failure, setFailure] = useState<string | null>(null);
   const seedRef = useRef<HTMLTextAreaElement | null>(null);
-  const stepRefs = useRef<Array<HTMLElement | null>>([]);
   const bootstrappedTextRef = useRef<string | null>(null);
   const restoredDraftRef = useRef(Boolean(restoredDraft));
 
@@ -161,29 +160,6 @@ export function CreateWorkspace({
     () => options.filter((option) => rejectedOptionIds.includes(option.id)),
     [options, rejectedOptionIds],
   );
-  const hasPendingJudgment = Boolean(
-    selectedOptionIds.length || rejectedOptionIds.length || userComment.trim() || (engineOptOut && manualFocus.trim()),
-  );
-  const canvasNodes = useMemo(
-    () =>
-      createCanvasNodes({
-        createCanvas,
-        brainProfile: brainProfile ?? null,
-        options,
-        selectedOptions,
-        artifact,
-        promptExport,
-      }),
-    [artifact, brainProfile, createCanvas, options, promptExport, selectedOptions],
-  );
-  const activeStepIndex = createActiveStepIndex({
-    optionSet,
-    hasPendingJudgment,
-    judgmentEvent,
-    artifact,
-    verification,
-    promptExport,
-  });
   const isCreateEntryMode = !optionSet && !artifact && !verification && !judgmentEvent && !promptExport;
 
   useEffect(() => {
@@ -481,22 +457,6 @@ export function CreateWorkspace({
     setExportFeedbackStatus(null);
   }
 
-  function setCreateStepRef(index: number) {
-    return (node: HTMLElement | null) => {
-      stepRefs.current[index] = node;
-    };
-  }
-
-  function handleStepSelect(index: number) {
-    const target = stepRefs.current[index];
-
-    if (!target) {
-      return;
-    }
-
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   if (isCreateEntryMode) {
     return (
       <main className="create-entry-shell" aria-label="Create start" data-testid="create-entry">
@@ -544,7 +504,7 @@ export function CreateWorkspace({
       <section className="check-center-stage" aria-label="Penny Create flow">
         <div className="create-workspace-layout">
         <article className="check-main-cycle create-workspace-card">
-          <header ref={setCreateStepRef(0)} className="create-workspace-topbar">
+          <header className="create-workspace-topbar">
             <div className="create-entry-brand">
               <span>Create</span>
               <h1>Build the fit tree.</h1>
@@ -573,16 +533,11 @@ export function CreateWorkspace({
                 <RefreshCcw size={17} />
               </button>
             </form>
-            <div className="create-entry-status" role="status">
-              <Sparkles size={14} />
-              <span>{providerModeLabel(observability?.providerMode ?? "deterministic")}</span>
-              <strong>{displayStatus}</strong>
-            </div>
           </header>
 
           {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
 
-          <div ref={setCreateStepRef(1)} className="create-step-anchor" data-create-step="five-directions">
+          <div className="create-step-anchor" data-create-step="five-directions">
             <CreateOptionBoard
               options={options}
               nextBestMove={optionSet?.nextBestMove ?? null}
@@ -617,7 +572,7 @@ export function CreateWorkspace({
             onLearnThis={onLearnThis ? (option) => onLearnThis(buildCreateOptionLearnNode(option, artifact)) : undefined}
           />
 
-          <section ref={setCreateStepRef(2)} className="create-judgment-panel" aria-label="Create judgment">
+          <section className="create-judgment-panel" aria-label="Create judgment">
             <header>
               <span>Judgment</span>
               <strong>{selectedOptions.length ? selectedOptions.map((option) => option.lens).join(" + ") : "Select one or more cards"}</strong>
@@ -638,19 +593,19 @@ export function CreateWorkspace({
             <CreateComparisonPanel comparison={providerComparison} busy={busy} onCompare={() => void handleCompareProviders()} />
           ) : null}
 
-          <div ref={setCreateStepRef(3)} className="create-output-grid" data-create-step="idea-spec">
+          <div className="create-output-grid" data-create-step="idea-spec">
             <CreateArtifactPanel
               artifact={artifact}
               selectedOptions={selectedOptions}
               rejectedOptions={rejectedOptions}
               userComment={effectiveUserComment}
             />
-            <div ref={setCreateStepRef(4)} className="create-step-anchor" data-create-step="verification">
+            <div className="create-step-anchor" data-create-step="verification">
               <CreateVerificationPanel verification={verification} />
             </div>
           </div>
 
-          <section ref={setCreateStepRef(5)} className="create-export-panel" aria-label="Export coding prompt" data-testid="create-export-panel">
+          <section className="create-export-panel" aria-label="Export coding prompt" data-testid="create-export-panel">
             <header>
               <span>Export</span>
               <strong>{promptExport ? promptExport.fileName : "Coding-agent prompt"}</strong>
@@ -684,22 +639,6 @@ export function CreateWorkspace({
             />
           </section>
         </article>
-        <CreateFitTreeRail
-          activeIndex={activeStepIndex}
-          status={displayStatus}
-          optionSet={optionSet}
-          selectedOptions={selectedOptions}
-          rejectedOptions={rejectedOptions}
-          userComment={effectiveUserComment}
-          artifact={artifact}
-          verification={verification}
-          promptExport={promptExport}
-          engineOptOut={engineOptOut}
-          manualFocus={manualFocus}
-          canvasNodes={canvasNodes}
-          onOpenBrain={onOpenBrain}
-          onStepSelect={handleStepSelect}
-        />
         </div>
       </section>
     </main>
@@ -1474,97 +1413,6 @@ type CreateCanvasNode = {
   note?: string;
   edgeToNext: string;
 };
-
-function createCanvasNodes(input: {
-  createCanvas: CreateCanvasSnapshot | null;
-  brainProfile: BrainMemoryProfileData | null;
-  options: CandidateOption[];
-  selectedOptions: CandidateOption[];
-  artifact: CodingPromptArtifact | null;
-  promptExport: PromptExport | null;
-}): CreateCanvasNode[] {
-  if (input.createCanvas?.nodes.length) {
-    const selectedLenses = input.selectedOptions.map((option) => option.lens);
-
-    return input.createCanvas.nodes.map((node): CreateCanvasNode => {
-      if (node.label === "Create" && selectedLenses.length) {
-        return {
-          id: node.id,
-          label: node.label,
-          detail: `Selected ${selectedLenses.join(" + ")}`,
-          note: "Local judgment is visible before artifact update.",
-          edgeToNext: node.edgeToNext,
-        };
-      }
-
-      if (node.label === "Export" && input.promptExport) {
-        return {
-          id: node.id,
-          label: node.label,
-          detail: input.promptExport.fileName,
-          note: "Prompt export returned by backend.",
-          edgeToNext: node.edgeToNext,
-        };
-      }
-
-      return {
-        id: node.id,
-        label: node.label,
-        detail: node.detail,
-        ...(node.note ? { note: node.note } : {}),
-        edgeToNext: node.edgeToNext,
-      };
-    });
-  }
-
-  const sourceLabels = input.brainProfile?.sources.slice(0, 4).map((source) => source.label).filter(Boolean) ?? [];
-  const selectedLenses = input.selectedOptions.map((option) => option.lens);
-  const generatedLenses = input.options.map((option) => option.lens);
-
-  return [
-    {
-      id: "penny-workbench",
-      label: "Penny",
-      detail: "Memory-native creativity workbench",
-      note: "Judgment stays human.",
-      edgeToNext: "grounds",
-    },
-    {
-      id: "brain-sources",
-      label: "Brain",
-      detail: sourceLabels.length
-        ? `${input.brainProfile?.stats.memoryNodeCount ?? 0} memories from ${sourceLabels.join(", ")}`
-        : "Context-light until Brain imports are attached",
-      note: "Fixture/manual only.",
-      edgeToNext: "suggests",
-    },
-    {
-      id: "create-options",
-      label: "Create",
-      detail: selectedLenses.length
-        ? `Selected ${selectedLenses.join(" + ")}`
-        : generatedLenses.length
-          ? `Generated ${generatedLenses.join(" / ")}`
-          : "Waiting for five directions",
-      note: "Five equal cards.",
-      edgeToNext: "explains",
-    },
-    {
-      id: "learn-explanation",
-      label: "Learn",
-      detail: createLearnBridgeConcept,
-      note: "State stays put.",
-      edgeToNext: "returns",
-    },
-    {
-      id: "artifact-export",
-      label: "Export",
-      detail: input.promptExport?.fileName ?? input.artifact?.title ?? "Idea Spec not generated yet",
-      note: "Spec plus evidence.",
-      edgeToNext: "ships",
-    },
-  ];
-}
 
 function readCreateWorkspaceDraft(): PersistedCreateWorkspaceDraft | null {
   if (typeof window === "undefined") {
@@ -3046,41 +2894,6 @@ function uniqueById<T extends { id: string }>(values: T[]): T[] {
 
 function truncateCreateEntryText(value: string, maxWords: number): string {
   return clipDisplayText(truncateWords(value, maxWords), 120);
-}
-
-function createActiveStepIndex(input: {
-  optionSet: OptionSet | null;
-  hasPendingJudgment?: boolean;
-  judgmentEvent: JudgmentEvent | null;
-  artifact: CodingPromptArtifact | null;
-  verification: VerificationSummary | null;
-  promptExport: PromptExport | null;
-}): number {
-  if (input.promptExport) {
-    return 5;
-  }
-
-  if (input.judgmentEvent && input.verification) {
-    return 4;
-  }
-
-  if (input.judgmentEvent && input.artifact) {
-    return 3;
-  }
-
-  if (input.judgmentEvent) {
-    return 2;
-  }
-
-  if (input.hasPendingJudgment) {
-    return 2;
-  }
-
-  if (input.optionSet) {
-    return 1;
-  }
-
-  return 0;
 }
 
 async function copyPromptTextToClipboard(text: string): Promise<boolean> {

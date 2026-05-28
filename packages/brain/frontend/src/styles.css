@@ -1299,17 +1299,16 @@
   }
 
   .create-workspace-shell .check-main-cycle {
-    width: min(100%, 1160px);
+    width: min(100%, 1260px);
     overflow: visible;
     padding-right: 0;
   }
 
   .create-workspace-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    gap: 18px;
-    width: min(100%, 1400px);
+    width: min(100%, 1260px);
     margin: 0 auto;
   }
 
@@ -1320,8 +1319,7 @@
   .create-workspace-topbar {
     display: grid;
     gap: 16px;
-    border-bottom: 1px solid rgb(17 17 17 / 0.16);
-    padding: 18px 0 20px;
+    padding: 18px 0 12px;
   }
 
   .create-workspace-topbar .create-entry-brand {
